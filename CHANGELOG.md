@@ -4,6 +4,15 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.1] - 2026-09-12
+
+### Fixed
+- The pinned prompt no longer jumps up a row when the slash suggestion menu
+  opens: menu row accounting double-counted the separator blank.
+- Subagent status lines render again in tui mode; the below-prompt block was
+  not reserved from the frame height and got clipped off the bottom of the
+  alternate screen.
+
 ## [0.53.0] - 2026-09-12
 
 ### Changed
