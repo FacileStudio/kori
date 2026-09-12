@@ -4,7 +4,31 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
-## [Unreleased]
+## [0.53.0] - 2026-09-12
+
+### Changed
+- **Breaking:** gate chains lost `scope:`. Every gate now runs on the edited
+  path (or the path the diagnostics tool names), same as the built-in filet
+  check; whole-tree sweeps go through `run_command`. Configs carrying
+  `scope:` fail to parse.
+
+### Added
+- `format: true` on a gate: the gate may rewrite the edited file, and the
+  post-edit injection then answers `reformatted <path> — re-read it` instead
+  of the gate's output, so the model knows its buffer went stale.
+- Rejected SKILL.md manifests are named in the skills notice with their
+  rejection reason, instead of vanishing silently.
+
+## [0.25.0] - 2026-09-12
+
+### Added
+- **`CancelParallel(batch)`.** Cancels a detached fan-out by its batch key:
+  each still-running task ends on the Results stream as a cancelled error,
+  tasks that finished keep their results.
+- **`NewParallelCancelTool` / `ParallelCancelToolName`.** A model-callable
+  `parallel_cancel` tool, so an agent can stop its own fan-outs.
+- **`tools.Config.DenyElevation` / `WithDenyElevation`.** Refuse run_command
+  calls that try to elevate privileges (sudo, su, doas, pkexec).
 
 ## [0.52.0] - 2026-09-12
 
