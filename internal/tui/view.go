@@ -20,7 +20,6 @@ type screen struct {
 
 func (m *Model) View() tea.View {
 	view := m.assembleView()
-	view.DisableBracketedPasteMode = true
 	return view
 }
 

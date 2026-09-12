@@ -4,6 +4,16 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.2] - 2026-09-13
+
+### Fixed
+- Multiline paste works again. Bracketed paste was disabled, so a pasted
+  newline arrived as a raw Enter and submitted each line as its own message;
+  with it re-enabled, the bubbles textarea sanitizer still flattened pasted
+  newlines to spaces. Pastes now insert line by line, newline between them.
+- `parallel_agents` no longer rejects a fan-out when the model sends `tasks`
+  as a string or a double-encoded array (nacelle v0.25.1).
+
 ## [0.53.1] - 2026-09-12
 
 ### Fixed

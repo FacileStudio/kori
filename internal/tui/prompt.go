@@ -70,6 +70,21 @@ func promptBorder(spine lipgloss.Style) func(textarea.PromptInfo) string {
 	}
 }
 
+func (m *Model) insertPaste(content string) tea.Cmd {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	for i, line := range strings.Split(content, "\n") {
+		if i > 0 {
+			m.prompt, _ = m.prompt.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
+		}
+		if line != "" {
+			m.prompt.InsertString(line)
+		}
+	}
+	m.refreshMenu()
+	return nil
+}
+
 func (m *Model) ask() tea.Cmd {
 	question := strings.TrimSpace(m.prompt.Value())
 	if question == "" {
