@@ -3,6 +3,7 @@ package skills
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -65,7 +66,15 @@ func LoadSkills(root string, trustNew bool, extraDirs []string) SkillsResult {
 }
 
 func loadSkills(root string, trustNew bool, extraDirs []string) skillsResult {
-	found := append(globalSkills(), extraSkills(extraDirs)...)
+	var found []skill
+	var problems []string
+	global, globalProblems := globalSkills()
+	found = append(found, global...)
+	problems = append(problems, globalProblems...)
+	extra, extraProblems := extraSkills(extraDirs)
+	found = append(found, extra...)
+	problems = append(problems, extraProblems...)
+
 	containers := projectSkillContainers(root)
 	store, err := loadTrust()
 	if err != nil {
@@ -82,43 +91,15 @@ func loadSkills(root string, trustNew bool, extraDirs []string) skillsResult {
 		}
 	}
 
-	var skipped []string
-	for _, dir := range containers {
-		if !trusted(store, dir) {
-			skipped = append(skipped, dir)
-		} else {
-			found = append(found, skillsIn(dir)...)
-		}
-	}
+	skipped, dirSkills, dirProblems := loadTrustedContainers(containers, store)
+	found = append(found, dirSkills...)
+	problems = append(problems, dirProblems...)
 
-	sys, not := renderSkills(found), skillNotice(skipped, saveErr)
+	sys, not := renderSkills(found), skillNotice(skipped, saveErr, problems)
 	return skillsResult{
 		System: sys, Notice: not, Skills: found,
 		system: sys, notice: not, skills: found,
 	}
-}
-
-// globalSkills reads every skill under ~/.agents/skills/ — the same
-// cross-vendor path skills.go's sibling in context.go reads ~/.agents/
-// AGENTS.md from. No trust decision applies: this is the user's own
-// machine, and nothing here crossed a boundary the user did not control.
-func globalSkills() []Skill {
-	dir := globalSkillsDir()
-	if dir == "" {
-		return nil
-	}
-	return skillsIn(dir)
-}
-
-// globalSkillsDir is ~/.agents/skills, or "" on a machine with no resolvable
-// home directory. It exists so projectSkillContainers can recognise the one
-// path it must not offer as a project container.
-func globalSkillsDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".agents", "skills")
 }
 
 // projectSkillContainers walks from root to the filesystem root, returning
@@ -173,8 +154,14 @@ func projectSkillContainers(root string) []string {
 // the convention, a project with no .agents/skills of its own) and is
 // treated the same as a single unreadable entry inside an otherwise real
 // directory: both are nothing to report, not a reason to fail.
-func skillsIn(dir string) []Skill {
+//
+// Rejected manifests come back as problems — one human-readable line each,
+// path first — so a skill that looks installed but never shows up can be
+// diagnosed instead of silently swallowed. A manifest that is just a plain
+// markdown file with no frontmatter is not a problem.
+func skillsIn(dir string) ([]Skill, []string) {
 	var found []Skill
+	var problems []string
 	if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -189,40 +176,46 @@ func skillsIn(dir string) []Skill {
 			}
 			return nil
 		}
-		if s, ok := parseSkill(manifest); ok {
+		s, problem := parseSkill(manifest)
+		if problem != "" {
+			problems = append(problems, manifest+": "+problem)
+			return filepath.SkipDir
+		}
+		if s.Name != "" {
 			found = append(found, s)
 		}
 		return filepath.SkipDir
 	}); err != nil {
-		return nil
+		return found, problems
 	}
-	return found
+	return found, problems
 }
 
-// parseSkill reads one SKILL.md's frontmatter. A file with no frontmatter,
-// frontmatter that is not valid YAML, or a missing name or description is
-// not a skill this package can present to the model — the Agent Skills
-// specification requires both, and a catalog entry with nothing to search
-// on is worse than not being catalogued at all.
-func parseSkill(path string) (Skill, bool) {
+// parseSkill reads one SKILL.md's frontmatter. It returns the skill and an
+// empty problem when the manifest is loadable, and a non-empty problem
+// naming why it was rejected otherwise. A file with no frontmatter at all
+// is a plain markdown file, not a broken skill, and gets no problem — the
+// distinction a missing name deserves but an ordinary markdown file does
+// not.
+func parseSkill(path string) (Skill, string) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return Skill{}, false
+		return Skill{}, fmt.Sprintf("unreadable: %v", err)
 	}
 
 	block, ok := frontmatter(string(raw))
 	if !ok {
-		return Skill{}, false
+		return Skill{}, ""
 	}
 
 	var meta skillFrontmatter
 	if err := yaml.Unmarshal([]byte(block), &meta); err != nil {
-		return Skill{}, false
+		return Skill{}, fmt.Sprintf("frontmatter does not parse as YAML: %v", err)
 	}
 	if meta.Name == "" || meta.Description == "" {
-		return Skill{}, false
+		return Skill{}, "frontmatter is missing a required name or description"
 	}
-	return Skill{Name: meta.Name, Description: meta.Description, Path: path}, true
+	return Skill{Name: meta.Name, Description: meta.Description, Path: path}, ""
 }
 
 // frontmatter extracts the YAML block between a file's opening and closing

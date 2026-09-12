@@ -33,7 +33,7 @@ func TestParseSkillRequiresNameAndDescription(t *testing.T) {
 	for label, body := range cases {
 		t.Run(label, func(t *testing.T) {
 			writeSkill(t, dir, body)
-			if _, ok := parseSkill(filepath.Join(dir, "SKILL.md")); ok {
+			if _, problem := parseSkill(filepath.Join(dir, "SKILL.md")); problem == "" {
 				t.Errorf("%s: parsed as a skill, want rejected", label)
 			}
 		})
@@ -44,9 +44,9 @@ func TestParseSkillAcceptsValidFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	writeSkill(t, dir, "name: pdf-tools\ndescription: Extracts text from PDF files.")
 
-	s, ok := parseSkill(filepath.Join(dir, "SKILL.md"))
-	if !ok {
-		t.Fatal("a valid SKILL.md was rejected")
+	s, problem := parseSkill(filepath.Join(dir, "SKILL.md"))
+	if problem != "" {
+		t.Fatalf("a valid SKILL.md was rejected: %s", problem)
 	}
 	if s.Name != "pdf-tools" || s.Description != "Extracts text from PDF files." {
 		t.Errorf("skill = %+v, want the frontmatter's own name and description", s)
@@ -62,8 +62,8 @@ func TestParseSkillRejectsAFileWithNoFrontmatter(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if _, ok := parseSkill(filepath.Join(dir, "SKILL.md")); ok {
-		t.Error("a file with no frontmatter parsed as a skill")
+	if _, problem := parseSkill(filepath.Join(dir, "SKILL.md")); problem != "" {
+		t.Errorf("a file with no frontmatter was reported as a problem: %s", problem)
 	}
 }
 
@@ -76,8 +76,11 @@ func TestSkillsInDoesNotDescendIntoAMatchedSkillsOwnSubtree(t *testing.T) {
 	writeSkill(t, filepath.Join(root, "outer-skill"), "name: outer-skill\ndescription: the one that should be found")
 	writeSkill(t, filepath.Join(root, "outer-skill", "nested"), "name: nested-skill\ndescription: should never surface")
 
-	found := skillsIn(root)
+	found, problems := skillsIn(root)
 
+	if len(problems) != 0 {
+		t.Errorf("problems = %v, want none for two valid skills", problems)
+	}
 	if len(found) != 1 {
 		t.Fatalf("found = %+v, want exactly the outer skill, not the one nested inside it", found)
 	}
@@ -93,10 +96,28 @@ func TestSkillsInFindsMultipleSiblingSkills(t *testing.T) {
 	writeSkill(t, filepath.Join(root, "a"), "name: skill-a\ndescription: first")
 	writeSkill(t, filepath.Join(root, "b"), "name: skill-b\ndescription: second")
 
-	found := skillsIn(root)
+	found, _ := skillsIn(root)
 
 	if len(found) != 2 {
 		t.Fatalf("found = %+v, want both sibling skills", found)
+	}
+}
+
+// A manifest with frontmatter that does not parse used to be dropped in
+// silence, so a skill that was installed looked like one that never
+// existed. It has to come back as a problem the notice can show.
+func TestSkillsInReportsAManifestWithUnparseableFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, filepath.Join(root, "broken"),
+		"name: broken\ndescription: plain scalar: with a second colon: here")
+
+	found, problems := skillsIn(root)
+
+	if len(found) != 0 {
+		t.Errorf("found = %+v, want the invalid skill left out", found)
+	}
+	if len(problems) != 1 || !strings.Contains(problems[0], "broken") {
+		t.Errorf("problems = %v, want the broken manifest named", problems)
 	}
 }
 
@@ -104,7 +125,7 @@ func TestSkillsInFindsMultipleSiblingSkills(t *testing.T) {
 // that has never adopted the convention — is the ordinary case, not an
 // error the walk should surface as one.
 func TestSkillsInToleratesAMissingDirectory(t *testing.T) {
-	if found := skillsIn(filepath.Join(t.TempDir(), "does-not-exist")); found != nil {
+	if found, _ := skillsIn(filepath.Join(t.TempDir(), "does-not-exist")); found != nil {
 		t.Errorf("found = %+v, want nil for a directory that was never there", found)
 	}
 }
@@ -118,7 +139,7 @@ func TestGlobalSkillsReadsFromTheHomeAgentsDirectory(t *testing.T) {
 	writeSkill(t, filepath.Join(home, ".agents", "skills", "brave-search"),
 		"name: brave-search\ndescription: Web search via an API.")
 
-	found := globalSkills()
+	found, _ := globalSkills()
 
 	if len(found) != 1 || found[0].Name != "brave-search" {
 		t.Errorf("found = %+v, want the one global skill", found)

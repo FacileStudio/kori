@@ -12,12 +12,54 @@ import (
 // reason globalSkills has none: naming a directory here is something only
 // the person running nacelle, on their own machine, can do in the first
 // place.
-func extraSkills(dirs []string) []skill {
+func extraSkills(dirs []string) ([]skill, []string) {
 	var found []skill
+	var problems []string
 	for _, dir := range dirs {
-		found = append(found, skillsIn(ExpandHome(dir))...)
+		s, p := skillsIn(ExpandHome(dir))
+		found = append(found, s...)
+		problems = append(problems, p...)
 	}
-	return found
+	return found, problems
+}
+
+// globalSkills reads every skill under ~/.agents/skills/ — the same
+// cross-vendor path skills.go's sibling in context.go reads ~/.agents/
+// AGENTS.md from. No trust decision applies: this is the user's own
+// machine, and nothing here crossed a boundary the user did not control.
+func globalSkills() ([]skill, []string) {
+	dir := globalSkillsDir()
+	if dir == "" {
+		return nil, nil
+	}
+	return skillsIn(dir)
+}
+
+// globalSkillsDir is ~/.agents/skills, or "" on a machine with no resolvable
+// home directory. It exists so projectSkillContainers can recognise the one
+// path it must not offer as a project container.
+func globalSkillsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".agents", "skills")
+}
+
+// loadTrustedContainers loads the skills of every container the trust store
+// accepts and names the ones it does not, so the person running nacelle can
+// review what they are being asked to trust.
+func loadTrustedContainers(containers []string, store map[string]trustRecord) (skipped []string, found []skill, problems []string) {
+	for _, dir := range containers {
+		if !trusted(store, dir) {
+			skipped = append(skipped, dir)
+			continue
+		}
+		in, dirProblems := skillsIn(dir)
+		found = append(found, in...)
+		problems = append(problems, dirProblems...)
+	}
+	return skipped, found, problems
 }
 
 // ExpandHome resolves a leading "~" the way a shell would.

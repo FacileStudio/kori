@@ -15,7 +15,7 @@ func TestExtraSkillsReadsEveryDirNamed(t *testing.T) {
 	codex := t.TempDir()
 	writeSkill(t, filepath.Join(codex, "review"), "name: review\ndescription: reviews a diff")
 
-	found := extraSkills([]string{claude, codex})
+	found, _ := extraSkills([]string{claude, codex})
 
 	if len(found) != 2 {
 		t.Fatalf("found = %+v, want one skill from each directory", found)
@@ -25,7 +25,7 @@ func TestExtraSkillsReadsEveryDirNamed(t *testing.T) {
 // A directory named in -skill-dir that was never there is the same ordinary
 // case as ~/.agents/skills missing — nothing to report, not an error.
 func TestExtraSkillsToleratesAMissingDirectory(t *testing.T) {
-	if found := extraSkills([]string{filepath.Join(t.TempDir(), "nope")}); found != nil {
+	if found, _ := extraSkills([]string{filepath.Join(t.TempDir(), "nope")}); found != nil {
 		t.Errorf("found = %+v, want nil for a directory that was never there", found)
 	}
 }

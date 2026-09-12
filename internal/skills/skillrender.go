@@ -24,18 +24,15 @@ func renderSkills(skills []skill) string {
 	return body.String()
 }
 
-// skillNotice tells the person running nacelle when a project has skills
-// sitting unloaded because nobody has trusted them yet. Skills can carry
-// instructions to run arbitrary scripts, unlike the plain instruction text
-// projectContext reads — that is the whole difference, and the reason this
-// gate exists where that one deliberately does not.
-//
-// It reports two different things a person needs to hear, either of which
-// can be true alone: skills sitting unloaded because nobody
-// trusted them, and a trust decision made this run that failed to persist
-// — which without a word about it would leave someone passing -trust-skills
-// again next time, unable to tell that from it simply not having worked.
-func skillNotice(skipped []string, saveErr error) string {
+// skillNotice tells the person running nacelle when skills were found but
+// did not load. It reports three independent facts, any of which can be
+// true alone: skills sitting unloaded because nobody trusted them, a trust
+// decision made this run that failed to persist — which without a word
+// about it would leave someone passing -trust-skills again next time,
+// unable to tell that from it simply not having worked — and manifests
+// present but rejected, which would otherwise make an installed skill
+// look like it never existed.
+func skillNotice(skipped []string, saveErr error, problems []string) string {
 	var lines []string
 	if len(skipped) > 0 {
 		suffix := "ies"
@@ -49,6 +46,10 @@ func skillNotice(skipped []string, saveErr error) string {
 	if saveErr != nil {
 		lines = append(lines, fmt.Sprintf("trust was granted for this run but could not be saved (%v), "+
 			"so -trust-skills will be needed again next time.", saveErr))
+	}
+	if len(problems) > 0 {
+		lines = append(lines, "these SKILL.md files were found but rejected, so they are not available: "+
+			strings.Join(problems, "; "))
 	}
 	return strings.Join(lines, " ")
 }
