@@ -59,9 +59,9 @@ func (m *Model) assembleTUI() tea.View {
 	menu := m.viewMenu()
 	menuRows := 0
 	if menu != "" {
-		menuRows = lipgloss.Height(menu) + 1
+		menuRows = lipgloss.Height(menu)
 	}
-	avail := max(m.windowHeight-1-lipgloss.Height(prompt)-menuRows, 1)
+	avail := max(m.windowHeight-1-lipgloss.Height(prompt)-menuRows-m.belowRows(), 1)
 	parts := append(m.tuiUpper(avail), "")
 	if menu != "" {
 		parts = append(parts, menu)
@@ -81,6 +81,16 @@ func (m *Model) assembleTUI() tea.View {
 		view.Cursor = position
 	}
 	return view
+}
+
+// belowRows is the height the below-prompt block claims, blank separator
+// included, so assembleTUI can reserve it from the transcript's share and the
+// prompt stays pinned above it instead of the block being clipped off-screen.
+func (m *Model) belowRows() int {
+	if below := m.belowContent(); below != "" {
+		return lipgloss.Height(below) + 1
+	}
+	return 0
 }
 
 // reflowHold re-wraps the alternate-screen transcript for the new width. The
@@ -177,31 +187,3 @@ func (m *Model) scrollWheel(msg tea.MouseWheelMsg) tea.Cmd {
 // below by one blank row each, so it reads as its own band. aboveContent
 // already ends in a blank row when the menu is closed, so the separator is only
 // added when the content does not already breathe.
-func (m *Model) assembleInline() tea.View {
-	above := m.aboveContent()
-	aboveHeight := lipgloss.Height(strings.Join(above, "\n"))
-	parts := above
-	if last := len(parts) - 1; last < 0 || parts[last] != "" {
-		parts = append(parts, "")
-	}
-	if menu := m.viewMenu(); menu != "" {
-		parts = append(parts, menu)
-	}
-	parts = append(parts, m.prompt.View())
-	if below := m.belowContent(); below != "" {
-		parts = append(parts, "", below)
-	}
-	body := strings.Join(parts, "\n")
-	m.frameRows = lipgloss.Height(body)
-
-	view := tea.NewView(body)
-	menuRows := 0
-	if m.viewMenu() != "" {
-		menuRows = m.menu.Height()
-	}
-	if position := m.prompt.Cursor(); position != nil {
-		position.Y += aboveHeight + 1 + menuRows
-		view.Cursor = position
-	}
-	return view
-}
