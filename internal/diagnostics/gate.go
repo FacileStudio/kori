@@ -1,5 +1,5 @@
 // Gate execution for project-configured gate chains: one deterministic check
-// run against a scope with its own timeout budget, exec indirection kept on a
+// run against a path with its own timeout budget, exec indirection kept on a
 // package var so tests can stand in fake gates.
 
 package diagnostics
@@ -16,19 +16,15 @@ import (
 
 const defaultGateTimeout = 8 * time.Second
 
-// Gate is one entry of a configured gate chain. Scope selects what the gate
-// runs against: "file" gates run after each edit with the edited path as
-// their final argument, "repo" gates run on demand with no extra argument.
-// An empty scope means "file".
+// Gate is one entry of a configured gate chain. It runs after each edit with
+// the edited path (or the diagnostics tool's path) as its final argument. A
+// Format gate may rewrite the file it runs on; the chain then injects a
+// re-read notice instead of the command's output.
 type Gate struct {
 	Name        string
 	Cmd         []string
-	Scope       string
 	TimeoutSecs int
-}
-
-func (g Gate) fileScoped() bool {
-	return g.Scope != "repo"
+	Format      bool
 }
 
 func (g Gate) timeout() time.Duration {
@@ -66,9 +62,7 @@ func execGate(ctx context.Context, g Gate, scope string) gateOutput {
 	runCtx, cancel := context.WithTimeout(ctx, g.timeout())
 	defer cancel()
 	args := append([]string{}, g.Cmd[1:]...)
-	if g.fileScoped() {
-		args = append(args, scope)
-	}
+	args = append(args, scope)
 	cmd := exec.CommandContext(runCtx, g.Cmd[0], args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

@@ -29,8 +29,8 @@ type editInput struct {
 }
 
 // gateChain is the thin surface the agent needs from the diagnostics gate
-// chain: file-scoped injection for the edit hook and the full run, repo-scoped
-// gates included, for the pull tool. The chain itself is being built in
+// chain: injection for the edit hook and the full run for the pull tool. The
+// chain itself is being built in
 // internal/diagnostics (gate.go and chain.go); until its constructor lands
 // there this is the contract the seam below fills, and a nil chain keeps every
 // caller on the filet-only path.
@@ -50,8 +50,8 @@ var chainOf = func(specs []settings.GateSpec) gateChain {
 		gates = append(gates, diagnostics.Gate{
 			Name:        s.Name,
 			Cmd:         s.Command,
-			Scope:       s.Scope,
 			TimeoutSecs: s.TimeoutSecs,
+			Format:      s.Format,
 		})
 	}
 	if len(gates) == 0 {

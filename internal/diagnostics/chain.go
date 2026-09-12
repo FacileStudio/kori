@@ -1,14 +1,15 @@
 // The gate chain: project-configured deterministic checks dispatched at two
-// entry points. File-scoped gates run on the post-edit injection path; repo
-// gates run only when the pull tool asks for the whole tree. No configured
-// chain keeps every caller on the built-in filet path.
+// entry points. Every gate runs against the path at hand: the edited file on
+// the post-edit injection path, the session root when the pull tool sweeps the
+// tree. No configured chain keeps every caller on the built-in filet path.
 
 package diagnostics
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"strings"
+	"os"
 	"sync/atomic"
 )
 
@@ -49,15 +50,18 @@ type runner struct {
 	gates []Gate
 }
 
-// InjectFile runs the file-scoped gates against one edited path and returns
+// InjectFile runs the chain's gates against one edited path and returns
 // the text appended to the edit tool result. Gates that fail oddly stay
-// silent so a broken gate never denies the edit it is reporting on.
+// silent so a broken gate never denies the edit it is reporting on. A
+// format gate that rewrote the path answers with a re-read notice instead
+// of its findings, so the model knows its copy of the file went stale.
 func (r *runner) InjectFile(ctx context.Context, path string) string {
 	for _, g := range r.gates {
-		if !g.fileScoped() {
-			continue
-		}
+		before := snapshot(path)
 		out := gateOutcome(g, runGate(ctx, g, path))
+		if g.Format && before != nil && !sameFile(before, path) {
+			return fmt.Sprintf("%s: reformatted %s — re-read it before further edits", g.Name, path)
+		}
 		if text, done := chainText(g, out); done {
 			return text
 		}
@@ -65,16 +69,25 @@ func (r *runner) InjectFile(ctx context.Context, path string) string {
 	return cleanLine
 }
 
-// Run sweeps the chain: file gates against the scope, repo gates against the
-// session root, first failure stops.
+func snapshot(path string) []byte {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+func sameFile(before []byte, path string) bool {
+	after, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(before, after)
+}
+
+// Run sweeps the chain against the scope — the one path, or the session root
+// on a repo sweep — first failure stops.
 func (r *runner) Run(ctx context.Context, path string, repo bool) (string, error) {
 	scope := scopeOf(path, repo)
 	for _, g := range r.gates {
-		local := scope
-		if !g.fileScoped() {
-			local = "."
-		}
-		out := gateOutcome(g, runGate(ctx, g, local))
+		out := gateOutcome(g, runGate(ctx, g, scope))
 		if text, done := chainText(g, out); done {
 			if out.kind == kindTimedOut {
 				return "", fmt.Errorf("%s: timed out after %s: %w", g.Name, g.timeout(), context.DeadlineExceeded)
@@ -98,24 +111,4 @@ func chainText(g Gate, out outcome) (string, bool) {
 		return renderRaw(g.Name, out.raw), true
 	}
 	return "", false
-}
-
-// renderRaw passes a gate's unparsable output through verbatim, capped at the
-// same finding-count and byte budgets as the compiler-style renderer, with
-// the overflow spilled to a file the pointer line names.
-func renderRaw(gate, text string) string {
-	if text == "" {
-		return fmt.Sprintf("%s: failed with exit code 1", gate)
-	}
-	lines := strings.Split(text, "\n")
-	if len(lines) > maxFindings || joined(lines) > maxTextBytes {
-		head := fit(lines[:min(len(lines), maxFindings-1)], 0)
-		name, err := spillFile(text)
-		if err != nil {
-			return strings.Join(head, "\n")
-		}
-		pointer := fmt.Sprintf("%s: %d lines of output; full text: %s", gate, len(lines), name)
-		return strings.Join(append(head, pointer), "\n")
-	}
-	return strings.Join(lines, "\n")
 }

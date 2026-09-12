@@ -67,8 +67,8 @@ func Inject(ctx context.Context, path string) string {
 	}
 }
 
-// InjectFile is the edit-hook side of the package: it runs only the
-// file-scoped gates of the installed chain on the one edited path, or the
+// InjectFile is the edit-hook side of the package: it runs the gates of the
+// installed chain on the one edited path, or the
 // filet check when no chain is installed, and returns the text Inject would.
 // Like Inject it never returns an error.
 func InjectFile(ctx context.Context, path string) string {
@@ -81,8 +81,7 @@ func InjectFile(ctx context.Context, path string) string {
 // Run is the pull side of the package: it checks one path, or the whole
 // session root when repo is true, and returns the same compiler-style,
 // errors-only, capped rendering for the diagnostics tool. A gate chain the
-// agent installed from the settings runs the full chain instead, repo-scoped
-// gates included. A clean run and an unavailable checker both answer with the
+// agent installed from the settings runs its gates against the same scope. A clean run and an unavailable checker both answer with the
 // short clean line, because a missing checker is not a reason to stop the
 // model; a timed out run returns an error that invites a retry while the
 // background warm-up runs.

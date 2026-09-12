@@ -161,8 +161,8 @@ type HookSpec struct {
 type GateSpec struct {
 	Name        string   `yaml:"name"`
 	Command     []string `yaml:"command"`
-	Scope       string   `yaml:"scope"`
 	TimeoutSecs int      `yaml:"timeout_secs"`
+	Format      bool     `yaml:"format"`
 }
 
 // Automation groups the config's scheduled and chained machinery. It is

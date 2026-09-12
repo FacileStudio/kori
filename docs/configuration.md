@@ -173,18 +173,17 @@ sources:
       args: [mcp]
 hooks: []
 cron: []
-# Gates are deterministic checks the session must pass: file-scoped gates run
-# after every edit, repo gates run when the diagnostics tool sweeps the tree.
-# No gates key keeps the built-in filet check.
+# Gates are deterministic checks run after every edit: the edited path is
+# appended to the command's arguments, findings are injected into the edit
+# result. No gates key keeps the built-in filet check.
 gates: []
 # gates:
 #   - name: filet
 #     command: [filet, check]
-#     scope: file
-#   - name: tests
-#     command: [go, test, ./...]
-#     scope: repo
-#     timeout_secs: 300
+#     timeout_secs: 30
+#   - name: prettier
+#     command: [prettier, --write]
+#     format: true
 ```
 
 Old flat key → new home, for migrating a pre-0.44 file:

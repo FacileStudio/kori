@@ -3,7 +3,6 @@ package settings
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -159,9 +158,6 @@ func resolveGates(resolved Config, path string) (Config, error) {
 	for _, g := range resolved.Gates {
 		if g.Name == "" || len(g.Command) == 0 {
 			return Config{}, &ParseError{Path: "gates", Err: errors.New("every gate needs a name and a command")}
-		}
-		if g.Scope != "" && g.Scope != "file" && g.Scope != "repo" {
-			return Config{}, &ParseError{Path: "gates", Err: fmt.Errorf("gate %q: unknown scope %q", g.Name, g.Scope)}
 		}
 	}
 	return resolved, nil

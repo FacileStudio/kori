@@ -10,7 +10,7 @@ import (
 // Gates ride the same file-to-resolved path as hooks and cron: a `gates:` key
 // in the main settings is the chain, with every field of each spec intact.
 func TestGatesComeFromTheFile(t *testing.T) {
-	written(t, "gates:\n  - name: tests\n    command: [go, test, ./...]\n    scope: repo\n    timeout_secs: 300\n")
+	written(t, "gates:\n  - name: tests\n    command: [go, test, ./...]\n    timeout_secs: 300\n")
 
 	config, err := settings(Config{})
 	if err != nil {
@@ -19,10 +19,10 @@ func TestGatesComeFromTheFile(t *testing.T) {
 	if len(config.Gates) != 1 {
 		t.Fatalf("gates = %+v, want one", config.Gates)
 	}
-	want := GateSpec{Name: "tests", Command: []string{"go", "test", "./..."}, Scope: "repo", TimeoutSecs: 300}
+	want := GateSpec{Name: "tests", Command: []string{"go", "test", "./..."}, TimeoutSecs: 300}
 	got := config.Gates[0]
 	if got.Name != want.Name || !slices.Equal(got.Command, want.Command) ||
-		got.Scope != want.Scope || got.TimeoutSecs != want.TimeoutSecs {
+		got.TimeoutSecs != want.TimeoutSecs {
 		t.Errorf("gate = %+v, want %+v", got, want)
 	}
 }
@@ -32,7 +32,7 @@ func TestGatesComeFromTheFile(t *testing.T) {
 func TestGatesFileOverridesTheMainSettings(t *testing.T) {
 	written(t, "gates:\n  - name: from-the-file\n    command: [true]\n")
 	path := filepath.Join(t.TempDir(), "gates.yml")
-	alternate := "gates:\n  - name: from-the-gates-file\n    command: [true]\n    scope: repo\n"
+	alternate := "gates:\n  - name: from-the-gates-file\n    command: [true]\n"
 	if err := os.WriteFile(path, []byte(alternate), 0o600); err != nil {
 		t.Fatalf("writing the gates file: %v", err)
 	}
