@@ -4,6 +4,13 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.3] - 2026-09-13
+
+### Fixed
+- Skill descriptions parsed from folded block scalars (`description: >`)
+  collapse to a single line, so the skills menu stops rendering a blank
+  second line for each of them.
+
 ## [0.53.2] - 2026-09-13
 
 ### Fixed

@@ -215,7 +215,15 @@ func parseSkill(path string) (Skill, string) {
 	if meta.Name == "" || meta.Description == "" {
 		return Skill{}, "frontmatter is missing a required name or description"
 	}
-	return Skill{Name: meta.Name, Description: meta.Description, Path: path}, ""
+	return Skill{Name: meta.Name, Description: singleLine(meta.Description), Path: path}, ""
+}
+
+// singleLine collapses every whitespace run to one space. YAML block scalars
+// (description: >) carry a trailing newline and folded line breaks into the
+// decoded string, and that newline ends up rendered as a blank line in the
+// skills menu, so a description is one line by contract.
+func singleLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // frontmatter extracts the YAML block between a file's opening and closing
