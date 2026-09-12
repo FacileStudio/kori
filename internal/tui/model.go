@@ -194,7 +194,7 @@ func (m *Model) finishCompaction() tea.Cmd {
 // history into view.
 func (m *Model) promptRoute(message tea.Msg) tea.Cmd {
 	if msg, ok := message.(tea.PasteMsg); ok {
-		return m.insertPaste(string(msg.Content))
+		return m.insertPaste(msg.Content)
 	}
 	if msg, ok := message.(tea.MouseWheelMsg); ok {
 		return m.scrollWheel(msg)
