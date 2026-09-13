@@ -18,7 +18,10 @@ limits:
   returns: 3
   nesting: 4            # filet's own default
   complexity: 10        # filet's own default
-  structFields: 12      # filet's own default
+  structFields: 16      # 12 was the default; CronJob is one job file's whole
+                        # schema (9 flat keys plus 7 override groups), and
+                        # splitting it would hide that schema from the person
+                        # editing the file
   interfaceMethods: 4   # filet's own default
 
 disabled:

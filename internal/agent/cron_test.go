@@ -43,18 +43,16 @@ func TestApplyJobDefaultsToNoShell(t *testing.T) {
 	}
 }
 
-func TestFindCronJob(t *testing.T) {
-	config := settings.Config{
-		Automation: settings.Automation{Cron: []settings.CronJob{
-			{Name: "one"},
-			{Name: "two"},
-		}},
+func TestFindJobFile(t *testing.T) {
+	files := []settings.JobFile{
+		{Path: "/jobs/one.yml", Job: settings.CronJob{Name: "one"}},
+		{Path: "/jobs/two.yml", Job: settings.CronJob{Name: "two"}},
 	}
-	if job, err := findCronJob(config, "two"); err != nil || job.Name != "two" {
-		t.Errorf("findCronJob(two) = %q, %v; want two, nil", job.Name, err)
+	if f, err := findJobFile(files, "two"); err != nil || f.Job.Name != "two" {
+		t.Errorf("findJobFile(two) = %q, %v; want two, nil", f.Job.Name, err)
 	}
-	if _, err := findCronJob(config, "missing"); err == nil {
-		t.Errorf("findCronJob(missing) should error")
+	if _, err := findJobFile(files, "missing"); err == nil {
+		t.Errorf("findJobFile(missing) should error")
 	}
 }
 

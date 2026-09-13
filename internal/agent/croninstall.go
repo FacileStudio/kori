@@ -12,41 +12,56 @@ import (
 )
 
 // listCronJobs prints the configured jobs and how to run or arm them. It arms
-// nothing.
+// nothing. Jobs come from ~/.nacelle/jobs/, one file each, so the listing is
+// the folder as of this invocation.
 func listCronJobs() error {
-	config, err := loadCronConfig()
+	config, files, err := loadCronState()
 	if err != nil {
 		return err
 	}
-	if settings.DerefBool(config.JSON) {
-		return printCronJSON(config.Cron)
+	jobs := make([]settings.CronJob, 0, len(files))
+	for _, f := range files {
+		jobs = append(jobs, f.Job)
 	}
-	if len(config.Cron) == 0 {
-		fmt.Println("no cron jobs in " + settings.ConfigPath())
+	if settings.DerefBool(config.JSON) {
+		return printCronJSON(jobs)
+	}
+	if len(files) == 0 {
+		fmt.Println("no cron jobs in " + settings.JobsDir())
 		return nil
 	}
-	for _, job := range config.Cron {
-		fmt.Printf("%-20s when=%-18s enabled=%t commands=%t workdir=%s delivery=%s\n",
-			job.Name, job.When, jobEnabled(job), jobCommands(job), job.Workdir, job.Delivery)
+	for _, f := range files {
+		trusted, err := settings.IsTrusted(f.Path, f.Raw)
+		if err != nil {
+			return err
+		}
+		job := f.Job
+		fmt.Printf("%-20s when=%-18s enabled=%t commands=%t trusted=%t workdir=%s delivery=%s\n",
+			job.Name, job.When, jobEnabled(job), jobCommands(job), trusted, job.Workdir, job.Delivery)
 	}
 	fmt.Println("\nrun one now:        nacelle cron run <name>")
+	fmt.Println("trust one:          nacelle cron trust <name>")
 	fmt.Println("arm its timer:      nacelle cron install <name>")
 	return nil
 }
 
 // installCronJob prints the systemd service + timer pair that arm one job, for
 // the user to drop under ~/.config/systemd/user/ (or /etc/systemd/system/ for a
-// system timer). It refuses any job that fails the arm-time policy in
-// checkCronInstallable.
+// system timer). It refuses any job that is untrusted or fails the arm-time
+// policy in checkCronInstallable.
 func installCronJob(name string) error {
-	config, err := loadCronConfig()
+	_, files, err := loadCronState()
 	if err != nil {
 		return err
 	}
-	job, err := findCronJob(config, name)
+	f, err := findJobFile(files, name)
 	if err != nil {
 		return err
 	}
+	if err := ensureTrusted(f); err != nil {
+		return err
+	}
+	job := f.Job
 	if err := checkCronInstallable(job); err != nil {
 		return err
 	}

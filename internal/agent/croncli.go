@@ -23,8 +23,9 @@ func usagef(format string, args ...any) error {
 func printCronUsage() error {
 	fmt.Println(`usage: nacelle cron <command> [args]
 
-  list              show the configured jobs
+  list              show the jobs in ~/.nacelle/jobs/
   run <name>        run one job now through the headless path
+  trust <name>      review one job file and approve its contents
   install <name>    print the systemd service and timer that arm one job
   help              show this text
 

@@ -172,7 +172,6 @@ sources:
       command: mycelium
       args: [mcp]
 hooks: []
-cron: []
 # Gates are deterministic checks run after every edit: the edited path is
 # appended to the command's arguments, findings are injected into the edit
 # result. No gates key keeps the built-in filet check.
@@ -209,6 +208,10 @@ nacelle writes this file itself with every default explicit, and you edit from
 there; deleting it regenerates it. But an unreadable or malformed one is: a
 unreadable or malformed one is: a config silently ignored is worse than no config, because the
 setting carefully written is simply not in effect and nothing says so.
+
+Scheduled jobs are no longer part of this file at all — they live one YAML file
+per job in `~/.nacelle/jobs/`. See [Cron jobs](#cron-jobs) for the folder, its
+trust gate and the per-job overrides.
 
 `prompt_placeholder` is the ghost text shown while the prompt is empty. The prompt has no prefix:
 the first row opens at a single margin space, and wrapped rows of a long question hang under it.
@@ -423,6 +426,137 @@ running as root; the OS decides who may elevate, and an account outside the `sud
 the actual wall. Set it to `false` to allow elevation. Phase 2 adds a pty password flow, where
 sudo prompts on a terminal the harness allocates but never reads, so the agent never sees the
 password. [docs/sudo.md](sudo.md) carries the full analysis.
+
+## Cron jobs
+
+Cron is nacelle run unattended: the same agent, driven headless by an external
+scheduler — a systemd timer or a crontab — while nobody watches. nacelle owns
+the job definitions and the run itself; the clock belongs to systemd, which is
+why there is no daemon here to reload or supervise. The `nacelle cron`
+subcommand ties the two together:
+
+```sh
+nacelle cron list            # every job, trusted or not
+nacelle cron run news        # run one job now, through the headless path
+nacelle cron install news    # print the systemd service and timer that arm it
+nacelle cron trust news      # approve one job file's current contents
+```
+
+`nacelle cron list --json` prints the same table as one JSON document; set
+`ui.cron_list_json: true` to make that the default output.
+
+### The jobs folder
+
+Each job is one YAML file in `~/.nacelle/jobs/` — `news.yml`, `healthchecks.yml`,
+one file per job, the job's own fields at the top level of the file rather than
+wrapped in a list. The job's name defaults to the filename stem, so `news.yml`
+defines the job `news` and `nacelle cron run news` runs it; a `name:` key
+overrides it for the rare file whose stem is not the name you want (a name
+must be unit-safe: letters, digits and `. _ -` only).
+
+The folder is scanned on every `cron` invocation, list included, so there is no
+daemon and no reload step: a file dropped in appears in `cron list` on the next
+invocation, a file edited changes the job, and a file deleted takes the job
+with it. Deleting the file is the off switch.
+
+Job files decode strictly, the way `~/.nacelle.yml` itself does: a typo in a
+job file is a hard error naming the file, not a silent half-job. Loud is the
+right setting for something that fires at 2am.
+
+### Trust
+
+A job file is instructions an agent will follow unattended with your provider
+keys in reach, so it is gated the way project skills and hooks are: a human
+must approve the exact bytes before they run.
+
+- A new file shows up in `nacelle cron list` immediately, marked untrusted.
+- `nacelle cron run` and `nacelle cron install` refuse an untrusted job until
+  someone runs `nacelle cron trust <name>`, which prints the file's path, its
+  name and its prompt, and asks before recording anything.
+- Trusting records a SHA-256 hash of the file's contents against its path in
+  `~/.nacelle/trust.json`, the same store that remembers approved skill
+  directories. Editing the file changes the hash, and a changed file is
+  refused again — trust re-arms on every edit, so no one-line change to a
+  trusted job slips through unreviewed.
+- Trust is per machine. A `~/.nacelle/jobs/` folder synced across machines
+  carries the files but not the approvals, so each machine needs its own
+  `nacelle cron trust` — the person trusting is a person at that machine's
+  keyboard, and that is the point.
+
+Trusting makes a job **runnable**, not **scheduled**: it clears `cron run` and
+unblocks `cron install`, and `cron install` still only prints the systemd
+service and timer units for you to save and enable yourself. Nothing nacelle
+does creates the timer.
+
+### A job file
+
+```yaml
+# ~/.nacelle/jobs/news.yml — one file, one job; the job's name is the stem.
+when: daily
+prompt: |-
+  Summarise what changed on the pages in my feed list since yesterday.
+  Keep it under 200 words and name the two most important changes.
+workdir: ~/Code/Facile/notes
+delivery: file:~/notes/cron
+timeout: 600
+enabled: true
+
+provider:
+  backend: openai
+  model: gpt-5.4
+
+security:
+  deny_elevation: true
+
+tools:
+  run_command: true
+  web_fetch: true
+
+reasoning:
+  effort: low
+
+limits:
+  max_iterations: 5
+```
+
+| Field | Default | What it does |
+|---|---|---|
+| `when` | empty (`install` writes `daily`) | The `OnCalendar=` line of the generated timer — any systemd calendar expression. nacelle never parses it; systemd does |
+| `prompt` | — required | The question the run starts from |
+| `workdir` | — install requires one | The run's root and the unit's `WorkingDirectory=`. Without one the run would execute wherever the scheduler happens to start the unit, which is never the project |
+| `delivery` | empty — no transcript written | `file:<dir>` appends the transcript to `<dir>/<name>-YYYY-MM-DD.md` and one status line per run to `<dir>/<name>.log` |
+| `timeout` | `300` | The service's `TimeoutStartSec=` — systemd kills a run outliving it |
+| `enabled` | `false` | `cron install` refuses a disabled job, so test-run-first is explicit: `cron run` it once, read the output, then set `enabled: true` |
+| `name` | the filename stem | Overrides the job's name |
+| `commands` | `false` | The legacy spelling of `tools.run_command`, kept from the inline-list era for files that already use it |
+
+### Per-job overrides
+
+Every group the interactive config has can be overridden per job: a job can run
+on a different backend than the interactive one, tighten its own isolation, or
+cap its own spend. Members are per-field — mention a group with one key set and
+every key you leave out keeps the config's value; a job saying nothing runs
+exactly on the config's settings.
+
+| Group | Keys | Notes |
+|---|---|---|
+| `provider:` | `backend`, `model`, `base_url`, `api_key` | A different backend, endpoint or key for this job — the cheap model for the dawn summary, the local gateway for the nightly audit. `provider.model` wins over the flat `model:` when both are set |
+| `security:` | `approve_tools`, `path_isolation`, `deny_elevation`, `env_isolation` | `approve_tools` is forced off for every cron run whatever the job or the config says — a run nobody watches cannot answer a prompt, and a prompt nobody answers is a run that never starts. The other three apply as written |
+| `tools:` | `run_command`, `parallel_agents`, `web_fetch`, `tasks`, `diagnostics` | `run_command` defaults to **false** for cron, the reverse of the interactive default: opt in with `tools.run_command: true` or the legacy `commands: true`, and `tools:` wins when both are spelled |
+| `reasoning:` | `effort`, `thinking`, `budget` | Per-job reasoning spend — `low` for the summariser, `high` for the auditor |
+| `limits:` | `max_iterations`, `compact_at` | Iteration and compaction caps that only make sense per job |
+| `hooks:` | hook specs, same shape as the config's own | **Append** to the config's hooks — a job adds chains on top of the ones every run gets, it never replaces them |
+| `gates:` | gate specs, same shape as the config's own | **Append** to the config's gates, same rule |
+
+### Migration
+
+The inline `cron:` list in `~/.nacelle.yml` is gone. A config still carrying it
+is refused at load with an error naming `~/.nacelle/jobs/` — the same refusal an
+unknown key gets, because a silently ignored job list is a scheduler that
+quietly stopped existing. Each list entry becomes its own file in the folder:
+the entry's `name` names the file (`news` becomes `news.yml`), the rest of the
+entry moves across unchanged, and `commands: true` keeps working as the legacy
+spelling of `tools.run_command: true`.
 
 ## Slash commands
 

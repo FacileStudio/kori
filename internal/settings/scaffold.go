@@ -62,7 +62,8 @@ sources:
   mcp: {}
 
 hooks: []
-cron: []
+# Scheduled jobs no longer live in this file: one YAML file per job under
+# ~/.nacelle/jobs/ (e.g. news.yml), approved with nacelle cron trust <name>.
 `
 
 // Scaffold writes the template when no config file exists yet, and reports

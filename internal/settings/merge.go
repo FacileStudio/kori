@@ -32,9 +32,6 @@ func (c *Config) merge(over Config) {
 	}
 	c.MCPFiles = append(c.MCPFiles, over.MCPFiles...)
 	c.Hooks = append(c.Hooks, over.Hooks...)
-	if len(over.Cron) > 0 {
-		c.Cron = over.Cron
-	}
 	if len(over.Gates) > 0 {
 		c.Gates = over.Gates
 	}

@@ -156,8 +156,10 @@ sources:
   mcp: {}
 
 hooks: []
-cron: []
 ```
+
+Scheduled jobs are not configured here anymore: one YAML file per job under
+`~/.nacelle/jobs/`, trusted with `nacelle cron trust <name>` before it runs.
 
 ## herdr
 

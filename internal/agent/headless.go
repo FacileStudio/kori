@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"strings"
@@ -25,17 +26,20 @@ func runHeadless(prompt string) error {
 	if err != nil {
 		return err
 	}
-	_, err = runHeadlessConfig(prompt, config)
+	_, _, err = runHeadlessConfig(prompt, config, nil)
 	return err
 }
 
 // runHeadlessConfig streams one prompt through an agent built from the given
-// config and returns the full text. The caller decides what to do with it —
-// the -print path drops it, a cron run delivers it.
-func runHeadlessConfig(prompt string, config settings.Config) (string, error) {
-	agent, cleanup, err := buildHeadlessAgent(config)
+// config and returns the full text plus what the run measured. Extra hooks
+// beyond the run's own compaction counter ride along — a cron run adds its
+// job's hooks here. The caller decides what to do with the results — the
+// -print path drops both, a cron run delivers the text and records the stats.
+func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
+	var stats runStats
+	agent, cleanup, err := buildHeadlessAgent(config, mergeHooks(stats.compactHook(), extra))
 	if err != nil {
-		return "", err
+		return "", stats, err
 	}
 	defer cleanup()
 
@@ -46,24 +50,32 @@ func runHeadlessConfig(prompt string, config settings.Config) (string, error) {
 	conv := []nacelle.Message{nacelle.UserText(prompt)}
 	for event, err := range agent.Stream(ctx, conv) {
 		if err != nil {
-			return "", err
+			return "", stats, err
 		}
-		if event.Kind == nacelle.KindText {
+		switch event.Kind {
+		case nacelle.KindText:
 			if _, err := fmt.Fprint(os.Stdout, event.Text); err != nil {
-				return "", err
+				return "", stats, err
 			}
 			out.WriteString(event.Text)
+		case nacelle.KindToolCall:
+			stats.ToolCalls++
+		case nacelle.KindTurn:
+			stats.FinalContextTokens = event.Usage.InputTokens + event.Usage.CacheReadTokens + event.Usage.CacheCreationTokens
+		case nacelle.KindDone:
+			stats.Usage = event.Usage
 		}
 	}
 	fmt.Println()
 	out.WriteString("\n")
-	return out.String(), nil
+	return out.String(), stats, nil
 }
 
 // buildHeadlessAgent assembles the agent the same way the TUI does,
 // without approval-gate wiring or banner construction. It returns the
-// agent and a cleanup function the caller must defer.
-func buildHeadlessAgent(config settings.Config) (*nacelle.Agent, func(), error) {
+// agent and a cleanup function the caller must defer. Extra hooks ride
+// the settings hooks.
+func buildHeadlessAgent(config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (*nacelle.Agent, func(), error) {
 	set, local, err := localTools(config)
 	if err != nil {
 		return nil, nil, err
@@ -82,7 +94,7 @@ func buildHeadlessAgent(config settings.Config) (*nacelle.Agent, func(), error) 
 		return nil, nil, closeOnErr(err, set, mcp.set)
 	}
 
-	get, err := build(config, local, approve, hooks)
+	get, err := build(config, local, approve, mergeHooks(hooks, extra))
 	if err != nil {
 		return nil, nil, closeOnErr(err, set, mcp.set)
 	}
@@ -92,6 +104,19 @@ func buildHeadlessAgent(config settings.Config) (*nacelle.Agent, func(), error) 
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}, nil
+}
+
+// mergeHooks returns the settings hooks with the caller's extra hooks
+// appended, copying on write so both inputs stay untouched.
+func mergeHooks(hooks, extra map[nacelle.HookPoint][]nacelle.Hook) map[nacelle.HookPoint][]nacelle.Hook {
+	out := maps.Clone(hooks)
+	if out == nil {
+		out = map[nacelle.HookPoint][]nacelle.Hook{}
+	}
+	for point, hs := range extra {
+		out[point] = append(out[point], hs...)
+	}
+	return out
 }
 
 // closeOnErr returns the original err if cleanup succeeds, or the cleanup

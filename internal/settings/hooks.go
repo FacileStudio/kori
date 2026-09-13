@@ -16,20 +16,6 @@ import (
 // `hooks:` entries in the user's own config.
 const HooksFile = ".nacelle/hooks.yml"
 
-// HookTrustFile records, per absolute path, the hash of the last hooks file
-// trusted from there.
-const HookTrustFile = "hooks.json"
-
-// trustDir is where HookTrustFile lives — the first thing this package puts
-// under ~/.nacelle/, which stays otherwise empty until something needs it.
-func trustDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".nacelle"), nil
-}
-
 // parseHooks decodes one hooks file.
 func parseHooks(raw []byte) ([]HookSpec, error) {
 	var file struct {
@@ -118,8 +104,7 @@ func LoadProjectHooks(root string, trustNew bool) (map[nacelle.HookPoint][]nacel
 		return nil, "", fmt.Errorf("in %s: %w", path, err)
 	}
 
-	hash := contentHash(raw)
-	trusted, err := hookIsTrusted(path, hash, trustNew)
+	trusted, err := hookIsTrusted(path, raw, trustNew)
 	if err != nil {
 		return nil, "", err
 	}
@@ -131,17 +116,12 @@ func LoadProjectHooks(root string, trustNew bool) (map[nacelle.HookPoint][]nacel
 	return hooks, "", nil
 }
 
-// hookIsTrusted reports whether this exact file content has been approved.
-func hookIsTrusted(path, hash string, trustNew bool) (bool, error) {
-	store, err := loadHookTrust()
-	if err != nil {
-		return false, err
+// hookIsTrusted reports whether this exact hooks file content has been
+// approved, recording the approval when the session runs with -trust-hooks.
+func hookIsTrusted(path string, raw []byte, trustNew bool) (bool, error) {
+	trusted, err := IsTrusted(path, raw)
+	if err != nil || trusted || !trustNew {
+		return trusted, err
 	}
-	if record, seen := store[path]; seen && record.Hash == hash {
-		return true, nil
-	}
-	if !trustNew {
-		return false, nil
-	}
-	return true, saveHookTrust(store, path, hash)
+	return true, Save(path, raw)
 }

@@ -165,11 +165,11 @@ type GateSpec struct {
 	Format      bool     `yaml:"format"`
 }
 
-// Automation groups the config's scheduled and chained machinery. It is
-// inline in the YAML, so the keys stay top-level: hooks, cron, gates.
+// Automation groups the config's chained machinery. It is inline in the
+// YAML, so the keys stay top-level: hooks, gates. Scheduled jobs are not
+// here anymore — LoadJobs reads them from ~/.nacelle/jobs/ instead.
 type Automation struct {
 	Hooks []HookSpec `yaml:"hooks"`
-	Cron  []CronJob  `yaml:"cron"`
 	Gates []GateSpec `yaml:"gates"`
 }
 
@@ -208,7 +208,7 @@ func Load(path string) (Config, error) {
 
 	var settings Config
 	if err := decoder.Decode(&settings); err != nil && !errors.Is(err, io.EOF) {
-		return Config{}, &ParseError{Path: path, Err: err}
+		return Config{}, &ParseError{Path: path, Err: repointCronKey(err)}
 	}
 	return settings, nil
 }

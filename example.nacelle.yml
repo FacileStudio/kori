@@ -58,5 +58,6 @@ sources:
   mcp: {}
 
 hooks: []
-cron: []
+# Scheduled jobs no longer live in this file: one YAML file per job under
+# ~/.nacelle/jobs/ (e.g. news.yml), trusted with `nacelle cron trust <name>`.
 gates: []
