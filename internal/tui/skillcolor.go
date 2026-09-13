@@ -2,12 +2,12 @@ package tui
 
 import "strings"
 
-// skillYellow is the raw escape that recolours a /skill token. Foreground
-// only: the prompt and the question pane paint their own backgrounds, and a
-// full reset would wipe them mid-row. The closing sequence is the token's
-// saved SGR, re-emitted by highlightSkills, which puts whatever style was in
-// effect back for the rest of the row.
-const skillYellow = "\x1b[33m"
+// skillYellow is the raw escape that recolours a /skill token. Bold plus
+// foreground only: the prompt and the question pane paint their own
+// backgrounds, and a full reset would wipe them mid-row. The closing
+// sequence is the token's saved SGR, re-emitted by highlightSkills, which
+// puts whatever style was in effect back for the rest of the row.
+const skillYellow = "\x1b[1;33m"
 
 // skillTokens lists every /skill:<name> token the loaded skills answer to.
 func (m *Model) skillTokens() []string {

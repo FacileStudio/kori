@@ -28,7 +28,7 @@ func TestSkillTokens(t *testing.T) {
 func TestHighlightSkillsExact(t *testing.T) {
 	row := "use /skill:review on this"
 	got := highlightSkills(row, []string{"/skill:review"})
-	want := "use \x1b[33m/skill:review\x1b[39m on this"
+	want := "use \x1b[1;33m/skill:review\x1b[39m on this"
 	if got != want {
 		t.Errorf("highlightSkills = %q, want %q", got, want)
 	}
@@ -37,7 +37,7 @@ func TestHighlightSkillsExact(t *testing.T) {
 func TestHighlightSkillsMultiple(t *testing.T) {
 	row := "/skill:review then /skill:plan"
 	got := highlightSkills(row, []string{"/skill:plan", "/skill:review"})
-	if strings.Count(got, "\x1b[33m") != 2 {
+	if strings.Count(got, "\x1b[1;33m") != 2 {
 		t.Errorf("highlightSkills = %q, want two highlighted tokens", got)
 	}
 }
@@ -45,7 +45,7 @@ func TestHighlightSkillsMultiple(t *testing.T) {
 func TestHighlightSkillsPartial(t *testing.T) {
 	row := "run /skill:rev"
 	got := highlightSkills(row, []string{"/skill:review"})
-	want := "run \x1b[33m/skill:rev\x1b[39m"
+	want := "run \x1b[1;33m/skill:rev\x1b[39m"
 	if got != want {
 		t.Errorf("highlightSkills = %q, want %q", got, want)
 	}
@@ -54,7 +54,7 @@ func TestHighlightSkillsPartial(t *testing.T) {
 func TestHighlightSkillsIgnoresUnknown(t *testing.T) {
 	row := "/clear and /skillx stay plain"
 	got := highlightSkills(row, []string{"/skill:review"})
-	if strings.Contains(got, "\x1b[33m") {
+	if strings.Contains(got, "\x1b[1;33m") {
 		t.Errorf("highlightSkills = %q, want no highlight", got)
 	}
 }
@@ -62,7 +62,7 @@ func TestHighlightSkillsIgnoresUnknown(t *testing.T) {
 func TestHighlightSkillsRestoresSgr(t *testing.T) {
 	row := "\x1b[44m/skill:review rest"
 	got := highlightSkills(row, []string{"/skill:review"})
-	want := "\x1b[44m\x1b[33m/skill:review\x1b[39m\x1b[44m rest"
+	want := "\x1b[44m\x1b[1;33m/skill:review\x1b[39m\x1b[44m rest"
 	if got != want {
 		t.Errorf("highlightSkills = %q, want %q", got, want)
 	}
@@ -71,7 +71,7 @@ func TestHighlightSkillsRestoresSgr(t *testing.T) {
 func TestQuestionHighlightsSkills(t *testing.T) {
 	m := skillTestModel("review")
 	got := m.question("look at /skill:review now", 80)
-	if !strings.Contains(got, "\x1b[33m/skill:review\x1b[39m") {
+	if !strings.Contains(got, "\x1b[1;33m/skill:review\x1b[39m") {
 		t.Errorf("question = %q, want the token highlighted", got)
 	}
 	if !strings.HasPrefix(unstyled(got), "▌") {
@@ -85,7 +85,7 @@ func TestPromptViewHighlightsSkills(t *testing.T) {
 	m.prompt = newPrompt("", lipgloss.NewStyle())
 	m.prompt.SetValue("use /skill:review")
 	got := highlightSkills(m.prompt.View(), m.skillTokens())
-	if !strings.Contains(got, "\x1b[33m/skill:review\x1b[39m") {
+	if !strings.Contains(got, "\x1b[1;33m/skill:review\x1b[39m") {
 		t.Errorf("prompt view = %q, want the token highlighted", got)
 	}
 }
