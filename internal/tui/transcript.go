@@ -153,13 +153,13 @@ func (m *Model) paint(who speaker, text string) string {
 	case fromFailure:
 		return m.theme.Failure.Width(width).Render(text)
 	case fromTurn:
-		return m.theme.Muted.Render(text)
+		return " " + m.theme.Muted.Render(text)
 	case fromCompact:
 		return m.theme.Compacting.Render(text)
 	case fromStart:
 		return text
 	default:
-		return m.theme.Client.Render(text)
+		return " " + m.theme.Client.Render(text)
 	}
 }
 

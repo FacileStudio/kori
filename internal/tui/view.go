@@ -24,8 +24,12 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) aboveContent() []string {
+	live := m.streaming()
 	var above []string
-	above = append(above, m.streaming()...)
+	if len(live) > 0 {
+		above = append(above, "")
+	}
+	above = append(above, live...)
 	above = append(above, "")
 	if tasksView := strings.Join(m.tasks.View(max(m.width-2, 1), m.theme.Muted), "\n"); tasksView != "" {
 		above = append(above, tasksView)
