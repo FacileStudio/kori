@@ -4,6 +4,37 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.54.0] - 2026-09-13
+
+### Added
+- Cron jobs move to their own folder: one YAML file per job under
+  `~/.nacelle/jobs/` (news.yml, healthchecks.yml, ...), the filename stem as
+  the default name. The folder is rescanned on every cron command, so a file
+  added or removed takes effect on the next invocation with no daemon. The
+  inline `cron:` key is removed — a config still carrying it fails at load
+  with a pointer to the folder (breaking).
+- Job trust: a new job file shows in `nacelle cron list` immediately but
+  `cron run` and `cron install` refuse it until `nacelle cron trust <name>`
+  shows the file and records the human's approval. Trust keys on the file
+  path and content hash in `~/.nacelle/trust.json` (the hooks trust store,
+  generalized; existing `hooks.json` approvals carry over), so an edited job
+  re-arms the gate.
+- Per-job overrides: a job file can carry `provider:`, `security:`, `tools:`,
+  `reasoning:`, `limits:` plus `hooks:` and `gates:` lists. Empty members
+  fall back to the config; `provider.model` beats the flat `model:` key;
+  the approval gate and shell stay disarmed regardless of what the job asks
+  for.
+- Cron run metrics: every `cron run` appends one JSON line to
+  `~/.local/state/nacelle/cron.jsonl` — name, start, duration, status, model,
+  tool calls, tokens in and out, cost, final context size, and the number of
+  compactions.
+
+### Fixed
+- Transcript spacing: committed blocks, tool lines, results and turn
+  boundaries sat one to four blank rows apart depending on what rendered
+  them. Spacing is decided in one place now — exactly one blank row between
+  any two committed lines.
+
 ## [0.53.9] - 2026-09-13
 
 ### Fixed
