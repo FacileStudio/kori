@@ -39,10 +39,11 @@ func (m *Model) startDetachedParent(tool nacelle.ToolEvent, rawResult string) {
 		return
 	}
 	delete(m.pending, tool.ID)
+	dec := json.NewDecoder(strings.NewReader(rawResult))
 	var stub struct {
 		Batch string `json:"batch"`
 	}
-	if err := json.Unmarshal([]byte(rawResult), &stub); err != nil || stub.Batch == "" {
+	if err := dec.Decode(&stub); err != nil || stub.Batch == "" {
 		return
 	}
 	m.registerParallel(stub.Batch, tasks)

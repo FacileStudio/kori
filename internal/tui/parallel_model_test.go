@@ -48,6 +48,23 @@ func TestModelParallelCallStubSeedsRows(t *testing.T) {
 	}
 }
 
+// The stub carries the return-control rule appended to the JSON, so the result
+// is prose after the object. Reading the first JSON value, not the whole
+// string, is what keeps the rows seeding.
+func TestModelParallelCallStubWithProseSeedsRows(t *testing.T) {
+	m := sized()
+	tool := nacelle.ToolEvent{ID: "call2", Name: nacelle.ParallelAgentsToolName, Input: `{"tasks":["a"]}`}
+
+	m.absorbToolCall(tool)
+	stub := `{"started":1,"batch":"psa-2"}` +
+		"\nFan-out dispatched. End your turn now: the parallel agents run detached."
+	m.absorbToolResult(tool, stub)
+
+	if tasks, ok := m.parallelTasks["psa-2"]; !ok || len(tasks) != 1 {
+		t.Fatalf("parallelTasks = %v, want one seeded row under psa-2", m.parallelTasks)
+	}
+}
+
 // The streamed results that follow the stub route by the batch key and fold the
 // task's spend into the session total, exactly like a /parallel fan-out's do.
 func TestModelParallelStubResultsRouteToBatch(t *testing.T) {
