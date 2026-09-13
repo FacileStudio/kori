@@ -67,37 +67,19 @@ const (
 // committing an answer. Update drains the queue after every message, so the
 // order lines are said in is the order they land in.
 //
+// Spacing is not each line's business: paint arms and renderers emit whatever
+// edge newlines they happen to emit, so say trims them all off and prints
+// joins the queue with exactly one blank row between lines. Uniform spacing,
+// whatever said it.
+//
 // The session log records the same text tagged with who said it, so a /resume
 // replays the conversation rather than the display. fromStart is the one
 // speaker that paints but is not recorded — the start message is client
 // chrome, not part of the conversation.
 func (m *Model) say(who speaker, text string) {
 	painted := m.paint(who, text)
-	switch who {
-	case fromThinking, fromTool, fromResult:
-		painted += "\n"
-	case fromReader, fromTurn:
-		if !strings.HasSuffix(m.lastSaid(), "\n") {
-			painted = "\n" + painted
-		}
-		painted += "\n"
-	}
-	m.unprinted = append(m.unprinted, painted)
+	m.unprinted = append(m.unprinted, strings.Trim(painted, "\n"))
 	m.session.Line(sessions.Speaker(who), text)
-}
-
-// lastSaid is the last line already committed to the scrollback queue, or the
-// empty string when nothing has been said yet. The turn boundary closes the
-// answer it streamed under, and the question is the block you scroll back to
-// find, so both get a leading blank row to keep them apart from what precedes
-// them — unless the line above already ends in a newline (a multi-line answer,
-// or a preceding widget line), in which case the join's own newline already
-// supplies the blank.
-func (m *Model) lastSaid() string {
-	if len(m.unprinted) == 0 {
-		return ""
-	}
-	return m.unprinted[len(m.unprinted)-1]
 }
 
 // prints hands everything said since the last message to the terminal, as a
@@ -117,7 +99,7 @@ func (m *Model) prints() tea.Cmd {
 	if len(m.unprinted) == 0 {
 		return nil
 	}
-	said := strings.Join(m.unprinted, "\n")
+	said := strings.Join(m.unprinted, "\n\n")
 	m.unprinted = nil
 	return m.printed(said)
 }
@@ -245,5 +227,5 @@ func (m *Model) restyle() {
 }
 
 func (m *Model) markdown(text string) string {
-	return theme.RenderMarkdown(m.pretty, text)
+	return strings.Trim(theme.RenderMarkdown(m.pretty, text), "\n")
 }

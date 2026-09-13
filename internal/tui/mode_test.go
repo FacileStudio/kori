@@ -196,7 +196,7 @@ func TestTUIModeWheelScrollsTheHeldTranscript(t *testing.T) {
 	if containsString(bottom, "row 00") {
 		t.Fatalf("at the bottom the oldest row should not yet be visible in\n%s", strings.Join(bottom, "\n"))
 	}
-	for range 30 {
+	for range 100 {
 		m.route(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	}
 	if m.scrollTop <= 0 {
@@ -205,7 +205,7 @@ func TestTUIModeWheelScrollsTheHeldTranscript(t *testing.T) {
 	if !containsString(strings.Split(ansi.Strip(m.View().Content), "\n"), "row 00") {
 		t.Error("after scrolling up the oldest row should surface")
 	}
-	for range 100 {
+	for range 200 {
 		m.route(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	}
 	if m.scrollTop != 0 {

@@ -97,12 +97,12 @@ func TestWidgetLinesAreSeparatedByBlankRows(t *testing.T) {
 	m.turn(nacelle.Event{Usage: nacelle.Usage{InputTokens: 10}})
 	m.say(fromTool, "$ read_file(x)")
 
-	said := visible(strings.Join(m.unprinted, "\n"))
+	said := visible(strings.Join(m.unprinted, "\n\n"))
 	if strings.Contains(said, "10 tokens") {
 		t.Fatalf("said = %q, want no per-turn boundary in the transcript", said)
 	}
 	m.settle()
-	said = visible(strings.Join(m.unprinted, "\n"))
+	said = visible(strings.Join(m.unprinted, "\n\n"))
 	recapAt := strings.Index(said, "10 tokens")
 	toolAt := strings.Index(said, "$ read_file(x)")
 	if recapAt < 0 || toolAt < 0 || toolAt >= recapAt {
@@ -124,7 +124,7 @@ func TestRunRecapIsSeparatedFromTheAnswerAboveIt(t *testing.T) {
 	m.turn(nacelle.Event{Usage: nacelle.Usage{InputTokens: 10}})
 	m.settle()
 
-	said := visible(strings.Join(m.unprinted, "\n"))
+	said := visible(strings.Join(m.unprinted, "\n\n"))
 	recapAt := strings.Index(said, "10 tokens")
 	answerAt := strings.Index(said, "Code committed")
 	if recapAt < 0 || answerAt < 0 || answerAt >= recapAt {
@@ -145,7 +145,7 @@ func TestReaderQuestionIsSeparatedFromTheTraceAroundItByBlankRows(t *testing.T) 
 	m.say(fromReader, "a question")
 	m.say(fromTool, "$ read_file(x)")
 
-	said := visible(strings.Join(m.unprinted, "\n"))
+	said := visible(strings.Join(m.unprinted, "\n\n"))
 	thinkingAt := strings.Index(said, "thinking out loud")
 	questionAt := strings.Index(said, "a question")
 	toolAt := strings.Index(said, "$ read_file(x)")
