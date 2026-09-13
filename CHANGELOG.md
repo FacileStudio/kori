@@ -4,6 +4,17 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.57.0] - 2026-09-13
+
+### Changed
+- Every tool call in the conversation shares the `⏺` glyph; only shell runs
+  keep `$`. Tool call lines use a single space after the glyph, and tool
+  batching classifies calls by name rather than by glyph.
+
+### Fixed
+- The blank row between two consecutive answer panes broke the left spine;
+  it is now painted as an empty pane row of its own.
+
 ## [0.56.0] - 2026-09-13
 
 ### Added
