@@ -13,17 +13,17 @@ import (
 	"github.com/FacileStudio/nacelle-tui/internal/settings"
 )
 
-// findCronCommand scans os.Args for the cron subcommand: flags typed ahead of
-// it stay where they are, where the settings flag parser reads them; the scan
+// findCommand scans os.Args for a subcommand by name: flags typed ahead of it
+// stay where they are, where the settings flag parser reads them; the scan
 // only skips leading dash-tokens, so a flag that takes a value must follow
 // the subcommand instead.
-func findCronCommand() (prefix, sub []string, ok bool) {
+func findCommand(name string) (prefix, sub []string, ok bool) {
 	args := os.Args[1:]
 	first := 0
 	for first < len(args) && strings.HasPrefix(args[first], "-") {
 		first++
 	}
-	if first >= len(args) || args[first] != "cron" {
+	if first >= len(args) || args[first] != name {
 		return nil, nil, false
 	}
 	return args[:first], args[first+1:], true
@@ -34,7 +34,7 @@ func findCronCommand() (prefix, sub []string, ok bool) {
 // It returns true when it recognised a cron command, and the caller should then
 // treat its error as the process's result.
 func checkCronFlag() (bool, error) {
-	prefix, sub, ok := findCronCommand()
+	prefix, sub, ok := findCommand("cron")
 	if !ok {
 		return false, nil
 	}

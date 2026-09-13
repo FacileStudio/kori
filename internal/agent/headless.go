@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -31,11 +29,18 @@ func runHeadless(prompt string) error {
 }
 
 // runHeadlessConfig streams one prompt through an agent built from the given
-// config and returns the full text plus what the run measured. Extra hooks
-// beyond the run's own compaction counter ride along — a cron run adds its
-// job's hooks here. The caller decides what to do with the results — the
-// -print path drops both, a cron run delivers the text and records the stats.
+// config and returns the full text plus what the run measured, streaming the
+// text to stdout. Extra hooks beyond the run's own compaction counter ride
+// along — a cron run adds its job's hooks here. The caller decides what to do
+// with the results — the -print path drops both, a cron run delivers the text
+// and records the stats.
 func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
+	return runHeadlessConfigTo(os.Stdout, prompt, config, extra)
+}
+
+// runHeadlessConfigTo is runHeadlessConfig with the streamed text going to w
+// instead of stdout; bench discards the text and keeps the measurements.
+func runHeadlessConfigTo(w io.Writer, prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
 	var stats runStats
 	agent, cleanup, err := buildHeadlessAgent(config, mergeHooks(stats.compactHook(), extra))
 	if err != nil {
@@ -54,7 +59,7 @@ func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.
 		}
 		switch event.Kind {
 		case nacelle.KindText:
-			if _, err := fmt.Fprint(os.Stdout, event.Text); err != nil {
+			if _, err := fmt.Fprint(w, event.Text); err != nil {
 				return "", stats, err
 			}
 			out.WriteString(event.Text)
@@ -66,7 +71,9 @@ func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.
 			stats.Usage = event.Usage
 		}
 	}
-	fmt.Println()
+	if _, err := fmt.Fprintln(w); err != nil {
+		return "", stats, err
+	}
 	out.WriteString("\n")
 	return out.String(), stats, nil
 }
@@ -150,24 +157,4 @@ func closeAll(closers ...any) error {
 		}
 	}
 	return lastErr
-}
-
-// stdinPrompt reads the first line of stdin when the terminal is not
-// interactive, for piped usage: `echo "list files" | nacelle`.
-func stdinPrompt() (string, error) {
-	data, err := readStdinFirstLine()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(data), nil
-}
-
-// readStdinFirstLine reads up to the first newline from stdin.
-func readStdinFirstLine() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return "", err
-	}
-	return strings.TrimRight(line, "\r\n"), nil
 }
