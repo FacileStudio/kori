@@ -37,12 +37,12 @@ func TestToolKindGlyph(t *testing.T) {
 		kind string
 		want string
 	}{
-		{"read", "☰"},
-		{"write", "$"},
-		{"network", "↧"},
-		{"delegate", "≫"},
+		{"read", "⏺"},
+		{"write", "⏺"},
+		{"network", "⏺"},
+		{"delegate", "⏺"},
 		{"mcp", "✻"},
-		{"other", "•"},
+		{"other", "⏺"},
 	}
 
 	for _, tc := range cases {
@@ -56,8 +56,8 @@ func TestToolGlyph(t *testing.T) {
 	if got := ToolGlyph("run_command"); got != "$" {
 		t.Errorf("ToolGlyph(run_command) = %q, want $", got)
 	}
-	if got := ToolGlyph("unknown"); got != "•" {
-		t.Errorf("ToolGlyph(unknown) = %q, want •", got)
+	if got := ToolGlyph("unknown"); got != "⏺" {
+		t.Errorf("ToolGlyph(unknown) = %q, want ⏺", got)
 	}
 }
 

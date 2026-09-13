@@ -13,37 +13,40 @@ import (
 
 var toolIcons = map[string]string{
 	"run_command":     "$",
-	"edit_file":       "✎",
-	"write_file":      "✚",
-	"read_file":       "☰",
-	"search_files":    "◎",
-	"find_files":      "◎",
-	"grep_files":      "◎",
-	"web_fetch":       "↧",
-	"download":        "↧",
-	"parallel_agents": "≫",
+	"edit_file":       "⏺",
+	"write_file":      "⏺",
+	"read_file":       "⏺",
+	"search_files":    "⏺",
+	"find_files":      "⏺",
+	"grep_files":      "⏺",
+	"web_fetch":       "⏺",
+	"download":        "⏺",
+	"parallel_agents": "⏺",
 }
 
 var toolStyles = map[string]lipgloss.Style{
-	"☰": lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
-	"◎": lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
 	"$": lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-	"✎": lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-	"✚": lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-	"↧": lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
-	"≫": lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
+	"⏺": lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
 	"✻": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
 }
 
 var toolANSI = map[string]string{
-	"☰": "34",
-	"◎": "34",
 	"$": "35",
-	"✎": "35",
-	"✚": "35",
-	"↧": "36",
-	"≫": "33",
+	"⏺": "34",
 	"✻": "208",
+}
+
+var toolKinds = map[string]string{
+	"run_command":     "write",
+	"edit_file":       "write",
+	"write_file":      "write",
+	"read_file":       "read",
+	"search_files":    "read",
+	"find_files":      "read",
+	"grep_files":      "read",
+	"web_fetch":       "network",
+	"download":        "network",
+	"parallel_agents": "delegate",
 }
 
 // ToolKind categorizes a tool by its operation group for batching.
@@ -51,36 +54,19 @@ func ToolKind(name string, source nacelle.Source) string {
 	if source == nacelle.ToolSourceMCP {
 		return "mcp"
 	}
-	glyph := ToolGlyph(name)
-	switch glyph {
-	case "☰", "◎":
-		return "read"
-	case "$", "✎", "✚":
-		return "write"
-	case "↧":
-		return "network"
-	case "≫":
-		return "delegate"
-	default:
-		return "other"
+	if kind, ok := toolKinds[name]; ok {
+		return kind
 	}
+	return "other"
 }
 
 // ToolKindGlyph returns the representative icon for a tool kind.
 func ToolKindGlyph(kind string) string {
 	switch kind {
-	case "read":
-		return "☰"
-	case "write":
-		return "$"
-	case "network":
-		return "↧"
-	case "delegate":
-		return "≫"
 	case "mcp":
 		return "✻"
 	default:
-		return "•"
+		return "⏺"
 	}
 }
 
@@ -89,7 +75,7 @@ func ToolGlyph(name string) string {
 	if icon, ok := toolIcons[name]; ok {
 		return icon
 	}
-	return "•"
+	return "⏺"
 }
 
 // ToolTone returns the Lipgloss style for a named tool.

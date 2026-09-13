@@ -38,11 +38,11 @@ func TestPrimaryArg(t *testing.T) {
 }
 
 func TestToolLine(t *testing.T) {
-	if got := ToolLine("read_file", `not json`, 80); got != "☰  read_file()" {
-		t.Errorf("line = %q, want ☰ read_file()", got)
+	if got := ToolLine("read_file", `not json`, 80); got != "⏺ read_file()" {
+		t.Errorf("line = %q, want ⏺ read_file()", got)
 	}
-	if got := ToolLine("list_tools", ``, 80); got != "• list_tools()" {
-		t.Errorf("line = %q, want • list_tools()", got)
+	if got := ToolLine("list_tools", ``, 80); got != "⏺ list_tools()" {
+		t.Errorf("line = %q, want ⏺ list_tools()", got)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestToolLineCutToFit(t *testing.T) {
 	if width := lipgloss.Width(line); width > 40-DurationRoom {
 		t.Errorf("line width %d exceeds budget", width)
 	}
-	if !strings.HasPrefix(line, "☰  read_file(deep/") || !strings.HasSuffix(line, "…)") {
+	if !strings.HasPrefix(line, "⏺ read_file(deep/") || !strings.HasSuffix(line, "…)") {
 		t.Errorf("line = %q, want prefix and ellipsis", line)
 	}
 }

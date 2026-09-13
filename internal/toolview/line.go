@@ -36,21 +36,9 @@ func ToolLineSource(name, input string, width int, source nacelle.Source) string
 }
 
 func toolLine(name, input string, width int, source nacelle.Source) string {
-	room := width - lipgloss.Width(name) - DurationRoom - len("• ()")
+	room := width - lipgloss.Width(name) - DurationRoom - len("⏺ ()")
 	glyph := ToolSourceGlyph(name, source)
-	return glyph + glyphGap(glyph) + name + "(" + truncate(ansi.Strip(PrimaryArg(input)), room) + ")"
-}
-
-// glyphGap is the space between a call line's glyph and its name. The pencil,
-// read and write glyphs are ambiguous-width: terminals that draw them two
-// cells wide swallow a single space, so they get two.
-func glyphGap(glyph string) string {
-	switch glyph {
-	case "✎", "☰", "✚":
-		return "  "
-	default:
-		return " "
-	}
+	return glyph + " " + name + "(" + truncate(ansi.Strip(PrimaryArg(input)), room) + ")"
 }
 
 // PrimaryArg extracts the most identifying argument from tool input.

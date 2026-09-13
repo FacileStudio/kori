@@ -16,8 +16,8 @@ func TestGroupLineSingle(t *testing.T) {
 		Count: 1,
 	}
 	line := g.GroupLine(80)
-	if !strings.Contains(line, "☰  read_file(main.go)") {
-		t.Errorf("GroupLine = %q, want ☰ read_file(main.go)", line)
+	if !strings.Contains(line, "⏺ read_file(main.go)") {
+		t.Errorf("GroupLine = %q, want ⏺ read_file(main.go)", line)
 	}
 }
 
@@ -28,8 +28,8 @@ func TestGroupLineBatch(t *testing.T) {
 		CallNames: []string{"a.go", "b.go", "c.go"},
 	}
 	line := g.GroupLine(80)
-	if !strings.Contains(line, "☰ 3 reads") {
-		t.Errorf("GroupLine = %q, want '☰ 3 reads'", line)
+	if !strings.Contains(line, "⏺ 3 reads") {
+		t.Errorf("GroupLine = %q, want '⏺ 3 reads'", line)
 	}
 	if !strings.Contains(line, "a.go · b.go · c.go") {
 		t.Errorf("GroupLine = %q, want filenames", line)
@@ -54,8 +54,8 @@ func TestGroupLineBatchMCP(t *testing.T) {
 
 func TestGroupGlyphs(t *testing.T) {
 	g := Group{Name: "read_file", Count: 1}
-	if got := g.GroupGlyph(); got != "☰" {
-		t.Errorf("glyph = %q, want ☰", got)
+	if got := g.GroupGlyph(); got != "⏺" {
+		t.Errorf("glyph = %q, want ⏺", got)
 	}
 
 	g.Discarded = true
@@ -70,8 +70,8 @@ func TestGroupGlyphs(t *testing.T) {
 	}
 
 	g = Group{Name: "read_file", Count: 3}
-	if got := g.GroupGlyph(); got != "☰" {
-		t.Errorf("batch glyph = %q, want ☰", got)
+	if got := g.GroupGlyph(); got != "⏺" {
+		t.Errorf("batch glyph = %q, want ⏺", got)
 	}
 }
 
