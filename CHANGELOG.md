@@ -4,6 +4,19 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.7] - 2026-09-13
+
+### Added
+- `ctrl+j` and `ctrl+k` move the slash command suggestion menu selection down
+  and up, alongside the existing arrow keys.
+- `/skill:name` tokens in the input prompt and transcript render bold as well
+  as yellow.
+
+### Changed
+- The ASCII nacelle banner is now the default `start_message`; a fresh
+  `~/.nacelle.yml` scaffold no longer writes an explicit empty value that
+  would have silenced it.
+
 ## [0.53.6] - 2026-09-13
 
 ### Changed
