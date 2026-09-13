@@ -41,13 +41,23 @@ func View(m *Menu, width int, plainStyle, menuStyle, cmdStyle lipgloss.Style) st
 	items := m.Filtered[m.Scroll : m.Scroll+m.Height()]
 	rows := make([]string, len(items))
 	for i, it := range items {
+		selected := m.Scroll+i == m.Selected
 		style := plainStyle
 		marker := "  "
-		if m.Scroll+i == m.Selected {
+		if selected {
 			style = menuStyle
 			marker = "→ "
 		}
-		rows[i] = style.Width(width).Render(marker + MenuRow(it, width-2, cmdStyle))
+		rows[i] = style.Width(width).Render(marker + MenuRow(it, width-2, selectedCmdStyle(cmdStyle, selected)))
 	}
 	return strings.Join(rows, "\n")
+}
+
+// selectedCmdStyle repaints the /command value white when its row is the
+// selected one, so the whole row reads as highlighted.
+func selectedCmdStyle(cmdStyle lipgloss.Style, selected bool) lipgloss.Style {
+	if !selected {
+		return cmdStyle
+	}
+	return cmdStyle.Foreground(lipgloss.Color("15"))
 }

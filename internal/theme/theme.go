@@ -66,7 +66,7 @@ func uiStylesFor(pick func(a, b color.Color) color.Color, quiet color.Color) UIS
 	return UIStyles{
 		Menu: lipgloss.NewStyle().
 			Background(pick(lipgloss.Color("7"), lipgloss.Color("8"))).
-			Foreground(pick(lipgloss.Color("0"), lipgloss.Color("7"))),
+			Foreground(lipgloss.Color("15")),
 		Plain:      lipgloss.NewStyle(),
 		Waiting:    lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
 		Ready:      lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
