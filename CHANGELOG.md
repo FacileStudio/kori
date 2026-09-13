@@ -4,6 +4,20 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.6] - 2026-09-13
+
+### Changed
+- The selected row in the slash command suggestion menu renders white
+  foreground, including the `/command` value inside it, instead of the
+  previous dim adaptive color.
+
+## [0.53.5] - 2026-09-13
+
+### Added
+- `/skill:name` tokens render yellow in the input prompt while typing
+  (including half-typed prefixes and multiple tokens) and in sent questions
+  in the transcript.
+
 ## [0.53.4] - 2026-09-13
 
 ### Fixed
