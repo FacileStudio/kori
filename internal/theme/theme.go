@@ -59,7 +59,7 @@ func transcriptStylesFor(quiet color.Color) TranscriptStyles {
 		Result:   lipgloss.NewStyle().Foreground(quiet),
 		Failure:  lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
 		Client:   lipgloss.NewStyle().Foreground(quiet),
-		Command:  lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		Command:  lipgloss.NewStyle().Foreground(lipgloss.Color("3")),
 	}
 }
 

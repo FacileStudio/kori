@@ -16,7 +16,7 @@ func TestGroupLineSingle(t *testing.T) {
 		Count: 1,
 	}
 	line := g.GroupLine(80)
-	if !strings.Contains(line, "☰ read_file(main.go)") {
+	if !strings.Contains(line, "☰  read_file(main.go)") {
 		t.Errorf("GroupLine = %q, want ☰ read_file(main.go)", line)
 	}
 }
