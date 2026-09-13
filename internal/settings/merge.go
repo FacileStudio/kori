@@ -9,12 +9,7 @@ func (c *Config) merge(over Config) {
 	c.mergeToggles(over)
 	c.mergeSecurity(over)
 	c.mergeUI(over)
-	if over.MaxIterations != nil {
-		c.MaxIterations = over.MaxIterations
-	}
-	if over.CompactAt != nil {
-		c.CompactAt = over.CompactAt
-	}
+	c.mergeLimits(over)
 	if over.Budget != nil {
 		c.Budget = over.Budget
 	}
@@ -34,6 +29,25 @@ func (c *Config) merge(over Config) {
 	c.Hooks = append(c.Hooks, over.Hooks...)
 	if len(over.Gates) > 0 {
 		c.Gates = over.Gates
+	}
+}
+
+// mergeLimits overwrites every limit over actually mentions.
+func (c *Config) mergeLimits(over Config) {
+	if over.MaxIterations != nil {
+		c.MaxIterations = over.MaxIterations
+	}
+	if over.CompactAt != nil {
+		c.CompactAt = over.CompactAt
+	}
+	if over.GrindCost != nil {
+		c.GrindCost = over.GrindCost
+	}
+	if over.GrindTokens != nil {
+		c.GrindTokens = over.GrindTokens
+	}
+	if over.GrindContinuations != nil {
+		c.GrindContinuations = over.GrindContinuations
 	}
 }
 

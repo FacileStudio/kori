@@ -22,6 +22,9 @@ func Run(v string) error {
 	if handled, err := checkCronFlag(); handled {
 		return err
 	}
+	if handled, err := checkBenchFlag(); handled {
+		return err
+	}
 	if handled, err := checkPrintFlag(); handled {
 		return err
 	}
@@ -92,17 +95,20 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 // snapshot, so the two cannot disagree about what was loaded.
 func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.SessionConfig {
 	return tui.SessionConfig{
-		Root:              p.config.Root,
-		Model:             p.config.Model,
-		Backend:           p.config.Backend,
-		Diffs:             *p.config.Diffs,
-		GroupTools:        p.config.GroupTools,
-		ShowThinking:      *p.config.ShowThinking,
-		CompactAt:         resolveCompactAt(*p.config.CompactAt, backend),
-		AutoResume:        *p.config.Continue,
-		Resume:            *p.config.Resume,
-		PromptPlaceholder: *p.config.PromptPlaceholder,
-		StartMessage:      *p.config.StartMessage,
+		Root:               p.config.Root,
+		Model:              p.config.Model,
+		Backend:            p.config.Backend,
+		Diffs:              *p.config.Diffs,
+		GroupTools:         p.config.GroupTools,
+		ShowThinking:       *p.config.ShowThinking,
+		CompactAt:          resolveCompactAt(*p.config.CompactAt, backend),
+		GrindCost:          *p.config.GrindCost,
+		GrindTokens:        *p.config.GrindTokens,
+		GrindContinuations: *p.config.GrindContinuations,
+		AutoResume:         *p.config.Continue,
+		Resume:             *p.config.Resume,
+		PromptPlaceholder:  *p.config.PromptPlaceholder,
+		StartMessage:       *p.config.StartMessage,
 		Startup: tui.LaunchContext{
 			ContextPaths:  found.contextPaths,
 			ContextTokens: tokenEstimate(found.contextChars),

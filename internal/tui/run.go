@@ -46,6 +46,12 @@ type SessionConfig struct {
 	PromptPlaceholder string
 	StartMessage      string
 	Startup           LaunchContext
+	// Grind is the per-run minimum spend: dollars, output tokens, and how
+	// many continuation notices one run may be given. Both floors at zero
+	// leave the budget off.
+	GrindCost          float64
+	GrindTokens        int64
+	GrindContinuations int
 }
 
 // UISession holds the complete state needed to run an interactive terminal session.

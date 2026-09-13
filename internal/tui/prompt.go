@@ -116,6 +116,7 @@ func (m *Model) ask() tea.Cmd {
 }
 
 func (m *Model) dispatch(line string) tea.Cmd {
+	m.grind.used = 0
 	m.say(fromReader, line)
 
 	started := tea.Cmd(nil)

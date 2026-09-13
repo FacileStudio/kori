@@ -51,7 +51,9 @@ func (m *Model) status() string {
 // context counts carry the live estimate (liveOut) so they tick as the model
 // writes, and the price carries that estimate scaled by the last realised cost
 // per token (rate) so the dollar figure moves too; the real per-turn usage
-// replaces the estimates the moment a turn ends.
+// replaces the estimates the moment a turn ends. A session with a grind
+// budget adds what is left of the current run's minimum, and a session
+// without one looks exactly as it did before.
 func (m *Model) footer() []string {
 	total := m.spent.Add(m.run.usage)
 	live := m.rate * float64(m.run.liveOut)
@@ -65,6 +67,12 @@ func (m *Model) footer() []string {
 		"↓"+shortTokens(total.OutputTokens+m.run.liveOut))
 	if m.size > 0 {
 		spent = append(spent, "↕"+shortTokens(m.size+m.run.liveOut))
+	}
+	liveSpend := m.run.usage
+	liveSpend.OutputTokens += m.run.liveOut
+	liveSpend.Cost += m.rate * float64(m.run.liveOut)
+	if left := m.grind.left(liveSpend); left != "" {
+		spent = append(spent, "grind "+left)
 	}
 	return spent
 }

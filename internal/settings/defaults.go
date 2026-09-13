@@ -15,7 +15,7 @@ func Defaults(system string) Config {
 	parallelAgents := true
 	diagnostics := true
 	iterations, budget := 5, int64(0)
-	compactAt := int64(75000)
+	compactAt, grindCost, grindTokens, grindContinuations := int64(75000), 0.0, int64(0), 2
 	fetch := true
 	groupTools, showThinking := true, true
 	cont, resume := false, ""
@@ -33,7 +33,7 @@ func Defaults(system string) Config {
 		Session:   Session{Root: ".", System: system, Continue: &cont, Resume: &resume},
 		Toggles:   Toggles{Bash: &bash, ParallelAgents: &parallelAgents, Fetch: &fetch, Tasks: &tasks, Diagnostics: &diagnostics},
 		Security:  Security{ApproveTools: &approveTools, PathIsolation: &strict, DenyElevation: &denyElevation, EnvIsolation: &envIsolation},
-		Limits:    Limits{MaxIterations: &iterations, CompactAt: &compactAt},
+		Limits:    Limits{MaxIterations: &iterations, CompactAt: &compactAt, GrindCost: &grindCost, GrindTokens: &grindTokens, GrindContinuations: &grindContinuations},
 		Reasoning: Reasoning{Thinking: &thinking, Budget: &budget},
 		Discovery: Discovery{
 			ProjectContext: &projectContext,

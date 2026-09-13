@@ -23,6 +23,9 @@ session:
 limits:
   max_iterations: 5
   compact_at: 75000
+  grind_min_cost: 0
+  grind_min_tokens: 0
+  grind_continuations: 2
 
 tools:
   run_command: true

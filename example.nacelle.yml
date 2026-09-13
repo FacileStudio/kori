@@ -15,6 +15,12 @@ session:
 limits:
   max_iterations: 5
   compact_at: 75000
+  # grind budget: the per-run minimum spend a run must reach before stopping
+  # counts as finished. Both floors at 0 turn it off; grind_continuations caps
+  # how many continuation notices one run can be given.
+  grind_min_cost: 0
+  grind_min_tokens: 0
+  grind_continuations: 2
 
 tools:
   run_command: true

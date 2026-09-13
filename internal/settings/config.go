@@ -21,6 +21,14 @@ const ConfigFile = ".nacelle.yml"
 type Limits struct {
 	MaxIterations *int   `yaml:"max_iterations"`
 	CompactAt     *int64 `yaml:"compact_at"`
+	// GrindBudget is the per-run minimum spend the model must reach before a
+	// stop counts as finished: a run that ends below it on a stop the model
+	// chose is continued with a notice naming what is left. GrindCost is
+	// dollars, GrindTokens counts output tokens, both default to zero which
+	// turns the budget off, and when both are set a run owes both.
+	GrindCost          *float64 `yaml:"grind_min_cost"`
+	GrindTokens        *int64   `yaml:"grind_min_tokens"`
+	GrindContinuations *int     `yaml:"grind_continuations"`
 }
 
 // Provider is the backend in use plus the endpoint and key that reach it.

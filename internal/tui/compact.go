@@ -77,6 +77,11 @@ type account struct {
 	// It is written only by the routed update, never by the tool that
 	// produces it — see tasks.go for why a tool goroutine cannot touch it.
 	tasks taskList
+
+	// grind is the per-run minimum spend this session demands, and how many
+	// continuations the current run has used of it. With no floor set it is
+	// off and nothing here ever fires.
+	grind grindBudget
 }
 
 // compactFinished says the compaction channel closed and no outcome arrived.

@@ -28,9 +28,13 @@ func FromEnv() Config {
 	return Config{
 		Provider: providerEnv(),
 		Session:  Session{Root: os.Getenv(EnvPrefix + "ROOT"), System: os.Getenv(EnvPrefix + "SYSTEM_PROMPT")},
-		Limits:   Limits{MaxIterations: envInt(EnvPrefix + "MAX_ITERATIONS"), CompactAt: envInt64(EnvPrefix + "COMPACT_AT")},
-		Sources:  Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS")},
-		UI:       UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
+		Limits: Limits{
+			MaxIterations: envInt(EnvPrefix + "MAX_ITERATIONS"), CompactAt: envInt64(EnvPrefix + "COMPACT_AT"),
+			GrindCost: envFloat(EnvPrefix + "GRIND_MIN_COST"), GrindTokens: envInt64(EnvPrefix + "GRIND_MIN_TOKENS"),
+			GrindContinuations: envInt(EnvPrefix + "GRIND_CONTINUATIONS"),
+		},
+		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS")},
+		UI:      UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
 		Toggles: Toggles{
 			Bash:           envBool(EnvPrefix + "BASH"),
 			ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),
@@ -100,6 +104,19 @@ func envInt64(name string) *int64 {
 		return nil
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &value
+}
+
+// envFloat is envInt in the width a dollar amount is measured in.
+func envFloat(name string) *float64 {
+	raw, ok := os.LookupEnv(name)
+	if !ok || raw == "" {
+		return nil
+	}
+	value, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return nil
 	}

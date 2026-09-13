@@ -37,12 +37,12 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 		core:       core{agent: agent, banner: banner, autoResume: c.AutoResume, resumePath: c.Resume, herdrClient: herdr.NewFromEnv()},
 		transcript: transcript{compactAt: c.CompactAt},
 		composer:   composer{prompt: newPrompt(c.PromptPlaceholder, base.Border), hist: history.New()},
-		look: look{
-			theme: base,
-			spin:  status.NewSpinner(),
+		look:       look{theme: base, spin: status.NewSpinner()},
+		account: account{
+			began: time.Now(),
+			grind: grindBudget{cost: c.GrindCost, tokens: c.GrindTokens, cap: c.GrindContinuations},
 		},
-		account: account{began: time.Now()},
-		screen:  screen{width: 80, liveRows: 1},
+		screen: screen{width: 80, liveRows: 1},
 		commandState: commandState{
 			skills: byName,
 			menu:   *menu.New(menuItems(byName)),

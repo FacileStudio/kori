@@ -119,6 +119,7 @@ func (m *Model) recordDetached(r detachedResult) tea.Cmd {
 		m.layout(m.windowHeight)
 	}
 	if m.parallelReview() {
+		m.grind.used = 0
 		return tea.Batch(watchDetached(), m.send(m.reviewText()))
 	}
 	return watchDetached()
