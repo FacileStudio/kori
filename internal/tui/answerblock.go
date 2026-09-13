@@ -31,3 +31,17 @@ func (m *Model) answerPane(text string, width int) string {
 func (m *Model) answerBlock(text string, width int) string {
 	return "\n" + m.answerPane(text, width) + "\n"
 }
+
+// gap is the row between two queued entries. Two bordered panes back to back
+// would leave that row bare — a hole in the spine — so it becomes a spine row
+// of its own, painted like an empty answer pane. Anything else keeps the plain
+// blank line.
+func (m *Model) gap(prev, next string) string {
+	prevLines := strings.Split(strings.TrimRight(prev, "\n"), "\n")
+	nextLines := strings.Split(next, "\n")
+	if strings.HasPrefix(unstyled(prevLines[len(prevLines)-1]), "▌") &&
+		strings.HasPrefix(unstyled(nextLines[0]), "▌") {
+		return "\n" + m.answerPane("", max(m.width, 1)) + "\n"
+	}
+	return "\n\n"
+}

@@ -36,8 +36,8 @@ func TestGroupOnlyPrintsOnce(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("after 3rd finish: %d lines, want 1", len(lines))
 	}
-	if !strings.Contains(lines[0], "☰ 3 reads") {
-		t.Errorf("group line = %q, want '☰ 3 reads'", lines[0])
+	if !strings.Contains(lines[0], "⏺ 3 reads") {
+		t.Errorf("group line = %q, want '⏺ 3 reads'", lines[0])
 	}
 }
 

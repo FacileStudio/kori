@@ -99,7 +99,10 @@ func (m *Model) prints() tea.Cmd {
 	if len(m.unprinted) == 0 {
 		return nil
 	}
-	said := strings.Join(m.unprinted, "\n\n")
+	said := m.unprinted[0]
+	for _, e := range m.unprinted[1:] {
+		said += m.gap(said, e) + e
+	}
 	m.unprinted = nil
 	if m.saidOnce {
 		said = "\n" + said

@@ -93,7 +93,7 @@ func TestTheLiveBoxIsYellowWhileRunning(t *testing.T) {
 	if !strings.Contains(view, "\x1b[33;48;5;237m▌") {
 		t.Errorf("view = %q, want the running edit box's yellow spine", view)
 	}
-	if !strings.Contains(view, "\x1b[33m✎") {
+	if !strings.Contains(view, "\x1b[33m⏺") {
 		t.Errorf("view = %q, want the running glyph in that same yellow", view)
 	}
 	if strings.Contains(view, "38;5;3") {
@@ -112,7 +112,7 @@ func TestANonEditToolIsNotBoxedWhileRunning(t *testing.T) {
 	if strings.Contains(m.View().Content, "48;5;237m▌") {
 		t.Error("a read call was boxed, want the ordinary held line")
 	}
-	if !strings.Contains(m.View().Content, "\x1b[33m☰") {
+	if !strings.Contains(m.View().Content, "\x1b[33m⏺") {
 		t.Error("a read call's held line is not painted the running yellow")
 	}
 }

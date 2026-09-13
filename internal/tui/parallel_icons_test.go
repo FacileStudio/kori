@@ -109,7 +109,7 @@ func TestToolGlyphTurnsGreenOnSuccess(t *testing.T) {
 	m.parallelTasks["t0"][0] = parallelTaskInfo{Task: "one", Tool: "read_file", ToolOut: "ok", Active: true}
 
 	raw := m.taskRow(m.parallelTasks["t0"][0])
-	if !strings.Contains(raw, "\x1b[32m☰") {
+	if !strings.Contains(raw, "\x1b[32m⏺") {
 		t.Errorf("succeeded tool glyph not green: %q", raw)
 	}
 	if !strings.Contains(raw, "\x1b[34m read_file") {
