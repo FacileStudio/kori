@@ -79,6 +79,11 @@ type transcript struct {
 	// ring-buffer style, so a long session cannot grow the per-frame redraw
 	// without bound.
 	hold []string
+	// saidOnce records whether anything has been printed or held yet. Every
+	// committed batch after the first gets one leading blank row: spacing
+	// between two things said in the same batch comes from the join, but
+	// separate flushes print separately and need their own separator.
+	saidOnce bool
 	// scrollTop is how many transcript rows the scroll wheel has pulled the
 	// tui-mode window back from the newest row. Held lines are drawn tail-first
 	// with the prompt pinned; scrolling up raises this so earlier rows surface

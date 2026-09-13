@@ -101,6 +101,10 @@ func (m *Model) prints() tea.Cmd {
 	}
 	said := strings.Join(m.unprinted, "\n\n")
 	m.unprinted = nil
+	if m.saidOnce {
+		said = "\n" + said
+	}
+	m.saidOnce = true
 	return m.printed(said)
 }
 
