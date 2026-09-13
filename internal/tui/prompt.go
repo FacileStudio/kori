@@ -11,6 +11,13 @@ import (
 
 const promptRows = 10
 
+// maxContentRows is the prompt's input gate, far above anything a message
+// holds. Bubbles blocks newline insertion once content passes the gate —
+// with MaxHeight doing that job, a paste of ten-plus lines silently ate
+// every later Alt+Enter — so the gate lives on MaxContentHeight while
+// MaxHeight stays the visible viewport cap the prompt scrolls inside.
+const maxContentRows = 1000
+
 // minHeightRows is the shortest the input renders even when it holds a single
 // line, so the field reads as a single line rather than a padded bar. The blank
 // row above the whole field is added by the view assembly.
@@ -31,6 +38,7 @@ func newPrompt(placeholder string, spine lipgloss.Style) textarea.Model {
 	prompt.DynamicHeight = true
 	prompt.MinHeight = minHeightRows
 	prompt.MaxHeight = promptRows
+	prompt.MaxContentHeight = maxContentRows
 	prompt.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "shift+enter"))
 	prompt.SetVirtualCursor(false)
 	backdrop := promptBackdrop()
