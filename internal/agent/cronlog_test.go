@@ -20,7 +20,7 @@ func TestCronRunRecordCarriesStatusAndError(t *testing.T) {
 		Compactions:        2,
 	}
 	started := time.Unix(0, 0)
-	ok, status := stats.record(settings.CronJob{Name: "job"}, "model-x", started, nil)
+	ok, _ := stats.record(settings.CronJob{Name: "job"}, "model-x", started, nil)
 	if ok.Status != string(cronOK) || ok.Error != "" || ok.Usage.Cost != 0.5 || ok.Compactions != 2 {
 		t.Fatalf("clean run record wrong: %+v", ok)
 	}
