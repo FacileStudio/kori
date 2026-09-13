@@ -53,7 +53,38 @@ func localTools(config Config) (_ *tools.Set, local []nacelle.Tool, err error) {
 	}
 	local = append(local, reaching...)
 
-	return opened, local, nil
+	return opened, withPersistentShell(config, local), nil
+}
+
+// withPersistentShell swaps the stateless run_command for one persistent
+// shell per session: same name, same schema, same result shape, only the
+// execution backend changes. Strict confinement stays untouched — its
+// escape checks exist to keep a command from moving out of the working
+// directory, and a shell that remembers where it moved to is exactly what
+// they forbid. The stateless tool stays on as the replacement's fallback,
+// so a session whose persistent shell cannot start still runs commands the
+// old way.
+func withPersistentShell(config Config, local []nacelle.Tool) []nacelle.Tool {
+	if !*config.Bash || settings.DerefBool(config.PathIsolation) {
+		return local
+	}
+	at := -1
+	for i, tool := range local {
+		if tool.Name() == "run_command" {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return local
+	}
+	session := newShellSession(config.Root, commandEnv(config), settings.DerefBool(config.DenyElevation))
+	replacement, err := newShellTool(session, local[at])
+	if err != nil {
+		return local
+	}
+	local[at] = replacement
+	return local
 }
 
 // commandEnv is what run_command hands its children. With security
