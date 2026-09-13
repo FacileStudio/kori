@@ -4,6 +4,13 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.56.0] - 2026-09-13
+
+### Added
+- The `session_start` hook point is accepted in `hooks:` entries and its
+  exit-0 stdout is injected into the conversation, so a hook like `cercle sync`
+  can drop inbox state in before the first model call.
+
 ## [0.55.0] - 2026-09-13
 
 ### Added
