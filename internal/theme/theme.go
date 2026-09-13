@@ -104,6 +104,7 @@ func Prettier(style string, width int) *glamour.TermRenderer {
 	if style == "dark" {
 		base = styles.DarkStyleConfig
 	}
+	base.Document.Margin = nil
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStyles(base),
 		glamour.WithWordWrap(width),
