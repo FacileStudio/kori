@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/styles"
 	"charm.land/lipgloss/v2"
 )
 
@@ -95,16 +96,16 @@ func Themed(dark bool) Palette {
 
 // Prettier builds the glamour markdown renderer.
 //
-// The palette is glamour's dark or light layout — margins, list indent,
-// heading prefixes, blockquote tokens — with every colour stripped, so text
-// renders in the terminal's own default colours and only bold, italic and
-// underline carry the emphasis. Glamour's standard styles hardcode a palette
-// (blue headings, a shaded code background, chroma token colours) that
-// ignores what the terminal is set to; strip in colourless.go walks the
-// style and clears those fields.
+// The palette is glamour's dark or light layout, kept whole: headings,
+// tables, code and inline emphasis all render in glamour's own colours, the
+// way glow does. Width is the word-wrap width.
 func Prettier(style string, width int) *glamour.TermRenderer {
+	base := styles.LightStyleConfig
+	if style == "dark" {
+		base = styles.DarkStyleConfig
+	}
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStyles(colourless(style)),
+		glamour.WithStyles(base),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {

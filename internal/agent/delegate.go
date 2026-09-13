@@ -42,7 +42,26 @@ func withParallelAgents(config settings.Config, backend nacelle.Backend, local [
 		return nil, err
 	}
 
-	return withParallelCancelTool(append(local, parallel))
+	return withParallelCancelTool(append(local, returnControl{parallel}))
+}
+
+// returnControl wraps the parallel tool so the stub the model reads — a bare
+// {"started":N,"batch":...} from the SDK — carries the return-control rule
+// with it. The tool description states the contract, but the stub arrives at
+// the exact moment a model is tempted to keep the main thread open, and a
+// result weighs more on that decision than a description does.
+type returnControl struct {
+	nacelle.Tool
+}
+
+func (r returnControl) Run(ctx context.Context, input json.RawMessage) (string, error) {
+	out, err := r.Tool.Run(ctx, input)
+	if err == nil {
+		out += "\nFan-out dispatched. End your turn now: the parallel agents run detached, " +
+			"their results stream back to the harness, and you are re-engaged to synthesize " +
+			"them when they finish. Do not keep calling tools on the main thread."
+	}
+	return out, err
 }
 
 func withParallelCancelTool(local []nacelle.Tool) ([]nacelle.Tool, error) {

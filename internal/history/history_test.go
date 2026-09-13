@@ -74,24 +74,24 @@ func TestRequeueAndEditing(t *testing.T) {
 	}
 }
 
-// Requeue claims a queued line only while the submitted text is still a draft
-// of it (one carries the other's text). A fresh, unrelated message must not be
-// hijacked into a phantom edit left by browsing history — swallowing it into
-// the queue is the "I typed and it did not send" report.
-func TestRequeueOnlyClaimsARelatedDraft(t *testing.T) {
+// Requeue claims a queued line the moment FromEnd points at one, whatever the
+// rewrite — an anchor is only set by recalling a queued line into the prompt,
+// and submitting from there is an edit. A FromEnd left at zero (nothing
+// recalled, or a past entry recalled last) never claims anything.
+func TestRequeueFollowsTheAnchorNotTheText(t *testing.T) {
 	h := New()
 
 	queued := []string{"q1"}
 	h.FromEnd = 1
-	if !h.Requeue(queued, "fix q1 now") {
-		t.Fatal("Requeue(a rewrite still carrying the line) failed")
+	if !h.Requeue(queued, "a completely different question") {
+		t.Fatal("Requeue refused a full rewrite of the line under edit")
 	}
-	if queued[0] != "fix q1 now" {
+	if queued[0] != "a completely different question" {
 		t.Errorf("queued[0] = %q, want the rewrite kept in place", queued[0])
 	}
 
-	h.FromEnd = 1
-	if h.Requeue(queued, "a completely different question") {
-		t.Error("Requeue swallowed a fresh, unrelated message as a phantom edit")
+	h.FromEnd = 0
+	if h.Requeue(queued, "q1") {
+		t.Error("Requeue claimed a line with no edit anchor set")
 	}
 }

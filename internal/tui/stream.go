@@ -153,14 +153,21 @@ func (m *Model) absorbToolResult(tool nacelle.ToolEvent, rawResult string) {
 	m.finished(&tool)
 }
 
+// commitParagraphs hands every finished paragraph of the answer to the
+// scrollback as it completes. The boundary is a blank line, not any newline:
+// glamour renders each chunk on its own, and a table or list split at a
+// single newline arrives as two half-structures that each render mangled.
+// A fenced code block with a blank line inside still splits; the tail
+// commits whole at the end of the turn, and the live region above shows the
+// full buffer meanwhile.
 func (m *Model) commitParagraphs() {
 	text := m.run.answer.String()
-	idx := strings.LastIndex(text, "\n")
+	idx := strings.LastIndex(text, "\n\n")
 	if idx < 0 {
 		return
 	}
-	complete := text[:idx]
-	partial := text[idx+1:]
+	complete := text[:idx+1]
+	partial := text[idx+2:]
 
 	m.run.answer.Reset()
 	m.run.answer.WriteString(partial)

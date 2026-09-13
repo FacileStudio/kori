@@ -78,15 +78,15 @@ func TestPrintingForgetsWhatItHandedOver(t *testing.T) {
 
 // The live region is repainted in place on every delta, so it has to fit on
 // the screen. Content taller than the terminal cannot be redrawn where it
-// streaming only holds partial lines — every completed line is committed to
-// scrollback immediately by commitParagraphs.
-func TestStreamingHoldsOnlyPartialLines(t *testing.T) {
+// streaming only holds partial paragraphs — every paragraph completed by a
+// blank line is committed to scrollback immediately by commitParagraphs.
+func TestStreamingHoldsOnlyPartialParagraphs(t *testing.T) {
 	m := sized()
-	m.run.answer.WriteString(strings.Repeat("a line of streamed answer\n", 40))
+	m.run.answer.WriteString(strings.Repeat("a paragraph of streamed answer\n\n", 40))
 	m.commitParagraphs()
 
-	if got := m.run.answer.Len(); got > 0 {
-		t.Errorf("answer buffer = %d bytes after 40 complete lines, want 0", got)
+	if got := m.run.answer.String(); got != "" {
+		t.Errorf("answer buffer = %q after 40 complete paragraphs, want it emptied by the trailing boundary", got)
 	}
 }
 
@@ -107,22 +107,22 @@ func TestFlushReturnsTheFullAnswer(t *testing.T) {
 
 // TestCommitParagraphsTracksCommittedBytes ensures commitParagraphs advances
 // the committed length so flush does not re-print what was already said.
-// Note: commitParagraphs commits up to and including the LAST newline in the
-// buffer, which matches the existing behavior.
+// Note: commitParagraphs commits up to and including the LAST blank-line
+// boundary in the buffer, which matches the existing behavior.
 func TestCommitParagraphsTracksCommittedBytes(t *testing.T) {
 	m := sized()
-	m.run.answer.WriteString("first line\nsecond line\npartial")
-	m.run.fullAnswer.WriteString("first line\nsecond line\npartial")
+	m.run.answer.WriteString("first line\n\nsecond line\n\npartial")
+	m.run.fullAnswer.WriteString("first line\n\nsecond line\n\npartial")
 
 	m.commitParagraphs()
 
-	want := "first line\nsecond line\n"
-	if m.run.committedLen != len(want) {
-		t.Errorf("committedLen = %d, want %d after committing up to last newline", m.run.committedLen, len(want))
+	want := "first line\n\nsecond line\n"
+	if m.run.committedLen != len(want)+1 {
+		t.Errorf("committedLen = %d, want %d after committing up to the last blank line", m.run.committedLen, len(want)+1)
 	}
 
 	answer := m.flush()
-	if answer != "first line\nsecond line\npartial" {
+	if answer != "first line\n\nsecond line\n\npartial" {
 		t.Errorf("flush() = %q, want full answer", answer)
 	}
 }
@@ -131,15 +131,15 @@ func TestCommitParagraphsTracksCommittedBytes(t *testing.T) {
 // via commitParagraphs are not re-printed by flush.
 func TestFlushDoesNotDuplicateCommittedLines(t *testing.T) {
 	m := sized()
-	m.run.answer.WriteString("line one\nline two\npartial")
-	m.run.fullAnswer.WriteString("line one\nline two\npartial")
+	m.run.answer.WriteString("line one\n\nline two\n\npartial")
+	m.run.fullAnswer.WriteString("line one\n\nline two\n\npartial")
 
 	m.commitParagraphs()
 
 	committed := strings.Join(spoken(m), "\n")
 
 	answer := m.flush()
-	if answer != "line one\nline two\npartial" {
+	if answer != "line one\n\nline two\n\npartial" {
 		t.Errorf("flush() returned %q, want full answer", answer)
 	}
 	if !strings.Contains(committed, "line one") {

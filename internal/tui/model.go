@@ -53,10 +53,10 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 				edits: map[string]editChange{}},
 		},
 	}
-	m.pretty = theme.Prettier(m.theme.Markdown, m.width)
+	m.pretty = theme.Prettier(m.theme.Markdown, max(m.width-2, 1))
 	m.promptStyles = m.prompt.Styles()
 	if c.StartMessage != "" {
-		m.say(fromClient, strings.TrimRight(c.StartMessage, "\n")+"\n")
+		m.say(fromStart, strings.TrimRight(c.StartMessage, "\n")+"\n")
 	}
 	m.say(fromClient, banner+"\n")
 	if c.Startup.SystemTokens > 0 {

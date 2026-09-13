@@ -5,9 +5,12 @@ import "strings"
 // skillYellow is the raw escape that recolours a /skill token. Bold plus
 // foreground only: the prompt and the question pane paint their own
 // backgrounds, and a full reset would wipe them mid-row. The closing
-// sequence is the token's saved SGR, re-emitted by highlightSkills, which
-// puts whatever style was in effect back for the rest of the row.
+// sequence clears both SGRs the token set — 22 for bold, 39 for the
+// foreground — because 39 alone would leave the bold leaking into the rest
+// of the row. The token's saved SGR follows, re-emitted by highlightSkills,
+// which puts whatever style was in effect back for the rest of the row.
 const skillYellow = "\x1b[1;33m"
+const skillReset = "\x1b[22;39m"
 
 // skillTokens lists every /skill:<name> token the loaded skills answer to.
 func (m *Model) skillTokens() []string {
@@ -71,7 +74,7 @@ func (p *skillPainter) sgrAfter(seq string) {
 
 // wrap paints one token yellow, then hands the row its style back.
 func (p skillPainter) wrap(token string) string {
-	return skillYellow + token + "\x1b[39m" + p.sgr
+	return skillYellow + token + skillReset + p.sgr
 }
 
 // ansiSequence returns the escape sequence at the front of row: ESC plus
