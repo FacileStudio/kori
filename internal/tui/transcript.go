@@ -187,7 +187,7 @@ func (m *Model) streaming() []string {
 	}
 
 	if answer := m.run.answer.String(); answer != "" {
-		live = append(live, m.markdown(answer))
+		live = append(live, m.answerPane(answer, max(m.width, 1)))
 	}
 	groups := m.inFlightGroups()
 	if len(groups) > 0 && len(live) > 0 {
