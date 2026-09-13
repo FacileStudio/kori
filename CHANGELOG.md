@@ -4,6 +4,23 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.55.0] - 2026-09-13
+
+### Added
+- The answer's left-border spine paints while the block streams, not only
+  once it finishes: the live region renders through the same pane painter the
+  committed block uses.
+
+### Fixed
+- Committed transcript lines sat flush against each other when they arrived
+  in separate flushes (thinking trace, then tool call, then result): every
+  batch after the first now leads with one blank row, matching the spacing
+  inside a batch.
+- Skill menu items read in yellow, matching the input prompt, instead of the
+  blue-green nothing else used. Tool call lines put a wider gap after the
+  pencil, read and write glyphs, which ambiguous-width terminals render two
+  cells wide and swallow the space after.
+
 ## [0.54.0] - 2026-09-13
 
 ### Added
