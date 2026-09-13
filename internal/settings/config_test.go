@@ -172,8 +172,8 @@ func TestStartMessageComesFromTheFileAndDefaultsEmpty(t *testing.T) {
 	written(t, "")
 	if config, err := settings(Config{}); err != nil {
 		t.Fatalf("settings: %v", err)
-	} else if *config.StartMessage != "" {
-		t.Errorf("start message = %q, want empty default", *config.StartMessage)
+	} else if *config.StartMessage != *Defaults("").StartMessage {
+		t.Errorf("start message = %q, want the defaults' art", *config.StartMessage)
 	}
 
 	written(t, "ui:\n  start_message: |\n    welcome\n    to nacelle\n")

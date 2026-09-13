@@ -1,5 +1,7 @@
 package settings
 
+import "strings"
+
 // DefaultCompactAt is the transcript size, in tokens, at which a session
 // with no opinion of its own compacts.
 const DefaultCompactAt int64 = 75_000
@@ -19,7 +21,13 @@ func Defaults(system string) Config {
 	cont, resume := false, ""
 	mode, transparent, json := "tui", true, false
 	promptPlaceholder := "Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\\ forces it."
-	startMessage := ""
+	startMessage := strings.Join([]string{
+		"                            ▄▄ ▄▄",
+		"                            ██ ██",
+		"    ████▄  ▀▀█▄ ▄████ ▄█▀█▄ ██ ██ ▄█▀█▄",
+		"    ██ ██ ▄█▀██ ██    ██▄█▀ ██ ██ ██▄█▀",
+		"    ██ ██ ▀█▄██ ▀████ ▀█▄▄▄ ██ ██ ▀█▄▄▄",
+	}, "\n")
 	return Config{
 		Provider:  Provider{Backend: "anthropic"},
 		Session:   Session{Root: ".", System: system, Continue: &cont, Resume: &resume},
