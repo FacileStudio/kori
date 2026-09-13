@@ -145,9 +145,9 @@ func (m *Model) refreshMenu() {
 
 func (m *Model) navigateMenu(press tea.KeyPressMsg) bool {
 	switch press.String() {
-	case "up":
+	case "up", "ctrl+k":
 		m.menu.Up()
-	case "down":
+	case "down", "ctrl+j":
 		m.menu.Down()
 	case "tab", "enter":
 		if it, ok := m.menu.SelectedItem(); ok {
