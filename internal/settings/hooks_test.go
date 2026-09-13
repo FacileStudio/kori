@@ -179,3 +179,39 @@ func runContractCase(t *testing.T, tt contractCase) {
 		}
 	}
 }
+
+// sessionStartHook builds one hook from a spec and fires it the way the
+// library does at session start: no tool, no input, nothing to report.
+func sessionStartHook(t *testing.T, spec HookSpec) nacelle.HookResult {
+	t.Helper()
+	hooks, err := BuildHooks(hookConfig{spec})
+	if err != nil {
+		t.Fatalf("BuildHooks: %v", err)
+	}
+	return hooks[nacelle.SessionStart][0](context.Background(), nacelle.HookEvent{Point: nacelle.SessionStart})
+}
+
+// A session_start hook is not tool-shaped: its stdin payload names the point
+// and carries empty tool fields, and that is the whole contract it sees.
+func TestSessionStartHookReadsAnEmptyToolPayload(t *testing.T) {
+	res := sessionStartHook(t, HookSpec{On: "session_start", Run: `cat`})
+
+	if res.Deny != "" {
+		t.Errorf("deny = %q; a session_start hook has nothing to deny", res.Deny)
+	}
+	for _, want := range []string{`"event":"session_start"`, `"tool":""`, `"input":""`} {
+		if !strings.Contains(res.Inject, want) {
+			t.Errorf("inject = %q; want it to carry %s", res.Inject, want)
+		}
+	}
+}
+
+// Exit zero's stdout is the injection, trailing newline trimmed — the same
+// rule an after_tool_call hook's output follows.
+func TestSessionStartStdoutBecomesTheInjection(t *testing.T) {
+	res := sessionStartHook(t, HookSpec{On: "session_start", Run: `echo "3 unread"`})
+
+	if res.Inject != "3 unread" {
+		t.Errorf("inject = %q, want %q", res.Inject, "3 unread")
+	}
+}

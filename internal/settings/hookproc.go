@@ -68,13 +68,15 @@ func runCommand(ctx context.Context, command string, payload hookPayload) (out [
 //	              because a crash is a bug report for the human, not
 //	              instruction-shaped text for the model
 //
-// Injection only lands on AfterToolCall — there is no result to amend before
-// the call — and is skipped on a failed tool: prose after an error reads to
-// the model as if the error were handled when nothing was.
+// Injection lands on AfterToolCall, where there is a result to amend, and on
+// SessionStart, where there is no result but the run has not started, so the
+// text rides into the conversation on its own. It is skipped on a failed
+// tool: prose after an error reads to the model as if the error were handled
+// when nothing was.
 func interpret(command string, ev nacelle.HookEvent, runErr error, out, errOut []byte) nacelle.HookResult {
 	switch {
 	case runErr == nil:
-		if ev.Point == nacelle.AfterToolCall && len(out) > 0 && ev.Err == nil {
+		if injects(ev.Point) && len(out) > 0 && ev.Err == nil {
 			return nacelle.HookResult{Inject: strings.TrimRight(string(out), "\n")}
 		}
 		return nacelle.HookResult{}
@@ -89,6 +91,12 @@ func interpret(command string, ev nacelle.HookEvent, runErr error, out, errOut [
 			command, runErr, strings.TrimSpace(string(errOut)))
 		return nacelle.HookResult{Deny: fmt.Sprintf("hook watching %q failed", ev.Tool)}
 	}
+}
+
+// injects reports the points whose exit-0 stdout reaches the model. The
+// other points fire for audit or gating, and their stdout goes unread.
+func injects(p nacelle.HookPoint) bool {
+	return p == nacelle.AfterToolCall || p == nacelle.SessionStart
 }
 
 // exitCode recovers a command's status without importing syscall for it.
