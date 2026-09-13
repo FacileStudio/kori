@@ -42,25 +42,27 @@ func TestAnAnswerIsRenderedAsMarkdownRatherThanShownRaw(t *testing.T) {
 	}
 }
 
-// The markdown palette is the terminal's own: no SGR colour or background
-// escape anywhere in a render covering every coloured element of the style —
-// heading, code span, fenced block with chroma tokens, list, quote, link.
-// Emphasis is bold, not paint.
-func TestMarkdownRendersInTheTerminalSDefaultColours(t *testing.T) {
+// The markdown palette is glamour's own: a render covering every coloured
+// element of the style — heading, list, quote, link, fenced block with chroma
+// tokens — carries SGR colour escapes, while OSC 8 hyperlinks stay stripped.
+//
+// The assertion names the heading rather than hunting for any escape
+// whatsoever: a bare "\x1b[38;" passes the moment some token decides to
+// colour itself, which says nothing about the palette being applied. The
+// heading's foreground (228) is the one token every glamour theme paints,
+// so it is the load-bearing check.
+func TestMarkdownRendersWithGlamourSColours(t *testing.T) {
 	source := "# Title\n\n- item\n\n> quoted\n\n[link](https://x)\n\n```go\nx := 1\n```\n"
 	for _, style := range []string{"dark", "light"} {
 		drawn := RenderMarkdown(Prettier(style, 80), source)
-		if strings.Contains(drawn, "\x1b[38;") || strings.Contains(drawn, "\x1b[48;") {
-			t.Errorf("drawn = %q, want no colour escape", drawn)
+		if !strings.Contains(drawn, "\x1b[38;5;228") {
+			t.Errorf("drawn = %q, want the heading's foreground escape from glamour's palette", ansi.Strip(drawn))
 		}
 		if !strings.Contains(drawn, "Title") || !strings.Contains(drawn, "item") {
-			t.Errorf("drawn = %q, want the content preserved", drawn)
+			t.Errorf("drawn = %q, want the content preserved", ansi.Strip(drawn))
 		}
 		if strings.Contains(drawn, "\x1b]8;") {
 			t.Errorf("drawn = %q, want no OSC 8 hyperlink sequence", drawn)
-		}
-		if strings.Contains(drawn, "background_color") || strings.Contains(drawn, "#373737") {
-			t.Errorf("drawn = %q, want no code-block background colour", drawn)
 		}
 	}
 }

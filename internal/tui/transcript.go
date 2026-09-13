@@ -47,6 +47,10 @@ const (
 
 	// fromCompact is the client reporting that it compacted the context.
 	fromCompact
+
+	// fromStart is the configured start message, which paints in the
+	// terminal's own foreground rather than the muted client grey.
+	fromStart
 )
 
 // say commits one finished thing to the terminal's own scrollback.
@@ -62,6 +66,11 @@ const (
 // say has callers that cannot return one — absorb folding an event, flush
 // committing an answer. Update drains the queue after every message, so the
 // order lines are said in is the order they land in.
+//
+// The session log records the same text tagged with who said it, so a /resume
+// replays the conversation rather than the display. fromStart is the one
+// speaker that paints but is not recorded — the start message is client
+// chrome, not part of the conversation.
 func (m *Model) say(who speaker, text string) {
 	painted := m.paint(who, text)
 	switch who {
@@ -124,13 +133,12 @@ func (m *Model) prints() tea.Cmd {
 // none, and is rendered as the markdown the model almost certainly wrote it
 // in.
 //
-// What the client says about itself is the one thing not held to a width, and
-// the banner is why. It is painted in newModel, before any WindowSizeMsg has
-// arrived, so the only width available is the 80 the model starts at — and it
-// is now printed to stdout before the program starts, so it is never repainted
-// either. Held to 80 it wrapped "· bash on" onto a line of its own on every
-// terminal wider than that. Unconstrained, the terminal wraps it the way it
-// wraps everything else, which is what this file argues for everywhere else.
+// What the client says about itself is the one thing not held to a width,
+// and the banner is why. It is painted in newModel before any WindowSizeMsg
+// has arrived, so the only width available is the 80 the model starts at —
+// and it is now printed to stdout before the program starts, so it is never
+// repainted either. Unconstrained, the terminal wraps it the way it wraps
+// everything else, which is what this file argues for everywhere else.
 //
 // Width is taken once, here, at the moment the line is printed. It can never
 // be re-taken: the line is in the terminal's scrollback from then on, and a
@@ -144,7 +152,7 @@ func (m *Model) paint(who speaker, text string) string {
 	case fromReader:
 		return m.question(text, width)
 	case fromModel:
-		return m.markdown(text)
+		return m.answerBlock(text, width)
 	case fromThinking:
 		return m.margined([]string{m.theme.Thinking.Width(width - 2).Render(text)})[0]
 	case fromTool:
@@ -159,6 +167,8 @@ func (m *Model) paint(who speaker, text string) string {
 		return m.theme.Muted.Render(text)
 	case fromCompact:
 		return m.theme.Compacting.Render(text)
+	case fromStart:
+		return text
 	default:
 		return m.theme.Client.Render(text)
 	}
@@ -179,13 +189,6 @@ func (m *Model) paint(who speaker, text string) string {
 // raw asterisks in the streaming region is worse than a slight reflow when a
 // new character arrives. Half a code block falls back to plain text — glamour
 // is lenient with incomplete markdown.
-//
-// It stamps the moment reasoning started on its way past. Drawing is not where
-// a clock belongs, but this is the only thing that runs after every absorbed
-// delta and lives in a file this may write to — absorb itself is in view.go.
-// The frame is drawn after every message, so the stamp lands one frame after
-// the first thinking delta, which is under a millisecond on a figure printed
-// to a tenth of a second. See stamp.
 func (m *Model) streaming() []string {
 	var live []string
 	if reasoning := m.run.reasoning.String(); reasoning != "" {
@@ -238,7 +241,7 @@ func (m *Model) inFlightGroups() []string {
 }
 
 func (m *Model) restyle() {
-	m.pretty = theme.Prettier(m.theme.Markdown, max(m.width, 1))
+	m.pretty = theme.Prettier(m.theme.Markdown, max(m.width-2, 1))
 }
 
 func (m *Model) markdown(text string) string {
