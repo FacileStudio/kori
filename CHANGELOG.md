@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.57.1] - 2026-09-13
+
+### Fixed
+- The live streaming region kept no blank row above itself, and client lines
+  rendered inside the margin lost their spacing; both now hold one blank row.
+
 All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
