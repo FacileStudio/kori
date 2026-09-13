@@ -4,6 +4,17 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.9] - 2026-09-13
+
+### Fixed
+- Parallel agent rows register again under the prompt: the return-control
+  prose appended to the `parallel_agents` stub made the batch decoder fail,
+  so the fan-out ran detached with no status lines. The decoder now reads the
+  first JSON value and ignores the prose.
+- Answer panes sit flush against their border again: glamour's restored stock
+  styles brought a document margin of two spaces on top of the border's own,
+  leaving three columns before the text. The margin is dropped.
+
 ## [0.53.8] - 2026-09-13
 
 ### Added
