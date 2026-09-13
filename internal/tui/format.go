@@ -12,9 +12,10 @@ import (
 func (m *Model) question(text string, width int) string {
 	body := m.theme.Question.Width(max(width-2, 1)).Render(text)
 	spines := m.theme.Question.Render("▌ ")
+	tokens := m.skillTokens()
 	lines := strings.Split(body, "\n")
 	for i, line := range lines {
-		lines[i] = spines + line
+		lines[i] = spines + highlightSkills(line, tokens)
 	}
 	return strings.Join(lines, "\n")
 }

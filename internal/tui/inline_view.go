@@ -23,7 +23,7 @@ func (m *Model) assembleInline() tea.View {
 	if menu := m.viewMenu(); menu != "" {
 		parts = append(parts, menu)
 	}
-	parts = append(parts, m.prompt.View())
+	parts = append(parts, highlightSkills(m.prompt.View(), m.skillTokens()))
 	if below := m.belowContent(); below != "" {
 		parts = append(parts, "", below)
 	}
