@@ -4,6 +4,25 @@ All notable changes to `nacelle-tui` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 
+## [0.53.8] - 2026-09-13
+
+### Added
+- Parallel tool results now carry the return-control rule in the stub itself:
+  the model is told to end its turn at the moment the fan-out dispatches.
+
+### Changed
+- Markdown renders with glamour's stock dark/light styles, colours included,
+  the way glow does, instead of stripping every colour field by reflection.
+- `/skill:name` highlighting resets bold and foreground together, so the
+  token's bold no longer leaks into the rest of the row.
+- Streaming commits whole paragraphs to the scrollback at blank-line
+  boundaries, so tables and lists are never rendered half-structured.
+
+### Fixed
+- Requeue follows the edit anchor, not text similarity: a full rewrite of a
+  recalled queued line lands in place, and a fresh message typed after
+  browsing history is never swallowed as a phantom edit.
+
 ## [0.53.7] - 2026-09-13
 
 ### Added
