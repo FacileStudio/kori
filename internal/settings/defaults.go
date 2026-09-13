@@ -22,11 +22,11 @@ func Defaults(system string) Config {
 	mode, transparent, json := "tui", true, false
 	promptPlaceholder := "Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\\ forces it."
 	startMessage := strings.Join([]string{
-		"                            ▄▄ ▄▄",
-		"                            ██ ██",
-		"    ████▄  ▀▀█▄ ▄████ ▄█▀█▄ ██ ██ ▄█▀█▄",
-		"    ██ ██ ▄█▀██ ██    ██▄█▀ ██ ██ ██▄█▀",
-		"    ██ ██ ▀█▄██ ▀████ ▀█▄▄▄ ██ ██ ▀█▄▄▄",
+		"                        ▄▄ ▄▄",
+		"                        ██ ██",
+		"████▄  ▀▀█▄ ▄████ ▄█▀█▄ ██ ██ ▄█▀█▄",
+		"██ ██ ▄█▀██ ██    ██▄█▀ ██ ██ ██▄█▀",
+		"██ ██ ▀█▄██ ▀████ ▀█▄▄▄ ██ ██ ▀█▄▄▄",
 	}, "\n")
 	return Config{
 		Provider:  Provider{Backend: "anthropic"},
