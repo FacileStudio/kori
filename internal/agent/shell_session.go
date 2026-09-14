@@ -100,7 +100,10 @@ func (s *shellSession) spawn() error {
 		return err
 	}
 
-	s.closePipes()
+	if err := s.closePipes(); err != nil {
+		s.broken = true
+		return err
+	}
 	s.cmd = cmd
 	s.stdin = stdinW
 	s.stdout = stdoutR
@@ -155,27 +158,31 @@ func (s *shellSession) reap(killFirst bool) error {
 
 // Close ends the session: stdin closes so the loop unwinds, the process
 // group is asked to stop and then made to, and the pipes go. Safe to call
-// twice; the finalizer calls it after the caller already has.
-func (s *shellSession) Close() {
+// twice; the finalizer calls it after the caller already has. It reports
+// whatever the teardown hit, though nothing can usually act on it.
+func (s *shellSession) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var err error
 	if s.alive && s.stdin != nil {
-		_ = s.stdin.Close()
+		err = s.stdin.Close()
 	}
-	_ = s.reap(true)
-	s.closePipes()
+	err = errors.Join(err, s.reap(true), s.closePipes())
 	s.alive = false
 	s.broken = true
+	return err
 }
 
 // closePipes drops whatever pipes a previous shell still held.
-func (s *shellSession) closePipes() {
+func (s *shellSession) closePipes() error {
+	var err error
 	if s.stdin != nil {
-		_ = s.stdin.Close()
+		err = s.stdin.Close()
 		s.stdin = nil
 	}
 	if s.stdout != nil {
-		_ = s.stdout.Close()
+		err = errors.Join(err, s.stdout.Close())
 		s.stdout = nil
 	}
+	return err
 }

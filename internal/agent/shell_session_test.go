@@ -55,7 +55,11 @@ func shellTestTool(t *testing.T, dir, binary string, denyElevation bool) nacelle
 	if err != nil {
 		t.Fatalf("building the shell tool: %v", err)
 	}
-	t.Cleanup(session.Close)
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Logf("session teardown: %v", err)
+		}
+	})
 	return tool
 }
 

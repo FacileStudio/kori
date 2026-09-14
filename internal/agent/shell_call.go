@@ -72,8 +72,8 @@ func (x *shellExchange) run(nonce string) (string, error) {
 	marker := shellDonePrefix + nonce + ":"
 	chunk := make([]byte, 32*1024)
 
-	if deadline, ok := x.ctx.Deadline(); ok {
-		_ = x.session.stdout.SetReadDeadline(deadline)
+	if err := x.startRead(); err != nil {
+		return x.finish(err)
 	}
 	watching := make(chan struct{})
 	go x.awaitCancel(watching)
@@ -92,12 +92,24 @@ func (x *shellExchange) run(nonce string) (string, error) {
 	}
 }
 
+// startRead puts the call's deadline on the stdout pipe when the context
+// carries one, so a run without a deadline reads without a deadline.
+func (x *shellExchange) startRead() error {
+	if deadline, ok := x.ctx.Deadline(); ok {
+		return x.session.stdout.SetReadDeadline(deadline)
+	}
+	return nil
+}
+
 // awaitCancel unblocks the read the moment the context is cancelled, which
-// the deadline alone would not notice until it expired.
+// the deadline alone would not notice until it expired. A pipe that refuses
+// the deadline leaves the next call's markBroken — the session respawns.
 func (x *shellExchange) awaitCancel(watching <-chan struct{}) {
 	select {
 	case <-x.ctx.Done():
-		_ = x.session.stdout.SetReadDeadline(time.Now())
+		if err := x.session.stdout.SetReadDeadline(time.Now()); err != nil {
+			x.session.broken = true
+		}
 	case <-watching:
 	}
 }
@@ -132,11 +144,9 @@ func (x *shellExchange) complete(end, rc int) string {
 func (x *shellExchange) finish(readErr error) (string, error) {
 	switch {
 	case errors.Is(x.ctx.Err(), context.Canceled):
-		_ = x.session.reap(true)
-		return shellReport(string(x.data), -1, x.ctx.Err(), x.maxOutput), x.ctx.Err()
+		return shellReport(string(x.data), -1, errors.Join(x.ctx.Err(), x.session.reap(true)), x.maxOutput), x.ctx.Err()
 	case errors.Is(readErr, os.ErrDeadlineExceeded) || x.ctx.Err() != nil:
-		_ = x.session.reap(true)
-		return shellReport(string(x.data), -1, shellTimedOut{after: x.timeout}, x.maxOutput), nil //nolint:nilerr // the timeout is reported in the report, not as an error
+		return shellReport(string(x.data), -1, errors.Join(shellTimedOut{after: x.timeout}, x.session.reap(true)), x.maxOutput), nil //nolint:nilerr // the timeout is reported in the report, not as an error
 	default:
 		dead := x.session.reap(false)
 		failure := dead

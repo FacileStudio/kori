@@ -81,6 +81,7 @@ func withPersistentShell(config Config, local []nacelle.Tool) []nacelle.Tool {
 	session := newShellSession(config.Root, commandEnv(config), settings.DerefBool(config.DenyElevation))
 	replacement, err := newShellTool(session, local[at])
 	if err != nil {
+		defer func() { _ = session.Close() }()
 		return local
 	}
 	local[at] = replacement

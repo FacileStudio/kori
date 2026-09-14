@@ -36,7 +36,9 @@ func newShellTool(session *shellSession, fallback nacelle.Tool) (nacelle.Tool, e
 	if err != nil {
 		return nil, err
 	}
-	runtime.SetFinalizer(tool, func(nacelle.Tool) { session.Close() })
+	runtime.SetFinalizer(tool, func(nacelle.Tool) {
+		defer func() { _ = session.Close() }()
+	})
 	return tool, nil
 }
 

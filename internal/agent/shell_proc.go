@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -22,30 +23,25 @@ func launchShellPipes(cmd *exec.Cmd) (io.WriteCloser, *os.File, error) {
 	}
 	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
-		_ = stdinR.Close()
-		_ = stdinW.Close()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, stdinR.Close(), stdinW.Close())
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stdoutW
 
 	if err := cmd.Start(); err != nil {
-		_ = stdinR.Close()
-		_ = stdinW.Close()
-		_ = stdoutR.Close()
-		_ = stdoutW.Close()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, stdinR.Close(), stdinW.Close(), stdoutR.Close(), stdoutW.Close())
 	}
-	_ = stdinR.Close()
-	_ = stdoutW.Close()
-	return stdinW, stdoutR, nil
+	return stdinW, stdoutR, errors.Join(stdinR.Close(), stdoutW.Close())
 }
 
 // respawn replaces a shell that died since the last call. Any state it held
 // is gone with it; the next command starts fresh, the way the stateless
 // runner starts every command.
 func (s *shellSession) respawn() error {
-	_ = s.reap(false)
-	return s.spawn()
+	reapErr := s.reap(false)
+	if err := s.spawn(); err != nil {
+		return errors.Join(err, reapErr)
+	}
+	return nil
 }
 
 // write sends one NUL-terminated record to the shell's stdin.
@@ -63,7 +59,9 @@ func (s *shellSession) drain() {
 	if s.stdout == nil {
 		return
 	}
-	_ = s.stdout.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+	if err := s.stdout.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		return
+	}
 	chunk := make([]byte, 32*1024)
 	for {
 		if _, err := s.stdout.Read(chunk); err != nil {

@@ -160,9 +160,16 @@ func bashRules(config Config) string {
 	if !*config.Bash {
 		return ""
 	}
-	return "\nrun_command is a real shell, running with this process's own privileges " +
+	text := "\nrun_command is a real shell, running with this process's own privileges " +
 		"and nothing confining it to the working directory. Anything irreversible — " +
 		"git reset --hard, git checkout --, a force push, rm on a path you did not create — " +
 		"is worth a sentence to the person first rather than an apology after. Uncommitted " +
 		"changes you did not make are theirs, not yours to tidy up.\n"
+	if !*config.PathIsolation {
+		text += "run_command keeps one shell for the whole session: the current " +
+			"directory, exported variables and background jobs survive between calls, " +
+			"so cd once instead of chaining it onto every command. For a long job, run " +
+			"it in the background with `> log 2>&1 &` and check the log later.\n"
+	}
+	return text
 }
