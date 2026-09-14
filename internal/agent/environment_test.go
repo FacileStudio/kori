@@ -185,3 +185,33 @@ func TestEnvironmentExplainsTheCatalogWhenOneIsMounted(t *testing.T) {
 		}
 	}
 }
+
+func TestEnvironmentMentionsSearchToolsOnlyWhenMounted(t *testing.T) {
+	got := environment(defaults(), time.Now(), connected{})
+	if !strings.Contains(got, "search_content") {
+		t.Errorf("environment() = %q, want search_content named when SearchContent is on", got)
+	}
+	if !strings.Contains(got, "find_files") {
+		t.Errorf("environment() = %q, want find_files named when FindFiles is on", got)
+	}
+
+	config := defaults()
+	off := false
+	config.SearchContent = &off
+	config.FindFiles = &off
+
+	disabled := environment(config, time.Now(), connected{})
+	if strings.Contains(disabled, "search_content") {
+		t.Errorf("environment() = %q, want no search_content when disabled", disabled)
+	}
+	if strings.Contains(disabled, "find_files") {
+		t.Errorf("environment() = %q, want no find_files when disabled", disabled)
+	}
+}
+
+func TestDefaultSystemPromptDoesNotMentionListDirectory(t *testing.T) {
+	prompt := DefaultSystemPrompt()
+	if strings.Contains(prompt, "list_directory") {
+		t.Errorf("DefaultSystemPrompt() contains phantom tool list_directory")
+	}
+}

@@ -15,20 +15,15 @@ var defaultSystemPrompt = `You are running inside kori, a terminal-based agent h
 You are an AI assistant with access to tools for reading and writing files, searching content, running commands, browsing the web, planning tasks, and delegating to parallel_agents. The tools available to you are:
 
 **File and directory**
-- read_file — read a file, returning numbered lines so a line can be quoted back exactly. Use it before editing anything, and on large files start with the limit and offset parameters instead of reading the whole thing; reading a file you will not act on wastes context. Returns the file's content, not a summary — for where something lives or is used, search_content is cheaper.
+- read_file — read a file, returning numbered lines so a line can be quoted back exactly. Use it before editing anything, and on large files start with the limit and offset parameters instead of reading the whole thing; reading a file you will not act on wastes context. Returns the file's content, not a summary — for where something lives or is used, search tools are cheaper.
 - write_file — create a file or replace one entirely. Use it for a new file, or for a small file where rewriting the whole content is clearer than patching it. Never for part of an existing file — that is edit_file's job, which preserves the rest; write_file cannot.
 - edit_file — replace one exact piece of text in an existing file, producing a reviewable diff. Read the file first; the old text must match exactly and appear once, so widen it with surrounding lines until it is unique. Prefer this over write_file and over shell edits for any change to an existing file.
-- list_directory — list one directory's files and subdirectories. Use it to get your bearings in a tree you have not seen, before searching or reading anything.
-- find_files — list files matching a glob, such as **/*.go. Use it to learn what exists or where something lives, before opening anything. It matches names, not contents — search_content is the one that looks inside files.
-
-**Search**
-- search_content — search file contents with a regular expression, returning matching lines with file and line number. Narrow with a glob when you know the file type. Use it instead of reading files one at a time to find where something is defined or used.
 
 **Shell**
 - run_command — run a shell command from the working directory. Use it for builds, tests, version control and anything the other tools do not cover; prefer the dedicated file and search tools when one fits, since shell output is truncated. It runs with this process's own privileges and sees the whole filesystem.
 
 **Planning and delegation**
-- tasks — lay out work as a list of steps, shown live to the user. Use it only for work that splits into several distinct steps or a numbered list; a one- or two-step job is noise on the screen.
+- tasks — plan multi-step work and track progress as you go. Create steps before starting complex tasks, update them as you complete each one. Keeps both you and the user aligned on what's done, in flight, and next.
 - parallel_agents — delegate independent sub-tasks to parallel assistant runs. For each task, provide a short 4-7 word title describing the session and the detailed task instructions.
 
 Tool schemas describe exactly what each tool can do and what parameters it accepts — use them as the contract for every call.
@@ -79,7 +74,7 @@ func DefaultSystemPrompt() string {
 }
 
 func environment(config Config, now time.Time, mcp connected) string {
-	return sessionBlock(config) + sessionMeta(now) + approvalNote(config) + bashRules(config) + webNote(config) + tasksNote() + parallelNote() + mcpNote(mcp)
+	return sessionBlock(config) + sessionMeta(now) + approvalNote(config) + bashRules(config) + webNote(config) + searchContentNote(config) + findFilesNote(config) + tasksNote() + parallelNote() + mcpNote(mcp)
 }
 
 func sessionBlock(config Config) string {
@@ -88,11 +83,11 @@ func sessionBlock(config Config) string {
 	body.WriteString("Working directory: ")
 	body.WriteString(absolute(config.Root))
 	body.WriteString("\n\n")
-	if *config.PathIsolation {
+	if config.PathIsolation != nil && *config.PathIsolation {
 		body.WriteString("File and directory tools take paths relative to the working directory and cannot reach outside " +
 			"it: absolute paths that sit under the working directory are resolved relative " +
 			"to it, so \"/etc/hosts\" means \"etc/hosts\" inside the working directory.")
-		if *config.Bash {
+		if config.Bash != nil && *config.Bash {
 			body.WriteString(" run_command starts in that same directory but sees the whole filesystem, " +
 				"so an absolute path to a location outside the working directory works there " +
 				"and nowhere else.")
@@ -102,7 +97,7 @@ func sessionBlock(config Config) string {
 			"paths under the working directory. There is no confinement: the model can " +
 			"read or edit anywhere on the host filesystem, so absolute paths outside the " +
 			"working directory work in file tools.")
-		if *config.Bash {
+		if config.Bash != nil && *config.Bash {
 			body.WriteString(" run_command runs from the working directory but sees the whole filesystem too.")
 		}
 	}
@@ -126,7 +121,7 @@ func sessionMeta(now time.Time) string {
 }
 
 func approvalNote(config Config) string {
-	if *config.ApproveTools {
+	if config.ApproveTools != nil && *config.ApproveTools {
 		return "\nEvery tool call is shown to the person running this before it runs. A " +
 			"refusal is their decision, not a failure to route around.\n"
 	}
@@ -157,7 +152,7 @@ func parallelNote() string {
 }
 
 func bashRules(config Config) string {
-	if !*config.Bash {
+	if config.Bash == nil || !*config.Bash {
 		return ""
 	}
 	text := "\nrun_command is a real shell, running with this process's own privileges " +
@@ -165,7 +160,7 @@ func bashRules(config Config) string {
 		"git reset --hard, git checkout --, a force push, rm on a path you did not create — " +
 		"is worth a sentence to the person first rather than an apology after. Uncommitted " +
 		"changes you did not make are theirs, not yours to tidy up.\n"
-	if !*config.PathIsolation {
+	if config.PathIsolation == nil || !*config.PathIsolation {
 		text += "run_command keeps one shell for the whole session: the current " +
 			"directory, exported variables and background jobs survive between calls, " +
 			"so cd once instead of chaining it onto every command. For a long job, run " +

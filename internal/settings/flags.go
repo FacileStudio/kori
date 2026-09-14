@@ -46,7 +46,7 @@ type uiFlags struct {
 }
 
 type togglesFlags struct {
-	bash, parallelAgents, fetch, approveTools, diffs, tasks, diagnostics *bool
+	bash, parallelAgents, fetch, approveTools, diffs, tasks, diagnostics, searchContent, findFiles *bool
 }
 
 type reasoningFlags struct {
@@ -107,6 +107,8 @@ func declareToggles(fallback Config) togglesFlags {
 		diffs:          flag.Bool("diffs", *fallback.Diffs, "show a git-style diff when the model edits a file; on by default"),
 		tasks:          flag.Bool("tasks", *fallback.Tasks, "give the model a task planning tool to create and update checklists; on by default"),
 		diagnostics:    flag.Bool("diagnostics", *fallback.Diagnostics, "give the model post-edit diagnostics and a tool to pull them; on by default"),
+		searchContent:  flag.Bool("search-content", *fallback.SearchContent, "let the model search file contents with regex; on by default"),
+		findFiles:      flag.Bool("find-files", *fallback.FindFiles, "let the model find files by glob; on by default"),
 	}
 }
 

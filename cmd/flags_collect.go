@@ -81,6 +81,12 @@ func collectToolFlags(cmd *cobra.Command, f *toolFlags, cfg *settings.Config) {
 	if fl.Changed("diagnostics") {
 		cfg.Diagnostics = &f.diagnostics
 	}
+	if fl.Changed("search-content") {
+		cfg.SearchContent = &f.searchContent
+	}
+	if fl.Changed("find-files") {
+		cfg.FindFiles = &f.findFiles
+	}
 	if fl.Changed("mcp") {
 		cfg.MCPFiles = f.mcp
 	}

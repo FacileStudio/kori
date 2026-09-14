@@ -29,6 +29,8 @@ type toolFlags struct {
 	diffs          bool
 	tasks          bool
 	diagnostics    bool
+	searchContent  bool
+	findFiles      bool
 	mcp            []string
 }
 
@@ -88,6 +90,8 @@ func bindToolFlags(cmd *cobra.Command, f *toolFlags) {
 	fl.BoolVar(&f.diffs, "diffs", true, "Show unified diffs when the model edits files")
 	fl.BoolVar(&f.tasks, "tasks", true, "Enable task planning tool for checklists")
 	fl.BoolVar(&f.diagnostics, "diagnostics", true, "Provide compiler and linter diagnostics to the model")
+	fl.BoolVar(&f.searchContent, "search-content", true, "Allow the model to search file contents with regex")
+	fl.BoolVar(&f.findFiles, "find-files", true, "Allow the model to find files by glob")
 	fl.StringSliceVar(&f.mcp, "mcp", nil, "Path to MCP server configuration JSON file (repeatable)")
 }
 

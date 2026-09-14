@@ -66,3 +66,13 @@ func TestNormalizeArgs(t *testing.T) {
 		t.Errorf("expected arg after -- untouched, got %s", os.Args[7])
 	}
 }
+
+func TestRootSearchFlags(t *testing.T) {
+	cmd := newRootCmd("v0.57.0")
+	if cmd.Flags().Lookup("search-content") == nil {
+		t.Error("search-content flag missing from root command")
+	}
+	if cmd.Flags().Lookup("find-files") == nil {
+		t.Error("find-files flag missing from root command")
+	}
+}

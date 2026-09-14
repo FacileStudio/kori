@@ -13,9 +13,6 @@ func (c *Config) merge(over Config) {
 	if over.Budget != nil {
 		c.Budget = over.Budget
 	}
-	if over.Fetch != nil {
-		c.Fetch = over.Fetch
-	}
 	if len(over.SkillDirs) > 0 {
 		c.SkillDirs = over.SkillDirs
 	}
@@ -78,54 +75,35 @@ func (c *Config) mergeStrings(over Config) {
 	}
 }
 
+func mergeBool(dst **bool, src *bool) {
+	if src != nil {
+		*dst = src
+	}
+}
+
 // mergeToggles overwrites every *bool setting over actually mentions.
 func (c *Config) mergeToggles(over Config) {
-	if over.Bash != nil {
-		c.Bash = over.Bash
-	}
-	if over.ParallelAgents != nil {
-		c.ParallelAgents = over.ParallelAgents
-	}
-	if over.Thinking != nil {
-		c.Thinking = over.Thinking
-	}
-	if over.ProjectContext != nil {
-		c.ProjectContext = over.ProjectContext
-	}
-	if over.Skills != nil {
-		c.Skills = over.Skills
-	}
-	if over.TrustSkills != nil {
-		c.TrustSkills = over.TrustSkills
-	}
-	if over.TrustHooks != nil {
-		c.TrustHooks = over.TrustHooks
-	}
-	if over.Diffs != nil {
-		c.Diffs = over.Diffs
-	}
-	if over.Tasks != nil {
-		c.Tasks = over.Tasks
-	}
-	if over.Diagnostics != nil {
-		c.Diagnostics = over.Diagnostics
-	}
+	mergeBool(&c.Bash, over.Bash)
+	mergeBool(&c.ParallelAgents, over.ParallelAgents)
+	mergeBool(&c.Fetch, over.Fetch)
+	mergeBool(&c.Thinking, over.Thinking)
+	mergeBool(&c.ProjectContext, over.ProjectContext)
+	mergeBool(&c.Skills, over.Skills)
+	mergeBool(&c.TrustSkills, over.TrustSkills)
+	mergeBool(&c.TrustHooks, over.TrustHooks)
+	mergeBool(&c.Diffs, over.Diffs)
+	mergeBool(&c.Tasks, over.Tasks)
+	mergeBool(&c.Diagnostics, over.Diagnostics)
+	mergeBool(&c.SearchContent, over.SearchContent)
+	mergeBool(&c.FindFiles, over.FindFiles)
 }
 
 // mergeSecurity overwrites the security toggles over actually mentions.
 func (c *Config) mergeSecurity(over Config) {
-	if over.ApproveTools != nil {
-		c.ApproveTools = over.ApproveTools
-	}
-	if over.PathIsolation != nil {
-		c.PathIsolation = over.PathIsolation
-	}
-	if over.DenyElevation != nil {
-		c.DenyElevation = over.DenyElevation
-	}
-	if over.EnvIsolation != nil {
-		c.EnvIsolation = over.EnvIsolation
-	}
+	mergeBool(&c.ApproveTools, over.ApproveTools)
+	mergeBool(&c.PathIsolation, over.PathIsolation)
+	mergeBool(&c.DenyElevation, over.DenyElevation)
+	mergeBool(&c.EnvIsolation, over.EnvIsolation)
 }
 
 // mergeUI overwrites every pointer field in UI that over actually mentions.

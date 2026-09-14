@@ -64,21 +64,14 @@ type Config struct {
 	// GatesFile is the --gates-file path; flag-only, like resume.
 	GatesFile string `yaml:"-"`
 
-	Provider `yaml:"provider"`
-	Session  `yaml:"session"`
-
-	Limits `yaml:"limits"`
-
-	Toggles `yaml:"tools"`
-
-	Reasoning `yaml:"reasoning"`
-
-	Security `yaml:"security"`
-
-	Discovery `yaml:"discovery"`
-
-	UI `yaml:"ui"`
-
+	Provider   `yaml:"provider"`
+	Session    `yaml:"session"`
+	Limits     `yaml:"limits"`
+	Toggles    `yaml:"tools"`
+	Reasoning  `yaml:"reasoning"`
+	Security   `yaml:"security"`
+	Discovery  `yaml:"discovery"`
+	UI         `yaml:"ui"`
 	Sources    `yaml:"sources"`
 	Automation `yaml:",inline"`
 }
@@ -91,6 +84,8 @@ type Toggles struct {
 	Fetch          *bool `yaml:"web_fetch"`
 	Tasks          *bool `yaml:"tasks"`
 	Diagnostics    *bool `yaml:"diagnostics"`
+	SearchContent  *bool `yaml:"search_content"`
+	FindFiles      *bool `yaml:"find_files"`
 }
 
 // Security holds the settings that decide how much a tool call may do

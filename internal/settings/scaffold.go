@@ -33,6 +33,8 @@ tools:
   tasks: true
   parallel_agents: true
   diagnostics: true
+  search_content: true
+  find_files: true
 
 security:
   approve_tools: false

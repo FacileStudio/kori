@@ -17,6 +17,8 @@ func Defaults(system string) Config {
 	iterations, budget := 5, int64(0)
 	compactAt, grindCost, grindTokens, grindContinuations := int64(75000), 0.0, int64(0), 2
 	fetch := true
+	searchContent := true
+	findFiles := true
 	groupTools, showThinking := true, true
 	cont, resume := false, ""
 	mode, transparent, json := "tui", true, false
@@ -29,7 +31,7 @@ func Defaults(system string) Config {
 	return Config{
 		Provider:  Provider{Backend: "anthropic"},
 		Session:   Session{Root: ".", System: system, Continue: &cont, Resume: &resume},
-		Toggles:   Toggles{Bash: &bash, ParallelAgents: &parallelAgents, Fetch: &fetch, Tasks: &tasks, Diagnostics: &diagnostics},
+		Toggles:   Toggles{Bash: &bash, ParallelAgents: &parallelAgents, Fetch: &fetch, Tasks: &tasks, Diagnostics: &diagnostics, SearchContent: &searchContent, FindFiles: &findFiles},
 		Security:  Security{ApproveTools: &approveTools, PathIsolation: &strict, DenyElevation: &denyElevation, EnvIsolation: &envIsolation},
 		Limits:    Limits{MaxIterations: &iterations, CompactAt: &compactAt, GrindCost: &grindCost, GrindTokens: &grindTokens, GrindContinuations: &grindContinuations},
 		Reasoning: Reasoning{Thinking: &thinking, Budget: &budget},

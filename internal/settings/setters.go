@@ -2,11 +2,11 @@ package settings
 
 import "maps"
 
-// typedSetters maps each flag's name to what it does to a Config. The two
-// halves exist because filet caps a function's statement count; the split
-// follows the declared struct's own grouping.
+// typedSetters maps each flag's name to what it does to a Config. The split
+// follows the declared struct's own grouping to respect statement caps.
 func typedSetters(f declared) map[string]func(*Config) {
 	setters := coreSetters(f)
+	maps.Copy(setters, toolSetters(f))
 	maps.Copy(setters, uiSetters(f))
 	return setters
 }
@@ -24,6 +24,20 @@ func uiSetters(f declared) map[string]func(*Config) {
 	}
 }
 
+func toolSetters(f declared) map[string]func(*Config) {
+	return map[string]func(*Config){
+		"fetch":           func(c *Config) { c.Fetch = f.fetch },
+		"bash":            func(c *Config) { c.Bash = f.bash },
+		"parallel-agents": func(c *Config) { c.ParallelAgents = f.parallelAgents },
+		"approve-tools":   func(c *Config) { c.ApproveTools = f.approveTools },
+		"diffs":           func(c *Config) { c.Diffs = f.diffs },
+		"tasks":           func(c *Config) { c.Tasks = f.tasks },
+		"diagnostics":     func(c *Config) { c.Diagnostics = f.diagnostics },
+		"search-content":  func(c *Config) { c.SearchContent = f.searchContent },
+		"find-files":      func(c *Config) { c.FindFiles = f.findFiles },
+	}
+}
+
 func coreSetters(f declared) map[string]func(*Config) {
 	return map[string]func(*Config){
 		"backend":          func(c *Config) { c.Backend = *f.backend },
@@ -31,18 +45,11 @@ func coreSetters(f declared) map[string]func(*Config) {
 		"effort":           func(c *Config) { c.Effort = *f.effort },
 		"root":             func(c *Config) { c.Root = *f.root },
 		"system-prompt":    func(c *Config) { c.System = *f.system },
-		"fetch":            func(c *Config) { c.Fetch = f.fetch },
-		"bash":             func(c *Config) { c.Bash = f.bash },
-		"parallel-agents":  func(c *Config) { c.ParallelAgents = f.parallelAgents },
 		"thinking":         func(c *Config) { c.Thinking = f.thinking },
 		"project-context":  func(c *Config) { c.ProjectContext = f.projectContext },
 		"skills":           func(c *Config) { c.Skills = f.skills },
 		"trust-skills":     func(c *Config) { c.TrustSkills = f.trustSkills },
 		"trust-hooks":      func(c *Config) { c.TrustHooks = f.trustHooks },
-		"approve-tools":    func(c *Config) { c.ApproveTools = f.approveTools },
-		"diffs":            func(c *Config) { c.Diffs = f.diffs },
-		"tasks":            func(c *Config) { c.Tasks = f.tasks },
-		"diagnostics":      func(c *Config) { c.Diagnostics = f.diagnostics },
 		"max-iterations":   func(c *Config) { c.MaxIterations = f.iterations },
 		"compact-at":       func(c *Config) { c.CompactAt = f.compactAt },
 		"reasoning-budget": func(c *Config) { c.Budget = f.budget },

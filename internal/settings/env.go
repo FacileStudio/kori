@@ -39,11 +39,10 @@ func FromEnv() Config {
 		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS")},
 		UI:      UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
 		Toggles: Toggles{
-			Bash:           envBool(EnvPrefix + "BASH"),
-			ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),
-			Fetch:          envBool(EnvPrefix + "FETCH"),
-			Tasks:          envBool(EnvPrefix + "TASKS"),
-			Diagnostics:    envBool(EnvPrefix + "DIAGNOSTICS"),
+			Bash: envBool(EnvPrefix + "BASH"), ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),
+			Fetch: envBool(EnvPrefix + "FETCH"), Tasks: envBool(EnvPrefix + "TASKS"),
+			Diagnostics: envBool(EnvPrefix + "DIAGNOSTICS"), SearchContent: envBool(EnvPrefix + "SEARCH_CONTENT"),
+			FindFiles: envBool(EnvPrefix + "FIND_FILES"),
 		},
 		Security: Security{
 			ApproveTools:  envBool(EnvPrefix + "APPROVE_TOOLS"),
