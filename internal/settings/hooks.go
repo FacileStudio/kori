@@ -13,8 +13,12 @@ import (
 )
 
 // HooksFile is the project-level hooks file, read in addition to the
-// `hooks:` entries in the user's own config.
-const HooksFile = ".nacelle/hooks.yml"
+// `hooks:` entries in the user's own config. The legacy .nacelle/ name is
+// still read when the new one is absent, so a project configured before the
+// rename keeps its hooks.
+const HooksFile = ".kori/hooks.yml"
+
+const legacyHooksFile = ".nacelle/hooks.yml"
 
 // parseHooks decodes one hooks file.
 func parseHooks(raw []byte) ([]HookSpec, error) {
@@ -84,12 +88,17 @@ func SessionHooks(config Config) (map[nacelle.HookPoint][]nacelle.Hook, string, 
 	return hooks, notice, nil
 }
 
-// LoadProjectHooks reads <root>/.nacelle/hooks.yml through the trust gate.
+// LoadProjectHooks reads <root>/.kori/hooks.yml through the trust gate,
+// falling back to the legacy .nacelle/hooks.yml.
 func LoadProjectHooks(root string, trustNew bool) (map[nacelle.HookPoint][]nacelle.Hook, string, error) {
 	path := filepath.Join(root, HooksFile)
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return nil, "", nil
+		path = filepath.Join(root, legacyHooksFile)
+		raw, err = os.ReadFile(path)
+		if os.IsNotExist(err) {
+			return nil, "", nil
+		}
 	}
 	if err != nil {
 		return nil, "", fmt.Errorf("reading %s: %w", path, err)

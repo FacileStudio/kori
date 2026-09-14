@@ -27,13 +27,9 @@ type trustRecord struct {
 }
 
 // trustDir is where the trust store lives — the first thing this package
-// puts under ~/.nacelle/, which stays otherwise empty until something needs it.
+// puts under ~/.kori/, which stays otherwise empty until something needs it.
 func trustDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".nacelle"), nil
+	return HomeDir()
 }
 
 // loadTrust reads every saved approval: TrustFile, with HookTrustFile read
@@ -76,7 +72,7 @@ func readTrust(path string) (map[string]trustRecord, error) {
 	return store, nil
 }
 
-// saveTrust records one approval, creating ~/.nacelle/ if the store has not
+// saveTrust records one approval, creating ~/.kori/ if the store has not
 // needed it before now.
 func saveTrust(store map[string]trustRecord, path, hash string) error {
 	dir, err := trustDir()

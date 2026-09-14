@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/FacileStudio/kori/internal/settings"
 	"sort"
 	"strings"
 
@@ -36,11 +38,11 @@ func ListSessionFiles(projectRoot string) []string {
 }
 
 func projectSessionsDir(projectRoot string) string {
-	home, err := os.UserHomeDir()
+	base, err := settings.HomeDir()
 	if err != nil {
 		return ""
 	}
-	dir := filepath.Join(home, ".nacelle", "sessions")
+	dir := filepath.Join(base, "sessions")
 	if projectRoot == "" {
 		return dir
 	}

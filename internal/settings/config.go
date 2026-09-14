@@ -14,7 +14,7 @@ import (
 )
 
 // ConfigFile is where settings are read from when the flags leave them out.
-const ConfigFile = ".nacelle.yml"
+const ConfigFile = ".kori.yml"
 
 // Limits is the threshold settings that cap the run. Embedded in Config so
 // every field still reads as c.MaxIterations.
@@ -33,7 +33,7 @@ type Limits struct {
 
 // Provider is the backend in use plus the endpoint and key that reach it.
 // The yaml keys live under the group names (provider:, limits: and the rest);
-// the NACELLE_ names are unchanged, so existing environments keep working.
+// the KORI_ names are new; NACELLE_ names still resolve for existing environments.
 type Provider struct {
 	Backend string `yaml:"backend"`
 	Model   string `yaml:"model"`
@@ -175,7 +175,7 @@ type GateSpec struct {
 
 // Automation groups the config's chained machinery. It is inline in the
 // YAML, so the keys stay top-level: hooks, gates. Scheduled jobs are not
-// here anymore — LoadJobs reads them from ~/.nacelle/jobs/ instead.
+// here anymore — LoadJobs reads them from ~/.kori/jobs/ instead.
 type Automation struct {
 	Hooks []HookSpec `yaml:"hooks"`
 	Gates []GateSpec `yaml:"gates"`
@@ -224,6 +224,8 @@ func Load(path string) (Config, error) {
 // Settings resolves every layer in one place: flag beats environment beats
 // file beats default. The scaffold runs before the file is read.
 func Settings(system string, flags Config) (Config, error) {
+	migrateLegacyHome()
+	migrateLegacyConfig()
 	if flags.NoConfig != nil && *flags.NoConfig {
 		resolved := Defaults(system)
 		resolved.merge(FromEnv())
@@ -233,7 +235,7 @@ func Settings(system string, flags Config) (Config, error) {
 	if created, err := Scaffold(ConfigPath()); err != nil {
 		return Config{}, err
 	} else if created {
-		fmt.Fprintln(os.Stderr, "wrote ~/.nacelle.yml with the default settings — edit it, or delete it to regenerate")
+		fmt.Fprintln(os.Stderr, "wrote ~/.kori.yml with the default settings — edit it, or delete it to regenerate")
 	}
 	file, err := Load(ConfigPath())
 	if err != nil {

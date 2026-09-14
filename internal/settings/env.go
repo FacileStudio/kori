@@ -3,23 +3,26 @@
 package settings
 
 import (
-	"os"
 	"strconv"
 	"strings"
 )
 
-// EnvPrefix is what every setting's environment variable starts with.
-const EnvPrefix = "NACELLE_"
+// EnvPrefix is what every setting's environment variable starts with. The
+// legacy NACELLE_ names still resolve: an environment written before the
+// rename keeps working, and a KORI_ variable wins whenever both are set.
+const EnvPrefix = "KORI_"
+
+const legacyEnvPrefix = "NACELLE_"
 
 // providerEnv reads the active provider's four fields. Backend and Model reuse
-// the NACELLE_BACKEND/NACELLE_MODEL names every other layer uses; the endpoint
+// the KORI_BACKEND/KORI_MODEL names every other layer uses; the endpoint
 // and key are the ones this layer adds, so they carry the PROVIDER_ prefix.
 func providerEnv() Provider {
 	return Provider{
-		Backend: os.Getenv(EnvPrefix + "BACKEND"),
-		Model:   os.Getenv(EnvPrefix + "MODEL"),
-		BaseURL: os.Getenv(EnvPrefix + "PROVIDER_BASE_URL"),
-		APIKey:  os.Getenv(EnvPrefix + "PROVIDER_API_KEY"),
+		Backend: envGet("BACKEND"),
+		Model:   envGet("MODEL"),
+		BaseURL: envGet("PROVIDER_BASE_URL"),
+		APIKey:  envGet("PROVIDER_API_KEY"),
 	}
 }
 
@@ -27,7 +30,7 @@ func providerEnv() Provider {
 func FromEnv() Config {
 	return Config{
 		Provider: providerEnv(),
-		Session:  Session{Root: os.Getenv(EnvPrefix + "ROOT"), System: os.Getenv(EnvPrefix + "SYSTEM_PROMPT")},
+		Session:  Session{Root: envGet("ROOT"), System: envGet("SYSTEM_PROMPT")},
 		Limits: Limits{
 			MaxIterations: envInt(EnvPrefix + "MAX_ITERATIONS"), CompactAt: envInt64(EnvPrefix + "COMPACT_AT"),
 			GrindCost: envFloat(EnvPrefix + "GRIND_MIN_COST"), GrindTokens: envInt64(EnvPrefix + "GRIND_MIN_TOKENS"),
@@ -49,7 +52,7 @@ func FromEnv() Config {
 			EnvIsolation:  envBool(EnvPrefix + "ENV_ISOLATION"),
 		},
 		Reasoning: Reasoning{
-			Effort:   os.Getenv(EnvPrefix + "EFFORT"),
+			Effort:   envGet("EFFORT"),
 			Thinking: envBool(EnvPrefix + "THINKING"),
 			Budget:   envInt64(EnvPrefix + "REASONING_BUDGET"),
 		},
@@ -63,7 +66,7 @@ func FromEnv() Config {
 
 // envString reads a string setting, returning nil when the variable is unset.
 func envString(name string) *string {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
@@ -73,7 +76,7 @@ func envString(name string) *string {
 // envBool reads a toggle, returning nil when the variable is unset or is not
 // something strconv recognises.
 func envBool(name string) *bool {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
@@ -86,7 +89,7 @@ func envBool(name string) *bool {
 
 // envInt reads a count, with the same treatment of an unreadable value.
 func envInt(name string) *int {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
@@ -99,7 +102,7 @@ func envInt(name string) *int {
 
 // envInt64 is envInt in the width a token count is measured in.
 func envInt64(name string) *int64 {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
@@ -112,7 +115,7 @@ func envInt64(name string) *int64 {
 
 // envFloat is envInt in the width a dollar amount is measured in.
 func envFloat(name string) *float64 {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
@@ -125,7 +128,7 @@ func envFloat(name string) *float64 {
 
 // envList reads a colon-separated list, returning nil when unset or empty.
 func envList(name string) []string {
-	raw, ok := os.LookupEnv(name)
+	raw, ok := lookup(name)
 	if !ok || raw == "" {
 		return nil
 	}
