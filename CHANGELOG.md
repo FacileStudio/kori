@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.58.1] - 2026-09-14
+
+### Fixed
+- Shell teardown errors surface instead of being discarded: pipe and process
+  cleanup report through `errors.Join` to their callers, a failed read
+  deadline marks the session broken, and `Close` reports what it hit.
+- The system prompt's bash rules now say the persistent shell keeps state
+  between calls (when strict path isolation is off), matching the tool
+  description.
+
 ## [0.58.0] - 2026-09-14
 
 ### Added
