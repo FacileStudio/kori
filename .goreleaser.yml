@@ -32,7 +32,7 @@ checksum:
 homebrew_casks:
   - name: kori
     homepage: https://github.com/FacileStudio/kori
-    description: Terminal coding agent — the human harness for the nacelle SDK
+    description: Terminal coding agent — the human harness for the kori SDK
     binaries:
       - kori
     repository:

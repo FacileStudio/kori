@@ -10,6 +10,10 @@
   its name: kori stays the terminal harness for the nacelle agent SDK.
 - The changelog URLs for all releases now point to `github.com/FacileStudio/kori`
 rather than `github.com/FacileStudio/nacelle-tui`.
+- All internal documentation now uses `kori` instead of `nacelle-tui`, and
+  releases on GitHub and homebrew refer to `kori` rather than `nacelle-tui`.
+- The historical changelog entries retain their `nacelle-tui` URLs for archive
+  purposes; new releases are tagged and documented under `kori`.
 
 ## [0.58.1] - 2026-09-14
 
