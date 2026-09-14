@@ -56,13 +56,14 @@ func (s *shellSession) write(payload string) error {
 
 // drain discards whatever the shell wrote after the marker, so a background
 // job's output does not resurface at the head of the next call's result.
-// Only bytes already in flight are caught; the tool's description points
-// long jobs at a log file instead of the pipe.
+// A short read deadline catches the bytes already in flight plus anything
+// arriving just behind them; the tool's description points long jobs at a
+// log file instead of the pipe.
 func (s *shellSession) drain() {
 	if s.stdout == nil {
 		return
 	}
-	s.stdout.SetReadDeadline(time.Now())
+	s.stdout.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
 	chunk := make([]byte, 32*1024)
 	for {
 		if _, err := s.stdout.Read(chunk); err != nil {

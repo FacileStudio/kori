@@ -38,12 +38,12 @@ func shellQuote(s string) string {
 }
 
 // shellNonce is 16 hex characters from the crypto source.
-func shellNonce() string {
+func shellNonce() (string, error) {
 	buf := make([]byte, 8)
 	if _, err := rand.Read(buf); err != nil {
-		return "deadbeefdeadbeef"
+		return "", err
 	}
-	return hex.EncodeToString(buf)
+	return hex.EncodeToString(buf), nil
 }
 
 // findDone looks for the marker line in data starting at from, so chunks

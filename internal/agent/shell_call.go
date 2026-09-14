@@ -26,19 +26,29 @@ func (s *shellSession) call(ctx context.Context, command string, timeout time.Du
 	inner, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	nonce := shellNonce()
+	nonce, err := shellNonce()
+	if err != nil {
+		s.broken = true
+		return "", errShellDown
+	}
 	payload := shellPayload(nonce, command)
-	if err := s.write(payload); err != nil {
-		if err := s.respawn(); err != nil {
-			s.broken = true
-			return "", errShellDown
-		}
-		if err := s.write(payload); err != nil {
-			s.broken = true
-			return "", errShellDown
-		}
+	if err := s.writeWithRespawn(payload); err != nil {
+		s.broken = true
+		return "", errShellDown
 	}
 	return (&shellExchange{session: s, ctx: inner, timeout: timeout, maxOutput: maxOutput, emit: emit}).run(nonce)
+}
+
+// writeWithRespawn writes one payload to the shell's stdin, respawning a
+// shell that died since the last call and writing the payload again.
+func (s *shellSession) writeWithRespawn(payload string) error {
+	if err := s.write(payload); err == nil {
+		return nil
+	}
+	if err := s.respawn(); err != nil {
+		return err
+	}
+	return s.write(payload)
 }
 
 // shellExchange is one call's read side: the bytes that arrived, how far

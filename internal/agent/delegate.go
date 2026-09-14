@@ -59,7 +59,7 @@ func (r returnControl) Schema() map[string]any {
 	itemProps := map[string]any{
 		"title": map[string]any{
 			"type":        "string",
-			"description": "A short, cool 4-7 word descriptive title for this session shown in the status line (e.g. 'audit auth middleware')",
+			"description": "A short, 4-7 word descriptive title for this session shown in the status line (e.g. 'audit auth middleware')",
 		},
 		"task": map[string]any{
 			"type":        "string",
