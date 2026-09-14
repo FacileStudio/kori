@@ -22,21 +22,21 @@ func launchShellPipes(cmd *exec.Cmd) (io.WriteCloser, *os.File, error) {
 	}
 	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
-		stdinR.Close()
-		stdinW.Close()
+		_ = stdinR.Close()
+		_ = stdinW.Close()
 		return nil, nil, err
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stdoutW
 
 	if err := cmd.Start(); err != nil {
-		stdinR.Close()
-		stdinW.Close()
-		stdoutR.Close()
-		stdoutW.Close()
+		_ = stdinR.Close()
+		_ = stdinW.Close()
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
 		return nil, nil, err
 	}
-	stdinR.Close()
-	stdoutW.Close()
+	_ = stdinR.Close()
+	_ = stdoutW.Close()
 	return stdinW, stdoutR, nil
 }
 
@@ -44,7 +44,7 @@ func launchShellPipes(cmd *exec.Cmd) (io.WriteCloser, *os.File, error) {
 // is gone with it; the next command starts fresh, the way the stateless
 // runner starts every command.
 func (s *shellSession) respawn() error {
-	s.reap(false)
+	_ = s.reap(false)
 	return s.spawn()
 }
 
@@ -63,7 +63,7 @@ func (s *shellSession) drain() {
 	if s.stdout == nil {
 		return
 	}
-	s.stdout.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+	_ = s.stdout.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
 	chunk := make([]byte, 32*1024)
 	for {
 		if _, err := s.stdout.Read(chunk); err != nil {

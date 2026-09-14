@@ -73,7 +73,7 @@ func (x *shellExchange) run(nonce string) (string, error) {
 	chunk := make([]byte, 32*1024)
 
 	if deadline, ok := x.ctx.Deadline(); ok {
-		x.session.stdout.SetReadDeadline(deadline)
+		_ = x.session.stdout.SetReadDeadline(deadline)
 	}
 	watching := make(chan struct{})
 	go x.awaitCancel(watching)
@@ -97,7 +97,7 @@ func (x *shellExchange) run(nonce string) (string, error) {
 func (x *shellExchange) awaitCancel(watching <-chan struct{}) {
 	select {
 	case <-x.ctx.Done():
-		x.session.stdout.SetReadDeadline(time.Now())
+		_ = x.session.stdout.SetReadDeadline(time.Now())
 	case <-watching:
 	}
 }
@@ -132,11 +132,11 @@ func (x *shellExchange) complete(end, rc int) string {
 func (x *shellExchange) finish(readErr error) (string, error) {
 	switch {
 	case errors.Is(x.ctx.Err(), context.Canceled):
-		x.session.reap(true)
+		_ = x.session.reap(true)
 		return shellReport(string(x.data), -1, x.ctx.Err(), x.maxOutput), x.ctx.Err()
 	case errors.Is(readErr, os.ErrDeadlineExceeded) || x.ctx.Err() != nil:
-		x.session.reap(true)
-		return shellReport(string(x.data), -1, shellTimedOut{after: x.timeout}, x.maxOutput), nil
+		_ = x.session.reap(true)
+		return shellReport(string(x.data), -1, shellTimedOut{after: x.timeout}, x.maxOutput), nil //nolint:nilerr // the timeout is reported in the report, not as an error
 	default:
 		dead := x.session.reap(false)
 		failure := dead

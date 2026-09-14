@@ -160,9 +160,9 @@ func (s *shellSession) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.alive && s.stdin != nil {
-		s.stdin.Close()
+		_ = s.stdin.Close()
 	}
-	s.reap(true)
+	_ = s.reap(true)
 	s.closePipes()
 	s.alive = false
 	s.broken = true
@@ -171,11 +171,11 @@ func (s *shellSession) Close() {
 // closePipes drops whatever pipes a previous shell still held.
 func (s *shellSession) closePipes() {
 	if s.stdin != nil {
-		s.stdin.Close()
+		_ = s.stdin.Close()
 		s.stdin = nil
 	}
 	if s.stdout != nil {
-		s.stdout.Close()
+		_ = s.stdout.Close()
 		s.stdout = nil
 	}
 }
