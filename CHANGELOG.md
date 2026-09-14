@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-09-14
+
+### Added
+- Cobra and Fang v2 CLI command tree (`cmd/`), adding structured subcommands for `bench` and `cron` with `--runs` and `--json` flags.
+- Alternate-screen transcript dynamic reflow on terminal window resize in TUI mode, retaining raw transcript entries and re-rendering on width change.
+
+### Fixed
+- Slice memory retention in `tuireflow.go` when capping held entries.
+- Flag argument normalization in `cmd/` now respects the `--` delimiter.
+- Sudo command documentation drift in `docs/sudo.md`.
+
+## [0.60.0] - 2026-09-14
+
 ### Changed
 - The project is renamed to `kori`. The repository (`FacileStudio/kori`), the
   goreleaser project name and binary, the Homebrew cask, the facile catalog
