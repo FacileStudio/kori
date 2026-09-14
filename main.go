@@ -2,18 +2,17 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
+	"github.com/FacileStudio/kori/cmd"
 	"github.com/FacileStudio/kori/internal/agent"
 )
 
-var version = "v0.57.0"
+var version = "v0.61.0"
 
 func main() {
-	if err := agent.Run(version); err != nil {
-		fmt.Fprintln(os.Stderr, "kori:", unprefixed(err))
+	if err := cmd.Execute(version); err != nil {
 		var usage *agent.UsageError
 		if errors.As(err, &usage) {
 			os.Exit(2)
