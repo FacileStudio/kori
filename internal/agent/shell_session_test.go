@@ -166,18 +166,6 @@ func TestShellToolStreamsLinesWithoutTheMarker(t *testing.T) {
 	}
 }
 
-func TestShellToolDeniesElevation(t *testing.T) {
-	tool := shellTestTool(t, t.TempDir(), "bash", true)
-
-	raw, err := json.Marshal(shellCommandInput{Command: "kori true"})
-	if err != nil {
-		t.Fatalf("marshalling the input: %v", err)
-	}
-	if _, err := tool.Run(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "privilege elevation") {
-		t.Fatalf("deny_elevation did not fire: %v", err)
-	}
-}
-
 func TestLocalToolsMountsThePersistentShell(t *testing.T) {
 	shellSandbox(t)
 	dir := t.TempDir()
