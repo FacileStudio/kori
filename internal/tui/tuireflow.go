@@ -6,12 +6,13 @@ import (
 	"github.com/FacileStudio/kori/internal/toolview"
 )
 
-const holdEntriesCap = 200
+const holdEntriesCap = 1000
 
 func (m *Model) recordHeld(who speaker, text string) {
 	m.held = append(m.held, heldEntry{who: who, text: text})
 	if over := len(m.held) - holdEntriesCap; over > 0 {
 		m.held = append(m.held[:0], m.held[over:]...)
+		clear(m.held[len(m.held):cap(m.held)])
 	}
 }
 

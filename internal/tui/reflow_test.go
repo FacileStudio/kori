@@ -45,8 +45,8 @@ func TestResizeReflowsHeldEntries(t *testing.T) {
 	m.say(fromModel, "42 is the answer to everything.")
 	m.prints()
 	m.resize(tea.WindowSizeMsg{Width: 40, Height: 24})
-	if len(m.held) != 2 {
-		t.Fatalf("held = %d entries, want 2", len(m.held))
+	if len(m.held) != 3 {
+		t.Fatalf("held = %d entries, want 3", len(m.held))
 	}
 	for _, row := range m.hold {
 		if lipgloss.Width(row) > 40 {
@@ -108,5 +108,15 @@ func TestResizeReflowsIdempotent(t *testing.T) {
 
 	if !slices.Equal(m.hold, pristine) {
 		t.Errorf("reflow not idempotent:\ngot  %q\nwant %q", m.hold, pristine)
+	}
+}
+
+func TestClearResetsHeldEntries(t *testing.T) {
+	m := tuiModel()
+	m.say(fromReader, "hello")
+	m.say(fromModel, "world")
+	m.clear()
+	if len(m.held) != 1 {
+		t.Fatalf("held = %d entries after clear, want 1", len(m.held))
 	}
 }

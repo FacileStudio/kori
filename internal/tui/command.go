@@ -77,6 +77,7 @@ func (m *Model) clear() tea.Cmd {
 	m.clearFinishedParallel()
 	m.layout(m.windowHeight)
 	m.Forget()
+	m.held = nil
 	echoed := m.prints()
 	m.say(fromClient, m.banner+" · cleared")
 	scrolled := strings.Repeat("\n", max(m.windowHeight, 1))
