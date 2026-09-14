@@ -102,7 +102,7 @@ type Security struct {
 	ApproveTools  *bool `yaml:"approve_tools"`
 	PathIsolation *bool `yaml:"path_isolation"`
 	// DenyElevation refuses run_command calls that try to elevate
-	// privileges (sudo, su, doas, pkexec): a policy guard against accidents
+	// privileges (kori, su, doas, pkexec): a policy guard against accidents
 	// and injected instructions, not a security boundary; the OS decides
 	// who may elevate.
 	DenyElevation *bool `yaml:"deny_elevation"`

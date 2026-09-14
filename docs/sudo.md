@@ -2,9 +2,9 @@
 
 This document answers three questions in order:
 
-1. Can kori block `sudo` in `run_command` through `~/.kori.yml`?
-2. Is blocking sudo a good idea?
-3. If sudo is allowed, how do we let the human type a password without the
+1. Can kori block elevation commands in `run_command` through `~/.kori.yml`?
+2. Is blocking elevation a good idea?
+3. If elevation is allowed, how do we let the human type a password without the
    agent ever seeing it?
 
 ## How run_command works today
@@ -20,17 +20,17 @@ Consequences that matter here:
 
 - The command runs with **this process's own privileges**: whatever user
   launched kori, that is who the agent runs as.
-- There is **no TTY**. Interactive `sudo` asks for a password on a terminal,
-  and there is none, so plain `sudo apt install foo` fails today with
-  "sudo: a terminal is required".
-- `sudo -S` reads the password from **stdin** instead. stdin is not a
-  terminal either, but a command like `echomypassword | sudo -S ...` or
-  `sudo -S ... < somefile` is technically possible. That is the hole.
+- There is **no TTY**. Interactive `kori` asks for a password on a terminal,
+  and there is none, so plain `kori apt install foo` fails today with
+  "kori: a terminal is required".
+- `kori -S` reads the password from **stdin** instead. stdin is not a
+  terminal either, but a command like `echomypassword | kori -S ...` or
+  `kori -S ... < somefile` is technically possible. That is the hole.
 
 The SDK already has a scanner for shell escapes,
 `tools/command_escape.go` (`checkCommandEscapes`). It walks the command,
 splits on `;`, `&&`, `||`, `|`, `&`, and refuses a list of shell builtins
-when strict confinement (`security.path_isolation`) is on. A sudo rule has
+when strict confinement (`security.path_isolation`) is on. A kori rule has
 a natural home right next to it.
 
 ## Question 1: can we configure this in ~/.kori.yml?

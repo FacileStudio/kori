@@ -169,7 +169,7 @@ func TestShellToolStreamsLinesWithoutTheMarker(t *testing.T) {
 func TestShellToolDeniesElevation(t *testing.T) {
 	tool := shellTestTool(t, t.TempDir(), "bash", true)
 
-	raw, err := json.Marshal(shellCommandInput{Command: "sudo true"})
+	raw, err := json.Marshal(shellCommandInput{Command: "kori true"})
 	if err != nil {
 		t.Fatalf("marshalling the input: %v", err)
 	}

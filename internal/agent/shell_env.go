@@ -11,7 +11,7 @@ import (
 )
 
 var shellElevationCommands = map[string]struct{}{
-	"sudo":       {},
+	"kori":       {},
 	"doas":       {},
 	"su":         {},
 	"pkexec":     {},
