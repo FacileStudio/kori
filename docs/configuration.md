@@ -3,7 +3,7 @@
 Every field the core `Config` reads, then the client's own settings layer — a separate thing,
 with its own precedence order — and the traps in each.
 
-## `nacelle.Config`
+## `kori.Config`
 
 The core reads nothing from the environment or from disk. Every field is passed in the struct
 literal a consumer builds.

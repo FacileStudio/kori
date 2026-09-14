@@ -8,6 +8,8 @@
   entry and the documentation move from `nacelle-tui`/`nacelle` to `kori`, and
   `example.nacelle.yml` is renamed `example.kori.yml`. The `nacelle` SDK keeps
   its name: kori stays the terminal harness for the nacelle agent SDK.
+- The changelog URLs for all releases now point to `github.com/FacileStudio/kori`
+rather than `github.com/FacileStudio/nacelle-tui`.
 
 ## [0.58.1] - 2026-09-14
 

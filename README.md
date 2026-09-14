@@ -9,6 +9,8 @@ a terminal, where someone is watching: text, reasoning, tools starting and
 finishing, why a turn ended, what it cost. It is deliberately small — sessions,
 profiles and panes are what a product grows, not what a contract test needs.
 
+**Note**: This repo changed its name from `nacelle-tui` to `kori` on 2026-09-14. The core SDK (`nacelle`) remains the same library.
+
 ## What it does
 
 - Streams one model turn at a time in a full-screen Bubble Tea v2 interface
