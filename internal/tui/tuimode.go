@@ -5,8 +5,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/FacileStudio/kori/internal/toolview"
 )
 
 // modeInline prints finished lines into the terminal's own scrollback and
@@ -91,21 +89,6 @@ func (m *Model) belowRows() int {
 		return lipgloss.Height(below) + 1
 	}
 	return 0
-}
-
-// reflowHold re-wraps the alternate-screen transcript for the new width. The
-// terminal reflows only lines it wrapped itself; rows this client painted
-// earlier were wrapped at the width of their moment, and a shrink would clip
-// them. Every row wider than the pane is broken again here, continuations
-// carrying the border glyph when the row they continue opened with one, so a
-// box's spine reads down its whole wrapped length.
-func (m *Model) reflowHold() {
-	limit := max(m.width-1, 1)
-	reflowed := make([]string, 0, len(m.hold))
-	for _, row := range m.hold {
-		reflowed = append(reflowed, toolview.WrapRow(row, limit)...)
-	}
-	m.hold = reflowed
 }
 
 // tuiUpper is the scrolling region above the pinned prompt: the held transcript

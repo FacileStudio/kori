@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -35,5 +36,77 @@ func TestResizeReflowsHeldRows(t *testing.T) {
 	}
 	if plain == 0 {
 		t.Errorf("plain continuations vanished")
+	}
+}
+
+func TestResizeReflowsHeldEntries(t *testing.T) {
+	m := tuiModel()
+	m.say(fromReader, "What is the meaning of life?")
+	m.say(fromModel, "42 is the answer to everything.")
+	m.prints()
+	m.resize(tea.WindowSizeMsg{Width: 40, Height: 24})
+	if len(m.held) != 2 {
+		t.Fatalf("held = %d entries, want 2", len(m.held))
+	}
+	for _, row := range m.hold {
+		if lipgloss.Width(row) > 40 {
+			t.Errorf("row %q width = %d, want <= 40", row, lipgloss.Width(row))
+		}
+	}
+}
+
+func TestRecordHeldCapsAtLimit(t *testing.T) {
+	m := tuiModel()
+	for i := range holdEntriesCap + 50 {
+		m.say(fromClient, strings.Repeat("a", i+1))
+	}
+	if len(m.held) != holdEntriesCap {
+		t.Fatalf("held = %d entries, want capped at %d", len(m.held), holdEntriesCap)
+	}
+}
+
+func TestResizeReflowsWider(t *testing.T) {
+	m := sized()
+	m.mode = modeTUI
+	m.resize(tea.WindowSizeMsg{Width: 40, Height: 24})
+	m.say(fromReader, "What is the best practice for terminal resize reflow?")
+	m.say(fromModel, "Terminal emulators do not reflow text automatically when wider unless the application re-renders the text from the source buffer. In alternate screen mode, kori now retains the raw transcript and paints it afresh.")
+	m.prints()
+	for _, row := range m.hold {
+		if lipgloss.Width(row) > 40 {
+			t.Errorf("held row wider than 40: %d: %q", lipgloss.Width(row), row)
+		}
+	}
+	m.resize(tea.WindowSizeMsg{Width: 100, Height: 24})
+	var expanded bool
+	for _, row := range m.hold {
+		if lipgloss.Width(row) > 50 {
+			expanded = true
+			break
+		}
+	}
+	if !expanded {
+		t.Errorf("expected some held rows > 50 chars after widening, got: %v", m.hold)
+	}
+}
+
+func TestResizeReflowsIdempotent(t *testing.T) {
+	m := sized()
+	m.mode = modeTUI
+	m.width = 80
+	m.windowHeight = 24
+	m.say(fromReader, "What is the best practice for terminal resize reflow?")
+	m.say(fromModel, "Terminal emulators do not reflow text automatically when wider unless the application re-renders the text from the source buffer. In alternate screen mode, kori now retains the raw transcript and paints it afresh.")
+	m.prints()
+
+	pristine := append([]string(nil), m.hold...)
+
+	m.resize(tea.WindowSizeMsg{Width: 35, Height: 24})
+	m.resize(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m.resize(tea.WindowSizeMsg{Width: 35, Height: 24})
+	m.resize(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	if !slices.Equal(m.hold, pristine) {
+		t.Errorf("reflow not idempotent:\ngot  %q\nwant %q", m.hold, pristine)
 	}
 }

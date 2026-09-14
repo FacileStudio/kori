@@ -81,7 +81,7 @@ func (m *Model) belowContent() string {
 	return strings.Join(m.margined([]string{m.parallelTasksView()}), "\n")
 }
 
-// reflowHold re-wraps the alternate-screen transcript for the new width. The
+// resize updates dimensions and reflows the transcript on width change.
 func (m *Model) resize(size tea.WindowSizeMsg) tea.Cmd {
 	widthChanged := size.Width != m.width
 	m.width, m.windowHeight = size.Width, size.Height
@@ -92,8 +92,8 @@ func (m *Model) resize(size tea.WindowSizeMsg) tea.Cmd {
 	m.layout(size.Height)
 
 	if widthChanged {
-		m.reflowHold()
 		m.restyle()
+		m.reflowHold()
 	}
 	return nil
 }

@@ -65,12 +65,18 @@ type core struct {
 	diagLoop    bool
 }
 
+type heldEntry struct {
+	who  speaker
+	text string
+}
+
 // transcript groups the conversation, unprinted lines, and transcript-size
 // settings so model stays under filet's field cap. Every field still reads as
 // m.conversation, m.unprinted, m.compactAt and m.compacting.
 type transcript struct {
 	conversation []nacelle.Message
 	unprinted    []string
+	held         []heldEntry
 	// hold is the committed, painted transcript in tui mode. Printing to the
 	// terminal scrollback is a no-op inside an alternate screen (see tea.Println),
 	// so finished lines land here instead and are drawn back into the view each

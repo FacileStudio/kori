@@ -77,6 +77,7 @@ const (
 // speaker that paints but is not recorded — the start message is client
 // chrome, not part of the conversation.
 func (m *Model) say(who speaker, text string) {
+	m.recordHeld(who, text)
 	painted := m.paint(who, text)
 	m.unprinted = append(m.unprinted, strings.Trim(painted, "\n"))
 	m.session.Line(sessions.Speaker(who), text)
