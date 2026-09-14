@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-## [0.61.0] - 2026-09-14
+## [0.61.1] - 2026-09-14
+
+### Fixed
+- Restore `sudo` in `shellElevationCommands` map (replacing `kori` which was mistakenly inserted during the rename).
+- Refactor `security.deny_elevation` command scanning to target executable positions across shell command segments instead of testing all whitespace arguments, eliminating abusive false positives on commit messages, flags, regex patterns, and setuid file arguments.
+
 
 ### Added
 - Cobra and Fang v2 CLI command tree (`cmd/`), adding structured subcommands for `bench` and `cron` with `--runs` and `--json` flags.
