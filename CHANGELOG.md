@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.58.0] - 2026-09-14
+
+### Added
+- `run_command` can hold one persistent shell session: `cd`, exports and shell
+  options survive between calls. State turns the result into a stateless run
+  the same shape, and the session survives the shell being killed or exited by
+  respawning it. Disabled when strict path or environment isolation is on.
+- `nacelle bench` runs a prompt through the headless path one or more times
+  and reports duration, tokens, cost, tool calls and final context per run,
+  with `--json` output.
+- Grind budgets: `grind_min_cost` and `grind_min_tokens` set a per-run minimum
+  spend the run must reach before stopping counts as finished;
+  `grind_continuations` caps the notices (0 turns the budget off).
+- Parallel agent tasks accept an inline title, and fan-outs without one get a
+  short generated title instead of the raw task text.
+
+### Fixed
+- A crypto/rand failure in the session shell's done-marker no longer falls
+  back to a constant nonce; the call fails as shell-down instead.
+- The post-command drain uses a short positive read deadline, so leftover
+  background output is caught instead of resurfacing in the next call.
+
 ## [0.57.1] - 2026-09-13
 
 ### Fixed
