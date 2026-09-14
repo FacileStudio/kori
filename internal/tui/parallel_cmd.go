@@ -27,7 +27,7 @@ func (m *Model) handleParallelCommand(args string) tea.Cmd {
 	if args == "cancel" || strings.HasPrefix(args, "cancel ") {
 		return m.cancelParallelCommand(strings.TrimPrefix(args, "cancel"))
 	}
-	tasks := splitParallelTasks(args)
+	tasks, titles := splitParallelTasksWithTitles(args)
 	if len(tasks) == 0 {
 		m.say(fromClient, "usage: /parallel task1, task2, task3")
 		return nil
@@ -36,7 +36,7 @@ func (m *Model) handleParallelCommand(args string) tea.Cmd {
 		m.say(fromFailure, "no agent is configured to run parallel agents")
 		return nil
 	}
-	return m.launchDetached(tasks)
+	return m.launchDetached(tasks, titles)
 }
 
 // cancelParallelCommand stops live detached fan-outs: `/parallel cancel` every
@@ -79,14 +79,22 @@ func (m *Model) liveParallelBatches(only string) []string {
 
 // splitParallelTasks turns `/parallel a, b , c` into ["a", "b", "c"].
 func splitParallelTasks(args string) []string {
+	tasks, _ := splitParallelTasksWithTitles(args)
+	return tasks
+}
+
+func splitParallelTasksWithTitles(args string) ([]string, []string) {
 	parts := strings.Split(args, ",")
-	out := make([]string, 0, len(parts))
+	tasks := make([]string, 0, len(parts))
+	titles := make([]string, 0, len(parts))
 	for _, p := range parts {
 		if t := strings.TrimSpace(p); t != "" {
-			out = append(out, t)
+			title, prompt := parseInlineTaskTitle(t)
+			tasks = append(tasks, prompt)
+			titles = append(titles, title)
 		}
 	}
-	return out
+	return tasks, titles
 }
 
 // delegateApprove is the approval policy the detached parallel_agents answer to. It

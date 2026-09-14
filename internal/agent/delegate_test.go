@@ -62,3 +62,17 @@ func TestParallelAgentsMountsTheParallelAndCancelTools(t *testing.T) {
 		t.Errorf("mounted %v, want parallel_agents and parallel_cancel", names)
 	}
 }
+
+func TestNormalizeParallelInput(t *testing.T) {
+	input := json.RawMessage(`{"tasks":[{"title":"audit auth","task":"read internal/auth"},{"title":"run tests","task":"go test ./..."}]}`)
+	normalized := normalizeParallelInput(input)
+	var out struct {
+		Tasks []string `json:"tasks"`
+	}
+	if err := json.Unmarshal(normalized, &out); err != nil {
+		t.Fatalf("unmarshal normalized: %v", err)
+	}
+	if len(out.Tasks) != 2 || out.Tasks[0] != "read internal/auth" || out.Tasks[1] != "go test ./..." {
+		t.Errorf("got %v, want tasks stripped of title wrapper", out.Tasks)
+	}
+}

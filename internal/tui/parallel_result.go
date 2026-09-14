@@ -20,13 +20,15 @@ func (m *Model) rememberParallelCall(tool nacelle.ToolEvent) {
 	if m.pending == nil {
 		m.pending = make(map[string][]string)
 	}
-	var input struct {
-		Tasks []string `json:"tasks"`
+	if m.pendingTitles == nil {
+		m.pendingTitles = make(map[string][]string)
 	}
-	if err := json.Unmarshal([]byte(tool.Input), &input); err != nil {
+	tasks, titles := ParseParallelTasks(tool.Input)
+	if len(tasks) == 0 {
 		return
 	}
-	m.pending[tool.ID] = input.Tasks
+	m.pending[tool.ID] = tasks
+	m.pendingTitles[tool.ID] = titles
 }
 
 // startDetachedParent consumes the stub a non-blocking parallel_agents call
@@ -39,6 +41,8 @@ func (m *Model) startDetachedParent(tool nacelle.ToolEvent, rawResult string) {
 		return
 	}
 	delete(m.pending, tool.ID)
+	titles := m.pendingTitles[tool.ID]
+	delete(m.pendingTitles, tool.ID)
 	dec := json.NewDecoder(strings.NewReader(rawResult))
 	var stub struct {
 		Batch string `json:"batch"`
@@ -46,7 +50,7 @@ func (m *Model) startDetachedParent(tool nacelle.ToolEvent, rawResult string) {
 	if err := dec.Decode(&stub); err != nil || stub.Batch == "" {
 		return
 	}
-	m.registerParallel(stub.Batch, tasks)
+	m.registerParallel(stub.Batch, tasks, titles)
 }
 
 // PostDetached forwards a streamed parallel task outcome from nacelle's Detach

@@ -45,9 +45,9 @@ func watchDetached() tea.Cmd {
 // so the prompt stays live. The tick the register returns is the only thing
 // that wakes the loop while nothing else is happening, so the elapsed clocks
 // under the prompt move for a fan-out launched from an idle prompt.
-func (m *Model) launchDetached(tasks []string) tea.Cmd {
+func (m *Model) launchDetached(tasks []string, titles ...[]string) tea.Cmd {
 	id := m.nextDetachID()
-	tick := m.registerParallel(id, tasks)
+	tick := m.registerParallel(id, tasks, titles...)
 
 	cfg := m.delegate
 	go func() {
@@ -84,16 +84,30 @@ func (m *Model) launchDetached(tasks []string) tea.Cmd {
 // back by that same key. It returns the spinner tick so a fan-out launched from
 // an idle prompt wakes the loop; spun keeps the tick alive while the task rows
 // are still live.
-func (m *Model) registerParallel(batch string, tasks []string) tea.Cmd {
+func (m *Model) registerParallel(batch string, tasks []string, titles ...[]string) tea.Cmd {
 	if m.parallelTasks == nil {
 		m.parallelTasks = make(map[string][]parallelTaskInfo)
 	}
+	var provided []string
+	if len(titles) > 0 {
+		provided = titles[0]
+	}
 	list := make([]parallelTaskInfo, len(tasks))
+	var needTitles bool
 	for i, t := range tasks {
-		list[i] = parallelTaskInfo{Task: t, Began: time.Now(), Active: true}
+		var title string
+		if i < len(provided) {
+			title = provided[i]
+		}
+		list[i] = parallelTaskInfo{Task: t, Title: title, Began: time.Now(), Active: true}
+		if title == "" {
+			needTitles = true
+		}
 	}
 	m.parallelTasks[batch] = list
-	m.titleParallelTasks(batch, tasks)
+	if needTitles {
+		m.titleParallelTasks(batch, tasks)
+	}
 	m.announceStart(len(tasks))
 	m.layout(m.windowHeight)
 	return m.spin.Tick

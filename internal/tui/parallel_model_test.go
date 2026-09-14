@@ -104,3 +104,26 @@ func TestModelParallelUnknownResultIsIgnored(t *testing.T) {
 		t.Errorf("unknown batch created state: %v", m.parallelTasks)
 	}
 }
+
+func TestModelParallelCallWithTitlesSeedsRows(t *testing.T) {
+	m := sized()
+	input := `{"tasks":[{"title":"audit auth middleware","task":"check tokens"},{"title":"run tests","task":"go test ./..."}]}`
+	tool := nacelle.ToolEvent{ID: "call3", Name: nacelle.ParallelAgentsToolName, Input: input}
+
+	m.absorbToolCall(tool)
+	m.absorbToolResult(tool, `{"started":2,"batch":"psa-3"}`)
+
+	tasks, ok := m.parallelTasks["psa-3"]
+	if !ok || len(tasks) != 2 {
+		t.Fatalf("tasks not seeded: %v", tasks)
+	}
+	if tasks[0].Title != "audit auth middleware" {
+		t.Errorf("task 0 title = %q, want %q", tasks[0].Title, "audit auth middleware")
+	}
+	if tasks[1].Title != "run tests" {
+		t.Errorf("task 1 title = %q, want %q", tasks[1].Title, "run tests")
+	}
+	if taskTitle(tasks[0]) != "audit auth middleware" {
+		t.Errorf("taskTitle(0) = %q, want %q", taskTitle(tasks[0]), "audit auth middleware")
+	}
+}

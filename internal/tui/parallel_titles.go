@@ -31,15 +31,17 @@ func watchTitles() tea.Cmd {
 
 func (m *Model) recordTitle(t taskTitled) tea.Cmd {
 	if tasks, ok := m.parallelTasks[t.Call]; ok && t.Index < len(tasks) {
-		tasks[t.Index].Title = t.Title
+		if tasks[t.Index].Title == "" {
+			tasks[t.Index].Title = t.Title
+		}
 	}
 	return watchTitles()
 }
 
 // titleSystem is the one-shot summarizer that turns a subagent's task into a
-// 6-7 word status-line title. It runs on the same backend as the session —
+// 4-7 word status-line title. It runs on the same backend as the session —
 // billed like the work it names — and with no tools.
-const titleSystem = "You turn a list of subagent tasks into terse status-line titles. Reply with exactly one title per task, one per line, in the same order as given. Each title is a 6-7 word plain description of the task. Never include file paths, URLs, directory names, or quoted identifiers in a title — describe the work with ordinary words only. Lower case, no punctuation, no emoji, no numbering, no leading bullets. Reply with nothing but the titles."
+const titleSystem = "You turn a list of subagent tasks into short, cool, punchy status-line titles. Reply with exactly one title per task, one per line, in the same order as given. Each title is a 4-7 word plain description of the task (e.g. 'audit auth middleware', 'search postgres backup logs'). Action-oriented, lower case, no punctuation, no emoji, no numbering, no leading bullets. Reply with nothing but the titles."
 
 const titleMaxTokens int64 = 200
 
@@ -61,6 +63,14 @@ func shortTitle(s string) string {
 	fields := stripPathTokens(strings.Fields(s))
 	if len(fields) > 7 {
 		fields = fields[:7]
+		for len(fields) > 2 {
+			last := strings.ToLower(fields[len(fields)-1])
+			if last == "in" || last == "for" || last == "to" || last == "with" || last == "on" || last == "the" || last == "a" || last == "an" || last == "and" || last == "of" || last == "at" {
+				fields = fields[:len(fields)-1]
+				continue
+			}
+			break
+		}
 	}
 	return strings.Join(fields, " ")
 }

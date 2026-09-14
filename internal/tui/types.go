@@ -140,6 +140,7 @@ type parallelState struct {
 	parallelTasks map[string][]parallelTaskInfo
 	detachedSeq   int
 	pending       map[string][]string
+	pendingTitles map[string][]string
 }
 
 // composer groups the prompt's own textarea and its recall history, so model
