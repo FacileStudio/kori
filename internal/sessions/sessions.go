@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // SessionLog is the record of a session on disk: one JSONL file per run,
-// under ~/.nacelle/sessions/, holding the questions that were typed and the
+// under ~/.kori/sessions/, holding the questions that were typed and the
 // answers that came back.
 //
 // It holds a path and nothing else — no handle, no buffer, no goroutine. Each
@@ -132,11 +134,11 @@ type sessionEntry struct {
 // session where nobody typed anything is a fact worth having; a zero-length
 // file is not.
 func newSessionLog(backend, model, root string) *sessionLog {
-	home, err := os.UserHomeDir()
+	dir, err := settings.HomeDir()
 	if err != nil {
 		return nil
 	}
-	dir := filepath.Join(home, ".nacelle", "sessions")
+	dir = filepath.Join(dir, "sessions")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil
 	}

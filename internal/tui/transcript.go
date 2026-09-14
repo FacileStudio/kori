@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/sessions"
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
-	"github.com/FacileStudio/nacelle-tui/internal/toolview"
+	"github.com/FacileStudio/kori/internal/sessions"
+	"github.com/FacileStudio/kori/internal/theme"
+	"github.com/FacileStudio/kori/internal/toolview"
 )
 
 // speaker is who a line on screen belongs to, which is all the drawing needs

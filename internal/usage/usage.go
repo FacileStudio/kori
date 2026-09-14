@@ -62,7 +62,7 @@ func NewSink(root, model string) *Sink {
 	machine, _ := os.Hostname()
 	project, branch := repoIdentity(root)
 	return &Sink{
-		dir:     filepath.Join(dataDir, "events", "nacelle"),
+		dir:     filepath.Join(dataDir, "events", "kori"),
 		machine: machine,
 		project: project,
 		branch:  branch,
@@ -102,7 +102,7 @@ func (s *Sink) canonical(usage nacelle.Usage, now time.Time) canonicalEvent {
 		Type:      "message",
 		Role:      "assistant",
 		Timestamp: now.UTC().Format(time.RFC3339Nano),
-		Agent:     "nacelle",
+		Agent:     "kori",
 		Machine:   s.machine,
 		Project:   s.project,
 		Branch:    s.branch,

@@ -21,7 +21,7 @@ func TestParallelAgentsDefaultOn(t *testing.T) {
 // turns it on is not the layer that decides.
 func TestParallelAgentsFollowThePrecedenceChain(t *testing.T) {
 	written(t, "tools:\n  parallel_agents: false")
-	t.Setenv("NACELLE_PARALLEL_AGENTS", "true")
+	t.Setenv("KORI_PARALLEL_AGENTS", "true")
 
 	config, err := settings(Config{})
 	if err != nil {

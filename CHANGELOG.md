@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- The project is renamed to `kori`. The repository (`FacileStudio/kori`), the
+  goreleaser project name and binary, the Homebrew cask, the facile catalog
+  entry and the documentation move from `nacelle-tui`/`nacelle` to `kori`, and
+  `example.nacelle.yml` is renamed `example.kori.yml`. The `nacelle` SDK keeps
+  its name: kori stays the terminal harness for the nacelle agent SDK.
+
 ## [0.58.1] - 2026-09-14
 
 ### Fixed
@@ -38,7 +47,7 @@
 - The live streaming region kept no blank row above itself, and client lines
   rendered inside the margin lost their spacing; both now hold one blank row.
 
-All notable changes to `nacelle-tui` are recorded here. The format follows
+All notable changes to `kori` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow semver —
 while on `v0`, a breaking change bumps the minor.
 

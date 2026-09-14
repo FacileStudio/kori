@@ -9,7 +9,7 @@ import (
 )
 
 // stdinPrompt reads the first line of stdin when the terminal is not
-// interactive, for piped usage: `echo "list files" | nacelle`.
+// interactive, for piped usage: `echo "list files" | kori`.
 func stdinPrompt() (string, error) {
 	data, err := readStdinFirstLine()
 	if err != nil {

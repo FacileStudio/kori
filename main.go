@@ -6,14 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/FacileStudio/nacelle-tui/internal/agent"
+	"github.com/FacileStudio/kori/internal/agent"
 )
 
 var version = "v0.57.0"
 
 func main() {
 	if err := agent.Run(version); err != nil {
-		fmt.Fprintln(os.Stderr, "nacelle:", unprefixed(err))
+		fmt.Fprintln(os.Stderr, "kori:", unprefixed(err))
 		var usage *agent.UsageError
 		if errors.As(err, &usage) {
 			os.Exit(2)
@@ -23,5 +23,5 @@ func main() {
 }
 
 func unprefixed(err error) string {
-	return strings.TrimPrefix(err.Error(), "nacelle: ")
+	return strings.TrimPrefix(err.Error(), "kori: ")
 }

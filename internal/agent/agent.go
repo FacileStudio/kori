@@ -10,8 +10,8 @@ import (
 	"github.com/FacileStudio/nacelle/openai"
 	"github.com/FacileStudio/nacelle/openrouter"
 
-	"github.com/FacileStudio/nacelle-tui/internal/diagnostics"
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/diagnostics"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // Assembling the agent from settings, split out of main.go because that file

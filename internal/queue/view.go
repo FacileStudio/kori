@@ -5,7 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/layout"
+	"github.com/FacileStudio/kori/internal/layout"
 )
 
 // Replace updates the message at index.

@@ -9,7 +9,7 @@ Add a `/model` slash command that switches the active model for the rest of an i
 
 ## Problem and evidence
 
-`m.agent` is assigned once during initialization in `internal/tui/model.go` and never changes during a session. Switching models currently requires quitting and restarting `nacelle-tui`.
+`m.agent` is assigned once during initialization in `internal/tui/model.go` and never changes during a session. Switching models currently requires quitting and restarting `kori`.
 
 Every major harness except goose provides an in-session model switch. Claude Code, Codex, opencode, Crush, gemini-cli, and aider all support mid-session switching while keeping the conversation intact. Compaction pressure and cost management are the primary operational reasons to switch between fast and deep models mid-turn.
 
@@ -17,7 +17,7 @@ Every major harness except goose provides an in-session model switch. Claude Cod
 
 The SDK's `nacelle.Agent` is immutable after construction. It provides no setter for its backend, exposing only the `Backend()` getter. A model switch must therefore reconstruct a new `nacelle.Agent` and reassign it to `m.agent`, following the precedent set by `/parallel` in `internal/tui/parallel_detached.go`.
 
-The switch must stay session-scoped in v1. It affects only the current interactive session and does not write back to `~/.nacelle.yml`.
+The switch must stay session-scoped in v1. It affects only the current interactive session and does not write back to `~/.kori.yml`.
 
 ### State changes on swap
 

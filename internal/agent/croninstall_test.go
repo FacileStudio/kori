@@ -4,15 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 func TestCronUnits(t *testing.T) {
-	svc, timer := cronUnits("daily-brief", "/opt/nacelle/bin/nacelle", "/home/y/code/app", "Mon..Fri *-*-* 09:00", "300")
+	svc, timer := cronUnits("daily-brief", "/opt/kori/bin/kori", "/home/y/code/app", "Mon..Fri *-*-* 09:00", "300")
 
 	for _, want := range []string{
 		"WorkingDirectory=/home/y/code/app",
-		`ExecStart="/opt/nacelle/bin/nacelle" "cron" "run" "daily-brief"`,
+		`ExecStart="/opt/kori/bin/kori" "cron" "run" "daily-brief"`,
 		"TimeoutStartSec=300",
 	} {
 		if !strings.Contains(svc, want) {
@@ -24,7 +24,7 @@ func TestCronUnits(t *testing.T) {
 	}
 	for _, want := range []string{
 		"OnCalendar=Mon..Fri *-*-* 09:00",
-		"Unit=nacelle-daily-brief.service",
+		"Unit=kori-daily-brief.service",
 	} {
 		if !strings.Contains(timer, want) {
 			t.Errorf("timer unit missing %q:\n%s", want, timer)

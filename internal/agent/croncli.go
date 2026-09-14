@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // UsageError marks a malformed cron invocation: main exits 2, the CLI
@@ -21,9 +21,9 @@ func usagef(format string, args ...any) error {
 
 // printCronUsage writes the cron subcommand's usage to stdout; help exits 0.
 func printCronUsage() error {
-	fmt.Println(`usage: nacelle cron <command> [args]
+	fmt.Println(`usage: kori cron <command> [args]
 
-  list              show the jobs in ~/.nacelle/jobs/
+  list              show the jobs in ~/.kori/jobs/
   run <name>        run one job now through the headless path
   trust <name>      review one job file and approve its contents
   install <name>    print the systemd service and timer that arm one job

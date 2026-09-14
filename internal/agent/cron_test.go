@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 func TestApplyJobDefaultsToNoShell(t *testing.T) {
@@ -85,29 +85,29 @@ var hoistCases = []struct {
 	argv, prefix, sub, rest, want []string
 }{
 	{
-		argv: []string{"nacelle", "cron", "list", "--json"},
+		argv: []string{"kori", "cron", "list", "--json"},
 		sub:  []string{"list", "--json"},
 		rest: []string{"list"},
-		want: []string{"nacelle", "--json", "cron", "list"},
+		want: []string{"kori", "--json", "cron", "list"},
 	},
 	{
-		argv:   []string{"nacelle", "-json", "cron", "list"},
+		argv:   []string{"kori", "-json", "cron", "list"},
 		prefix: []string{"-json"},
 		sub:    []string{"list"},
 		rest:   []string{"list"},
-		want:   []string{"nacelle", "-json", "cron", "list"},
+		want:   []string{"kori", "-json", "cron", "list"},
 	},
 	{
-		argv: []string{"nacelle", "cron", "list", "-json=false"},
+		argv: []string{"kori", "cron", "list", "-json=false"},
 		sub:  []string{"list", "-json=false"},
 		rest: []string{"list"},
-		want: []string{"nacelle", "-json=false", "cron", "list"},
+		want: []string{"kori", "-json=false", "cron", "list"},
 	},
 	{
-		argv: []string{"nacelle", "cron", "run", "brief"},
+		argv: []string{"kori", "cron", "run", "brief"},
 		sub:  []string{"run", "brief"},
 		rest: []string{"run", "brief"},
-		want: []string{"nacelle", "cron", "run", "brief"},
+		want: []string{"kori", "cron", "run", "brief"},
 	},
 }
 
@@ -130,9 +130,9 @@ func TestCronUsageErrors(t *testing.T) {
 	saved := os.Args
 	defer func() { os.Args = saved }()
 	for _, args := range [][]string{
-		{"nacelle", "cron", "run"},
-		{"nacelle", "cron", "install"},
-		{"nacelle", "cron", "bogus"},
+		{"kori", "cron", "run"},
+		{"kori", "cron", "install"},
+		{"kori", "cron", "bogus"},
 	} {
 		os.Args = args
 		handled, err := checkCronFlag()

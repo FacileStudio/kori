@@ -39,7 +39,7 @@ func minimalShellEnv() []string {
 }
 
 // shellCommandPath is the launching shell's own PATH with the standard user
-// bin directories appended, in case the shell that started nacelle-tui was
+// bin directories appended, in case the shell that started kori was
 // itself minimal.
 func shellCommandPath() string {
 	path := os.Getenv("PATH")

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // TrustFile is where a decision to load a project's skills is remembered,
@@ -12,18 +14,14 @@ import (
 const TrustFile = "trust.json"
 
 // trustDir is where TrustFile lives — the first thing this package puts
-// under ~/.nacelle/, which stays otherwise empty until something needs it.
+// under ~/.kori/, which stays otherwise empty until something needs it.
 // A trust decision does not belong in ~/.agents/, the shared cross-vendor
 // path skills.go also reads from: that path is common ground between every
-// AGENTS.md-aware tool, and what nacelle has chosen to trust on this
-// machine is nacelle's own state, not something another tool should read
+// AGENTS.md-aware tool, and what kori has chosen to trust on this
+// machine is kori's own state, not something another tool should read
 // or overwrite.
 func trustDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".nacelle"), nil
+	return settings.HomeDir()
 }
 
 // trustRecord is one directory's trust decision. TrustedAt is kept for a
@@ -55,7 +53,7 @@ func loadTrust() (map[string]trustRecord, error) {
 	return store, nil
 }
 
-// saveTrust writes every decision back, creating ~/.nacelle/ the first time
+// saveTrust writes every decision back, creating ~/.kori/ the first time
 // anything is trusted.
 func saveTrust(store map[string]trustRecord) error {
 	dir, err := trustDir()

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 func defaults() Config {

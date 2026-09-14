@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FacileStudio/nacelle-tui/internal/thinking"
+	"github.com/FacileStudio/kori/internal/thinking"
 )
 
 func TestTheClockStopsWhenTheAnswerStartsNotWhenTheTurnEnds(t *testing.T) {

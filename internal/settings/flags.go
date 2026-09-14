@@ -79,7 +79,7 @@ func declareFlags(fallback Config) declared {
 			mode:        flag.String("mode", *fallback.Mode, "inline or tui rendering"),
 			transparent: flag.Bool("transparent-blocks", *fallback.TransparentBlocks, "drop the backdrop on tool result and diff panes"),
 			json:        flag.Bool("json", *fallback.JSON, "print cron list as one JSON document"),
-			noConfig:    flag.Bool("no-config", false, "start with default settings, ignoring ~/.nacelle.yml"),
+			noConfig:    flag.Bool("no-config", false, "start with default settings, ignoring ~/.kori.yml"),
 		},
 		reasoningFlags: reasoningFlags{
 			effort:   flag.String("effort", fallback.Effort, "none, minimal, low, medium, high, xhigh or max"),
@@ -93,7 +93,7 @@ func declareFlags(fallback Config) declared {
 			projectContext: flag.Bool("project-context", *fallback.ProjectContext, "read CLAUDE.md and AGENTS.md from root upward into the system prompt"),
 			skills:         flag.Bool("skills", *fallback.Skills, "tell the model about skills found in ~/.agents/skills and trusted .agents/skills directories"),
 			trustSkills:    flag.Bool("trust-skills", *fallback.TrustSkills, "trust every .agents/skills directory found under root this run, and remember the decision"),
-			trustHooks:     flag.Bool("trust-hooks", *fallback.TrustHooks, "trust this project's .nacelle/hooks.yml as it reads right now, and remember that version"),
+			trustHooks:     flag.Bool("trust-hooks", *fallback.TrustHooks, "trust this project's .kori/hooks.yml as it reads right now, and remember that version"),
 		},
 	}
 }

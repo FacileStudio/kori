@@ -9,7 +9,7 @@ import (
 func checkVersionFlag(v string) (bool, error) {
 	for _, arg := range os.Args[1:] {
 		if arg == "-version" || arg == "--version" || arg == "-v" {
-			fmt.Println("nacelle " + v)
+			fmt.Println("kori " + v)
 			return true, nil
 		}
 	}

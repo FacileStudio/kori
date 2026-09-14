@@ -1,6 +1,6 @@
-# example.nacelle.yml — every setting, every default, explicit.
-# Written to ~/.nacelle.yml on first boot; identical to the settings.Template
-# in internal/settings/scaffold.go. Delete ~/.nacelle.yml to regenerate it.
+# example.kori.yml — every setting, every default, explicit.
+# Written to ~/.kori.yml on first boot; identical to the settings.Template
+# in internal/settings/scaffold.go. Delete ~/.kori.yml to regenerate it.
 provider:
   backend: anthropic
   model: ""
@@ -66,5 +66,5 @@ sources:
 
 hooks: []
 # Scheduled jobs no longer live in this file: one YAML file per job under
-# ~/.nacelle/jobs/ (e.g. news.yml), trusted with `nacelle cron trust <name>`.
+# ~/.kori/jobs/ (e.g. news.yml), trusted with `kori cron trust <name>`.
 gates: []

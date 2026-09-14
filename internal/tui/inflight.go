@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/toolview"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
-	"github.com/FacileStudio/nacelle-tui/internal/toolview"
 )
 
 // answerStream holds the text buffers produced during a run. Embedded in

@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/skills"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
-	"github.com/FacileStudio/nacelle-tui/internal/skills"
 )
 
 var delegations = make(chan nacelle.Usage, 64)

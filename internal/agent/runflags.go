@@ -8,10 +8,10 @@ import (
 	"github.com/FacileStudio/nacelle"
 	"github.com/FacileStudio/nacelle/tools"
 
-	"github.com/FacileStudio/nacelle-tui/internal/approval"
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
-	"github.com/FacileStudio/nacelle-tui/internal/skills"
-	"github.com/FacileStudio/nacelle-tui/internal/tui"
+	"github.com/FacileStudio/kori/internal/approval"
+	"github.com/FacileStudio/kori/internal/settings"
+	"github.com/FacileStudio/kori/internal/skills"
+	"github.com/FacileStudio/kori/internal/tui"
 )
 
 // Run is the main entry point for the agent.

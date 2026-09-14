@@ -11,8 +11,8 @@ import (
 
 	"github.com/FacileStudio/nacelle"
 
-	"github.com/FacileStudio/nacelle-tui/internal/approval"
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/approval"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // runHeadless runs a single prompt and streams text to stdout.

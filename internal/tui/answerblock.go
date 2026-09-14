@@ -2,7 +2,7 @@ package tui
 
 import "strings"
 
-import "github.com/FacileStudio/nacelle-tui/internal/toolview"
+import "github.com/FacileStudio/kori/internal/toolview"
 
 // answerPane paints the answer as a pane: the markdown rendered two columns
 // short, each row padded onto the block backdrop (or left on the terminal's

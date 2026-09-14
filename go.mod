@@ -1,4 +1,4 @@
-module github.com/FacileStudio/nacelle-tui
+module github.com/FacileStudio/kori
 
 go 1.26
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
-	"github.com/FacileStudio/nacelle-tui/internal/sessions"
-	"github.com/FacileStudio/nacelle-tui/internal/usage"
+	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/sessions"
+	"github.com/FacileStudio/kori/internal/usage"
 )
 
 // boot wires the session config the model was built from into its live fields —

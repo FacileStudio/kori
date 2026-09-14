@@ -7,9 +7,9 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/FacileStudio/kori/internal/layout"
+	"github.com/FacileStudio/kori/internal/status"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/layout"
-	"github.com/FacileStudio/nacelle-tui/internal/status"
 )
 
 // parallelTasksView returns a view of the parallel subagent tasks, one line per

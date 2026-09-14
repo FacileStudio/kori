@@ -1,4 +1,4 @@
-# nacelle-tui Roadmap
+# kori Roadmap
 
 This file tracks UI-only work. Core SDK changes live in `../nacelle/ROADMAP.md`. Both repos release with the same tag (e.g. `v0.8.0` / `tui/v0.8.0`) in a two-commit flow: core first, then UI pinned to it.
 
@@ -27,21 +27,21 @@ This file tracks UI-only work. Core SDK changes live in `../nacelle/ROADMAP.md`.
 - **Log rotation & write-failure warning** — rotate session files at 256 KB, gzip old file (`.gz`), start new timestamped file. *Done via `sessionrotate.go`.*
 - **Session summary command** — *Done via `/status` command.*
 - **Dynamic compaction window** — automatically scales `compactAt` to 75% of `Capabilities.ContextWindow` when unconfigured. *Done in v0.21.7.*
-- **Resume** — `--continue` picks the newest session under `~/.nacelle/sessions/<project>/`; `/resume` picker in the TUI to resume past conversation. *Done via `--continue` flag and `/resume` command.*
+- **Resume** — `--continue` picks the newest session under `~/.kori/sessions/<project>/`; `/resume` picker in the TUI to resume past conversation. *Done via `--continue` flag and `/resume` command.*
 - **Subagents overview** — show list of running subagents and current task progress one per line under the input prompt (like pi or antigravity). *Done via `parallel_result.go` in v0.26.0.*
 
 ---
 
 ## Track I — Background scheduling (cron)
 
-A cron for agents: unattended, no daemon. Jobs live inline in `~/.nacelle.yml` under `cron:`; the `nacelle cron` subcommand fronts the existing headless path. The scheduler is systemd/Cron — nacelle only surfaces and arms it.
+A cron for agents: unattended, no daemon. Jobs live inline in `~/.kori.yml` under `cron:`; the `kori cron` subcommand fronts the existing headless path. The scheduler is systemd/Cron — kori only surfaces and arms it.
 
-- **`nacelle cron list`** — show jobs and their armed state. *Done.*
-- **`nacelle cron run <name>`** — run one job headless, deliver the transcript. Defaults are reversed for unattended runs: shell (`commands`) off and `enabled` off, because a run nobody can answer must not reach a live approval prompt. `install` refuses a disabled job so test-run-first is explicit. *Done (Phase 1).*
-- **`nacelle cron install <name>`** — print a systemd service+timer pair (arms via `OnCalendar`, `TimeoutStopSec` from the job's `timeout`) for the user to save and enable. nacelle generates, the user owns. *Done (Phase 1).*
+- **`kori cron list`** — show jobs and their armed state. *Done.*
+- **`kori cron run <name>`** — run one job headless, deliver the transcript. Defaults are reversed for unattended runs: shell (`commands`) off and `enabled` off, because a run nobody can answer must not reach a live approval prompt. `install` refuses a disabled job so test-run-first is explicit. *Done (Phase 1).*
+- **`kori cron install <name>`** — print a systemd service+timer pair (arms via `OnCalendar`, `TimeoutStopSec` from the job's `timeout`) for the user to save and enable. kori generates, the user owns. *Done (Phase 1).*
 - **Delivery** — `delivery: "file:<dir>"` appends a status header + transcript to `<dir>/<name>.log`; unset means journal/stdout only. *Done (Phase 1).*
 - **Phase 2 (not yet built): promotion UX** — repeat a chat job, agent offers to schedule it, test-runs it once into the same thread, creates it enabled-by-design, and auto-disables on failure with a notification. Mirrors the `syntheses/background-agent-scheduling.md` reference.
-- **Not doing** — a daemon, a job DB, retry, or parsing systemd/crontab syntax inside nacelle.
+- **Not doing** — a daemon, a job DB, retry, or parsing systemd/crontab syntax inside kori.
 
 ---
 

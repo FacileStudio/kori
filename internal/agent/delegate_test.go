@@ -7,7 +7,7 @@ import (
 
 	"github.com/FacileStudio/nacelle"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 func TestADelegateWithNoApprovalGateMayCall(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-// Template is the scaffold written to ~/.nacelle.yml on first boot: every
+// Template is the scaffold written to ~/.kori.yml on first boot: every
 // setting present, every value the default. The point is discoverability —
 // someone opening the file sees the whole surface with names to grep for,
 // instead of an empty file and a docs page.
@@ -66,7 +66,7 @@ sources:
 
 hooks: []
 # Scheduled jobs no longer live in this file: one YAML file per job under
-# ~/.nacelle/jobs/ (e.g. news.yml), approved with nacelle cron trust <name>.
+# ~/.kori/jobs/ (e.g. news.yml), approved with kori cron trust <name>.
 `
 
 // Scaffold writes the template when no config file exists yet, and reports

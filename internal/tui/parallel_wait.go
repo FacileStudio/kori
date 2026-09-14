@@ -3,7 +3,7 @@ package tui
 import (
 	"strconv"
 
-	"github.com/FacileStudio/nacelle-tui/internal/sessions"
+	"github.com/FacileStudio/kori/internal/sessions"
 )
 
 // relaxAfterDispatch ends the parent run once a model-callable parallel

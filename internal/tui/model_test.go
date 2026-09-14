@@ -35,13 +35,13 @@ func bareBanner() *Model {
 // empty start message prints nothing — the banner stays the first and only
 // thing.
 func TestStartMessagePrintsAboveTheBanner(t *testing.T) {
-	m := NewModel(nil, "banner", nil, SessionConfig{CompactAt: 100_000, StartMessage: "welcome\nto nacelle", PromptPlaceholder: "placeholder"})
+	m := NewModel(nil, "banner", nil, SessionConfig{CompactAt: 100_000, StartMessage: "welcome\nto kori", PromptPlaceholder: "placeholder"})
 	said := visible(strings.Join(m.unprinted, "\n"))
-	message, bannerAt := strings.Index(said, "to nacelle"), strings.Index(said, "banner")
+	message, bannerAt := strings.Index(said, "to kori"), strings.Index(said, "banner")
 	if message < 0 || bannerAt < 0 || message > bannerAt {
 		t.Errorf("launch = %q, want the start message above the banner", said)
 	}
-	if got := visible(m.unprinted[0]); !strings.Contains(got, "to nacelle") {
+	if got := visible(m.unprinted[0]); !strings.Contains(got, "to kori") {
 		t.Errorf("first thing said = %q, want the start message", got)
 	}
 }

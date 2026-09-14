@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	s "github.com/FacileStudio/nacelle-tui/internal/settings"
+	s "github.com/FacileStudio/kori/internal/settings"
 )
 
 type testConfigEnv struct {
@@ -54,7 +54,7 @@ func TestCompactAtPrecedence(t *testing.T) {
 		t.Errorf("file compact_at = %d, want 204800", *c.CompactAt)
 	}
 
-	t.Setenv("NACELLE_COMPACT_AT", "300000")
+	t.Setenv("KORI_COMPACT_AT", "300000")
 	if c := env.read(t, s.Config{}); *c.CompactAt != 300000 {
 		t.Errorf("env compact_at = %d, want 300000", *c.CompactAt)
 	}

@@ -6,8 +6,8 @@ import (
 
 	"github.com/FacileStudio/nacelle"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
-	"github.com/FacileStudio/nacelle-tui/internal/tui"
+	"github.com/FacileStudio/kori/internal/settings"
+	"github.com/FacileStudio/kori/internal/tui"
 )
 
 // withParallelAgents mounts the delegation tools when the settings ask for them.

@@ -13,11 +13,11 @@ func TestStripPrintFlagExtractsPrompt(t *testing.T) {
 		want     string
 		wantArgs string
 	}{
-		{"-print with arg", []string{"nacelle", "-print", "hello world"}, "hello world", "nacelle"},
-		{"-print=equals", []string{"nacelle", "-print=hello"}, "hello", "nacelle"},
-		{"-print alone (stdin)", []string{"nacelle", "-print"}, "", "nacelle"},
-		{"no -print", []string{"nacelle", "-model", "abc"}, "", "nacelle -model abc"},
-		{"-print after other flags", []string{"nacelle", "-root", ".", "-print", "hello"}, "hello", "nacelle -root ."},
+		{"-print with arg", []string{"kori", "-print", "hello world"}, "hello world", "kori"},
+		{"-print=equals", []string{"kori", "-print=hello"}, "hello", "kori"},
+		{"-print alone (stdin)", []string{"kori", "-print"}, "", "kori"},
+		{"no -print", []string{"kori", "-model", "abc"}, "", "kori -model abc"},
+		{"-print after other flags", []string{"kori", "-root", ".", "-print", "hello"}, "hello", "kori -root ."},
 	}
 
 	for _, tt := range cases {

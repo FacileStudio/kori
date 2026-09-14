@@ -9,8 +9,8 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/theme"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
 )
 
 func TestTheSpinnerAndTheWaitingPhraseAreOneColouredStatement(t *testing.T) {

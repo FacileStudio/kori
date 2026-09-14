@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 func TestApplyJobOverridesEachGroup(t *testing.T) {

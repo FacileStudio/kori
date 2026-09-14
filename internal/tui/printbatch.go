@@ -3,7 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/layout"
+	"github.com/FacileStudio/kori/internal/layout"
 )
 
 // printBatches splits one painted block into the tea.Println batches inline

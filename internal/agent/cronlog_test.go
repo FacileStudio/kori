@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
 )
 
 func TestCronRunRecordCarriesStatusAndError(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/FacileStudio/nacelle"
 
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
+	"github.com/FacileStudio/kori/internal/theme"
 )
 
 var toolIcons = map[string]string{

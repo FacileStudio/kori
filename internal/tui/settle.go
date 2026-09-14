@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/herdr"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
 )
 
 // This file is how a run ends: the state left behind is tidied, what streamed

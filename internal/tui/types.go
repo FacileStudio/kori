@@ -6,13 +6,13 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/glamour/v2"
 
+	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/history"
+	"github.com/FacileStudio/kori/internal/menu"
+	"github.com/FacileStudio/kori/internal/queue"
+	"github.com/FacileStudio/kori/internal/status"
+	"github.com/FacileStudio/kori/internal/theme"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
-	"github.com/FacileStudio/nacelle-tui/internal/history"
-	"github.com/FacileStudio/nacelle-tui/internal/menu"
-	"github.com/FacileStudio/nacelle-tui/internal/queue"
-	"github.com/FacileStudio/nacelle-tui/internal/status"
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
 )
 
 // commandState is everything /skill:name and the dropdown menu need beyond

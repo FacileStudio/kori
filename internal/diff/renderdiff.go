@@ -7,7 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/FacileStudio/nacelle-tui/internal/toolview"
+	"github.com/FacileStudio/kori/internal/toolview"
 )
 
 var (

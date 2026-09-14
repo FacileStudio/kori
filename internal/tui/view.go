@@ -5,8 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/layout"
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
+	"github.com/FacileStudio/kori/internal/layout"
+	"github.com/FacileStudio/kori/internal/theme"
 )
 
 type screen struct {

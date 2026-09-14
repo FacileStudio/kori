@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
+	"github.com/FacileStudio/kori/internal/diff"
+	"github.com/FacileStudio/kori/internal/toolview"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/diff"
-	"github.com/FacileStudio/nacelle-tui/internal/toolview"
 )
 
 // commandLineCap bounds how many rows of a run_command's output one box shows,

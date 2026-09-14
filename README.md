@@ -1,9 +1,9 @@
-# nacelle-tui
+# kori
 
 Terminal coding agent — the human harness for the
 [nacelle](https://github.com/FacileStudio/nacelle) agent SDK.
 
-The binary is named `nacelle`. The SDK is a Go library for building agents;
+The binary is named `kori`. The SDK is a Go library for building agents;
 this program is its first consumer and lives to exercise every part of it from
 a terminal, where someone is watching: text, reasoning, tools starting and
 finishing, why a turn ended, what it cost. It is deliberately small — sessions,
@@ -32,13 +32,13 @@ profiles and panes are what a product grows, not what a contract test needs.
 |---|---|
 | TUI | Go 1.26.4, `charm.land/bubbletea/v2`, lipgloss v2, glamour v2 |
 | Agent | [FacileStudio/nacelle](https://github.com/FacileStudio/nacelle), pinned by tag |
-| State | `~/.nacelle.yml`, `~/.nacelle/hooks.json` for hook trust |
+| State | `~/.kori.yml`, `~/.kori/hooks.json` for hook trust |
 | Release | GoReleaser, GitHub Actions on tag push, Homebrew tap `FacileStudio/tap` |
 
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/FacileStudio/nacelle-tui/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FacileStudio/kori/main/install.sh | bash
 ```
 
 Installs to `~/.local/bin` via [facile](https://github.com/FacileStudio/facile), the suite
@@ -47,13 +47,13 @@ installer. Pass `--bin-dir <dir>` to change that, `--source` to build from sourc
 Already have `facile`:
 
 ```sh
-facile install nacelle
+facile install kori
 ```
 
 Or Homebrew:
 
 ```sh
-brew install FacileStudio/tap/nacelle
+brew install FacileStudio/tap/kori
 ```
 
 ## Usage
@@ -61,33 +61,33 @@ brew install FacileStudio/tap/nacelle
 Run it in the directory you want it to work in:
 
 ```sh
-nacelle
+kori
 ```
 
 It reads API keys from the environment: `ANTHROPIC_API_KEY` for the default
 backend, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) for `-backend google`,
 `OPENAI_API_KEY` for `-backend openai`, and `OPENROUTER_API_KEY` for `-backend openrouter`.
 
-Settings layer bottom-up: defaults, then `~/.nacelle.yml`, then `NACELLE_*`
+Settings layer bottom-up: defaults, then `~/.kori.yml`, then `KORI_*`
 environment variables, then flags. The useful ones:
 
 | Flag | Env | What |
 |---|---|---|
-| `-backend` | `NACELLE_BACKEND` | `anthropic`, `google`, `openai`, or `openrouter` |
-| `-model` | `NACELLE_MODEL` | model id; the backend's own default otherwise |
-| `-root` | `NACELLE_ROOT` | directory the file tools may reach |
-| `-bash` | `NACELLE_BASH` | let the model run commands (off by default) |
+| `-backend` | `KORI_BACKEND` | `anthropic`, `google`, `openai`, or `openrouter` |
+| `-model` | `KORI_MODEL` | model id; the backend's own default otherwise |
+| `-root` | `KORI_ROOT` | directory the file tools may reach |
+| `-bash` | `KORI_BASH` | let the model run commands (off by default) |
 | `-continue` | — | auto-resume the newest session for the current project |
 | `-resume` | — | resume a specific session by id or file path |
-| `-no-config` | — | start with default settings, ignoring ~/.nacelle.yml |
-| `-tasks` | `NACELLE_TASKS` | task planning tool (on by default) |
-| `-approve-tools` | `NACELLE_APPROVE_TOOLS` | ask before every tool call runs |
-| `-subagents` | `NACELLE_SUBAGENTS` | give the model the parallel delegate tool (on by default) |
-| `-max-iterations` | `NACELLE_MAX_ITERATIONS` | how many times the model may be asked |
+| `-no-config` | — | start with default settings, ignoring ~/.kori.yml |
+| `-tasks` | `KORI_TASKS` | task planning tool (on by default) |
+| `-approve-tools` | `KORI_APPROVE_TOOLS` | ask before every tool call runs |
+| `-subagents` | `KORI_SUBAGENTS` | give the model the parallel delegate tool (on by default) |
+| `-max-iterations` | `KORI_MAX_ITERATIONS` | how many times the model may be asked |
 | `-mcp` | — | MCP servers file (repeatable) |
-| `-skill-dir` | `NACELLE_SKILL_DIRS` | extra skills directory (repeatable) |
+| `-skill-dir` | `KORI_SKILL_DIRS` | extra skills directory (repeatable) |
 
-`nacelle -version` prints exactly `nacelle <semver>`. See `-h` for the full set:
+`kori -version` prints exactly `kori <semver>`. See `-h` for the full set:
 reasoning effort and budget, web fetch, project-context and skill
 discovery, hooks trust.
 
@@ -95,13 +95,13 @@ Full settings reference: [docs/configuration.md](docs/configuration.md).
 
 ## Configuration
 
-Settings live in `~/.nacelle.yml`, **written on first boot with every default
+Settings live in `~/.kori.yml`, **written on first boot with every default
 explicitly set** — delete it to regenerate. An existing file is never touched.
 The example file with all defaults, and the full reference with the
 precedence order and the traps in each setting:
 [docs/configuration.md](docs/configuration.md).
 
-`example.nacelle.yml` in this repo is the same file the first boot writes:
+`example.kori.yml` in this repo is the same file the first boot writes:
 
 ```yaml
 provider:
@@ -159,22 +159,22 @@ hooks: []
 ```
 
 Scheduled jobs are not configured here anymore: one YAML file per job under
-`~/.nacelle/jobs/`, trusted with `nacelle cron trust <name>` before it runs.
+`~/.kori/jobs/`, trusted with `kori cron trust <name>` before it runs.
 
 ## herdr
 
-Run inside [herdr](https://herdr.dev), `nacelle` reports its live state and
-session identity over herdr's socket API (`internal/herdr/`). A nacelle pane
+Run inside [herdr](https://herdr.dev), `kori` reports its live state and
+session identity over herdr's socket API (`internal/herdr/`). A kori pane
 shows as an agent with an idle / working / blocked state, and herdr holds a
 reference to the run's transcript. This needs no herdr binary update and works
 on any machine, including stock herdr.
 
-After a herdr **server restart**, herdr restores a nacelle pane as a plain
-shell in its saved directory — nacelle is not in herdr's compiled-in resume
+After a herdr **server restart**, herdr restores a kori pane as a plain
+shell in its saved directory — kori is not in herdr's compiled-in resume
 table, and no config or plugin adds it. Reopen the session in that directory
-with `nacelle` (auto-resumes the newest session by cwd) or
-`nacelle --resume <transcript-path>`. Real auto-restore awaits herdr adding
-nacelle to its resume table; `--resume` already accepts the exact absolute
+with `kori` (auto-resumes the newest session by cwd) or
+`kori --resume <transcript-path>`. Real auto-restore awaits herdr adding
+kori to its resume table; `--resume` already accepts the exact absolute
 transcript path the reporter reports.
 
 ## Structure
@@ -190,7 +190,7 @@ internal/layout/    Terminal dimensions and line truncation
 internal/menu/      Autocompletion menu for commands and skills
 internal/queue/     Input queueing during active turns
 internal/sessions/  Session persistence, listing, rotation, resume
-internal/settings/  CLI flags, ~/.nacelle.yml, and environment configuration
+internal/settings/  CLI flags, ~/.kori.yml, and environment configuration
 internal/skills/    Agent skills discovery and execution
 internal/status/    Spinner and progress status indicator
 internal/tasks/     Task planning tool, validation, step updates

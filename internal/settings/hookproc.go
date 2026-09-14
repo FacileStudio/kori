@@ -48,7 +48,7 @@ func expandTilde(command string) string {
 func runCommand(ctx context.Context, command string, payload hookPayload) (out []byte, errOut []byte, runErr error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "nacelle hooks: encoding event for %q: %v\n", command, err)
+		fmt.Fprintf(os.Stderr, "kori hooks: encoding event for %q: %v\n", command, err)
 		return nil, nil, err
 	}
 
@@ -87,7 +87,7 @@ func interpret(command string, ev nacelle.HookEvent, runErr error, out, errOut [
 		}
 		return nacelle.HookResult{Deny: reason}
 	default:
-		fmt.Fprintf(os.Stderr, "nacelle hooks: %q failed: %v: %s\n",
+		fmt.Fprintf(os.Stderr, "kori hooks: %q failed: %v: %s\n",
 			command, runErr, strings.TrimSpace(string(errOut)))
 		return nacelle.HookResult{Deny: fmt.Sprintf("hook watching %q failed", ev.Tool)}
 	}

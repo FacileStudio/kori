@@ -13,7 +13,7 @@ import (
 // the strict decoder, and merged with the defaults it must not disturb.
 func TestScaffoldRoundTripsToTheDefaults(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, ".nacelle.yml")
+	path := filepath.Join(dir, ".kori.yml")
 
 	created, err := Scaffold(path)
 	if err != nil || !created {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/FacileStudio/nacelle"
 
-	"github.com/FacileStudio/nacelle-tui/internal/sessions"
-	"github.com/FacileStudio/nacelle-tui/internal/usage"
+	"github.com/FacileStudio/kori/internal/sessions"
+	"github.com/FacileStudio/kori/internal/usage"
 )
 
 // account holds what the client knows about what the session has spent: the
@@ -68,7 +68,7 @@ type account struct {
 	sink *usage.Sink
 
 	// session is this run of the client written down: the questions asked
-	// and the answers given, appended to a file under ~/.nacelle/sessions
+	// and the answers given, appended to a file under ~/.kori/sessions
 	// as they are said. It is nil when the file could not be opened, which
 	// is not a reason to refuse to run.
 	session *sessions.SessionLog

@@ -9,12 +9,12 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/history"
+	"github.com/FacileStudio/kori/internal/menu"
+	"github.com/FacileStudio/kori/internal/status"
+	"github.com/FacileStudio/kori/internal/theme"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/herdr"
-	"github.com/FacileStudio/nacelle-tui/internal/history"
-	"github.com/FacileStudio/nacelle-tui/internal/menu"
-	"github.com/FacileStudio/nacelle-tui/internal/status"
-	"github.com/FacileStudio/nacelle-tui/internal/theme"
 )
 
 // forceQuit is how long the offer to quit outright stays open after a run is

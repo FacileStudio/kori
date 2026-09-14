@@ -7,8 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/menu"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/menu"
 )
 
 func TestMenuItemsListsCommandsBeforeSkillsWithDescriptions(t *testing.T) {

@@ -1,4 +1,4 @@
-# nacelle-tui — Configuration
+# kori — Configuration
 
 Every field the core `Config` reads, then the client's own settings layer — a separate thing,
 with its own precedence order — and the traps in each.
@@ -78,7 +78,7 @@ with an `*Unsupported` error rather than silently running with less.
 
 The client's settings layer is a separate settings problem from the core, and deliberately does not share a
 mechanism with it: **the library must never read configuration from disk or environment.** A
-`nacelle` package that read `~/.nacelle.yml` would let a file on a *different* machine's disk
+`nacelle` package that read `~/.kori.yml` would let a file on a *different* machine's disk
 change a headless consumer's behaviour, the way Bubble Tea's own config never reaches past the
 program that imports it.
 
@@ -92,9 +92,9 @@ could tell apart.
 
 | Layer | Source | Notes |
 |---|---|---|
-| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-max-iterations`, `-compact-at`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.nacelle.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
-| Environment | `NACELLE_BACKEND`, `NACELLE_MODEL`, `NACELLE_PROVIDER_BASE_URL`, `NACELLE_PROVIDER_API_KEY`, `NACELLE_EFFORT`, `NACELLE_REASONING_BUDGET`, `NACELLE_ROOT`, `NACELLE_SYSTEM_PROMPT`, `NACELLE_BASH`, `NACELLE_THINKING`, `NACELLE_PROJECT_CONTEXT`, `NACELLE_SKILLS`, `NACELLE_TRUST_SKILLS`, `NACELLE_SKILL_DIRS`, `NACELLE_APPROVE_TOOLS`, `NACELLE_DIFFS`, `NACELLE_MAX_ITERATIONS`, `NACELLE_COMPACT_AT`, `NACELLE_FETCH`, `NACELLE_TASKS` | A misspelt boolean (`NACELLE_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `NACELLE_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `NACELLE_PROVIDER_BASE_URL` and `NACELLE_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
-| File | `~/.nacelle.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
+| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-max-iterations`, `-compact-at`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
+| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
+| File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
 | Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: inline`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
@@ -107,7 +107,7 @@ the person running this should opt into, not defaults sprung on them. See
 [Context and skills](#context-and-skills) and
 [Tool approval](#tool-approval) below.
 
-### `~/.nacelle.yml`
+### `~/.kori.yml`
 
 The file is grouped: each family of settings lives under its own key, the same
 families the code groups them into. The old flat layout (every key at the top
@@ -159,7 +159,7 @@ ui:
   transparent_blocks: false
   # cron_list_json: false
   # start_message: |-
-  #   Welcome to nacelle.
+  #   Welcome to kori.
   #     _   _
   #    | | | |
   #    | |_| |
@@ -204,13 +204,13 @@ Old flat key → new home, for migrating a pre-0.44 file:
 | `skill_dirs`, `mcp` | `sources:` |
 
 Every field is optional. A missing file is not an error — on first boot
-nacelle writes this file itself with every default explicit, and you edit from
+kori writes this file itself with every default explicit, and you edit from
 there; deleting it regenerates it. But an unreadable or malformed one is: a
 unreadable or malformed one is: a config silently ignored is worse than no config, because the
 setting carefully written is simply not in effect and nothing says so.
 
 Scheduled jobs are no longer part of this file at all — they live one YAML file
-per job in `~/.nacelle/jobs/`. See [Cron jobs](#cron-jobs) for the folder, its
+per job in `~/.kori/jobs/`. See [Cron jobs](#cron-jobs) for the folder, its
 trust gate and the per-job overrides.
 
 `prompt_placeholder` is the ghost text shown while the prompt is empty. The prompt has no prefix:
@@ -220,14 +220,14 @@ the first row opens at a single margin space, and wrapped rows of a long questio
 string that may span lines, so use a `|`-literal (or `|-` to drop the trailing newline) to put a
 welcome block or an ascii banner there. Empty (the default) prints nothing.
 
-**No per-project `./.nacelle.yml` yet.** A second precedence layer before the first has real
+**No per-project `./.kori.yml` yet.** A second precedence layer before the first has real
 users is a layer nobody has asked for the shape of.
 
 ### Custom providers
 
-A custom provider points nacelle at an endpoint that is not one of the four vendor APIs, using an
+A custom provider points kori at an endpoint that is not one of the four vendor APIs, using an
 existing backend's protocol when the endpoint speaks it. It is four fields with the same precedence
-as everything else: `backend` and `model` (the `NACELLE_BACKEND` / `NACELLE_MODEL` behind them), plus
+as everything else: `backend` and `model` (the `KORI_BACKEND` / `KORI_MODEL` behind them), plus
 `base_url` and `api_key` (the new ones), all read into one `Provider` group.
 
 The common case is an OpenAI-compatible gateway — any server that speaks the
@@ -236,14 +236,14 @@ proxies. Point `backend` at `openai`, set your own `base_url` and `api_key`, and
 as-is:
 
 ```sh
-export NACELLE_BACKEND=openai
-export NACELLE_PROVIDER_BASE_URL=http://localhost:3001/v1
-export NACELLE_PROVIDER_API_KEY=sk-your-unified-key
-export NACELLE_MODEL=auto
-nacelle
+export KORI_BACKEND=openai
+export KORI_PROVIDER_BASE_URL=http://localhost:3001/v1
+export KORI_PROVIDER_API_KEY=sk-your-unified-key
+export KORI_MODEL=auto
+kori
 ```
 
-Or the same provider in `~/.nacelle.yml`:
+Or the same provider in `~/.kori.yml`:
 
 ```yaml
 provider:
@@ -264,7 +264,7 @@ The file note from the precedence table above softens here: the config file **ca
 warning still stands for vendor keys — a file holding an `OPENAI_API_KEY` you actually use is a file
 that can never be committed to a dotfiles repo. A custom endpoint like freellmapi has its own key,
 so the two stories do not collide. In either case the env-var route is the one that keeps the key
-out of any file, and `NACELLE_PROVIDER_API_KEY` shares the `NACELLE_` prefix the rest of the layer
+out of any file, and `KORI_PROVIDER_API_KEY` shares the `KORI_` prefix the rest of the layer
 uses.
 
 `anthropic` cannot be pointed at a custom endpoint: its `Config` takes a pre-built client rather
@@ -311,14 +311,14 @@ same risk.
 [Agent Skills specification](https://agentskills.io/specification): every `SKILL.md` under
 `~/.agents/skills/` (no trust needed, the user's own machine), every one under a **trusted**
 `.agents/skills/` found the same way the context walk works, and every one under a directory
-named by `-skill-dir` (repeatable), `NACELLE_SKILL_DIRS` (colon-separated) or `skill_dirs` in
-`~/.nacelle.yml`. Only a skill's `name` and `description` ever reach the system prompt; the
+named by `-skill-dir` (repeatable), `KORI_SKILL_DIRS` (colon-separated) or `skill_dirs` in
+`~/.kori.yml`. Only a skill's `name` and `description` ever reach the system prompt; the
 model reads the rest with `read_file` once it decides a skill applies. `-trust-skills` trusts
 every project-local `.agents/skills/` found on that run and remembers the decision in
-`~/.nacelle/trust.json`, keyed by canonical directory — run it once per project, not on every
+`~/.kori/trust.json`, keyed by canonical directory — run it once per project, not on every
 launch.
 
-**MCP servers** (`mcp.go`). A server is written inline under `sources.mcp:` in `~/.nacelle.yml` — nothing
+**MCP servers** (`mcp.go`). A server is written inline under `sources.mcp:` in `~/.kori.yml` — nothing
 else is needed to start one:
 ```yaml
 sources:
@@ -331,7 +331,7 @@ The key is the server name;the definition uses the keys the `mcpServers` format 
 (stdio), `"type": "http"` + `url` (remote), `env`, `cwd`, `headers`, `disabled`. Both stdio and HTTP
 servers work, on **either backend**:the tools are bridged to `nacelle.Tool`, so
 `-approve-tools` gates them like every other tool and `-backend openrouter` gets them too. `${VAR}`和
-`${VAR:-default}` expand,, so a token stays in the environment rather than in `~/.nacelle.yml`. Writing
+`${VAR:-default}` expand,, so a token stays in the environment rather than in `~/.kori.yml`. Writing
 the definition here means there is no second file to keep in step and no pointer to remember to point tor
 
 For the times a server is already configured for another client, `-mcp <file>` (repeatable) names
@@ -348,18 +348,18 @@ refusing to work rather than as a server that is down.
 
 Nothing is discovered. A `.mcp.json` sitting in the working directory is **not** read, because it
 names executables to run — strictly worse than the project-local `.agents/skills/` this client
-already gates behind `~/.nacelle/trust.json`, since a skill is text the model may decline to act
-on and this is a subprocess started before the model is asked anything. Every server nacelle
-opens was named on the command line or in your own `~/.nacelle.yml`.
+already gates behind `~/.kori/trust.json`, since a skill is text the model may decline to act
+on and this is a subprocess started before the model is asked anything. Every server kori
+opens was named on the command line or in your own `~/.kori.yml`.
 
 The spec defines the `SKILL.md` file, not where it has to live on disk — every tool picks its
 own directory (Claude Code reads `~/.claude/skills/`, pi reads `~/.agents/skills/` and its own
-`~/.pi/agent/skills/`), so `~/.agents/skills/` is nacelle's own choice, not a location any other
-tool already reads. `-skill-dir` is how nacelle sees a directory that belongs to one of those,
+`~/.pi/agent/skills/`), so `~/.agents/skills/` is kori's own choice, not a location any other
+tool already reads. `-skill-dir` is how kori sees a directory that belongs to one of those,
 without moving or copying anything into its own — the same problem pi itself solves with a
 `skills` array in `settings.json` pointed at `~/.claude/skills` or `~/.codex/skills`. No trust
 gate applies to it, same reasoning as `~/.agents/skills/` above: naming a directory here is
-something only the person running nacelle, on their own machine, can do in the first place.
+something only the person running kori, on their own machine, can do in the first place.
 
 **The banner** (`main.go`'s `banner`) is how much of this is actually visible before typing
 anything: line one names the backend and model, line two the resolved `-root`, how many skills
@@ -370,12 +370,12 @@ question this client otherwise had no way to check short of a debug build.
 `bash off` earns its place because the symptom arrives from the model rather than from this
 client: asked to build and run something, it answers that it has no terminal and cannot run a
 command. That is true and deliberate — `run_command` is unconfined, so it stays opt-in — but
-nothing connected that answer back to a `tools.run_command: false` written once in `~/.nacelle.yml` and
-forgotten. Turn it on with `-bash`, `NACELLE_BASH=1`, or `tools.run_command: true`.
+nothing connected that answer back to a `tools.run_command: false` written once in `~/.kori.yml` and
+forgotten. Turn it on with `-bash`, `KORI_BASH=1`, or `tools.run_command: true`.
 
 ## Reading a page
 
-`tools.web_fetch` (`NACELLE_FETCH`, `-fetch`) lets the model read one web page by URL. **On by default**,
+`tools.web_fetch` (`KORI_FETCH`, `-fetch`) lets the model read one web page by URL. **On by default**,
 unlike bash, and it is what turns a page's URL into text the model can act on.
 
 It is on by default because it cannot change anything and cannot reach anything but the public
@@ -398,7 +398,7 @@ reported as one, with the suggestion to try another source, rather than as the p
 
 ## Tool approval
 
-`-approve-tools` (`NACELLE_APPROVE_TOOLS`, `approve_tools`) asks before every tool call runs.
+`-approve-tools` (`KORI_APPROVE_TOOLS`, `approve_tools`) asks before every tool call runs.
 **Off by default**: a nil `Config.Approve` means the SDK itself runs every call unasked, and
 the TUI's own default matches — nobody gets a behaviour change without opting in.
 
@@ -415,7 +415,7 @@ a normal tool-result error block for the model to see, the same as any other fai
 
 ## Deny elevation
 
-`security.deny_elevation` (`NACELLE_DENY_ELEVATION`) refuses `run_command` calls that try to
+`security.deny_elevation` (`KORI_DENY_ELEVATION`) refuses `run_command` calls that try to
 elevate privileges: `sudo`, `su`, `doas`, `pkexec`, checked after every chain separator and
 inside subshells, not only at the start of the line. **On by default.** The refusal is an
 ordinary tool error the model reads, so it adapts instead of retrying.
@@ -429,28 +429,28 @@ password. [docs/sudo.md](sudo.md) carries the full analysis.
 
 ## Cron jobs
 
-Cron is nacelle run unattended: the same agent, driven headless by an external
-scheduler — a systemd timer or a crontab — while nobody watches. nacelle owns
+Cron is kori run unattended: the same agent, driven headless by an external
+scheduler — a systemd timer or a crontab — while nobody watches. kori owns
 the job definitions and the run itself; the clock belongs to systemd, which is
-why there is no daemon here to reload or supervise. The `nacelle cron`
+why there is no daemon here to reload or supervise. The `kori cron`
 subcommand ties the two together:
 
 ```sh
-nacelle cron list            # every job, trusted or not
-nacelle cron run news        # run one job now, through the headless path
-nacelle cron install news    # print the systemd service and timer that arm it
-nacelle cron trust news      # approve one job file's current contents
+kori cron list            # every job, trusted or not
+kori cron run news        # run one job now, through the headless path
+kori cron install news    # print the systemd service and timer that arm it
+kori cron trust news      # approve one job file's current contents
 ```
 
-`nacelle cron list --json` prints the same table as one JSON document; set
+`kori cron list --json` prints the same table as one JSON document; set
 `ui.cron_list_json: true` to make that the default output.
 
 ### The jobs folder
 
-Each job is one YAML file in `~/.nacelle/jobs/` — `news.yml`, `healthchecks.yml`,
+Each job is one YAML file in `~/.kori/jobs/` — `news.yml`, `healthchecks.yml`,
 one file per job, the job's own fields at the top level of the file rather than
 wrapped in a list. The job's name defaults to the filename stem, so `news.yml`
-defines the job `news` and `nacelle cron run news` runs it; a `name:` key
+defines the job `news` and `kori cron run news` runs it; a `name:` key
 overrides it for the rare file whose stem is not the name you want (a name
 must be unit-safe: letters, digits and `. _ -` only).
 
@@ -459,7 +459,7 @@ daemon and no reload step: a file dropped in appears in `cron list` on the next
 invocation, a file edited changes the job, and a file deleted takes the job
 with it. Deleting the file is the off switch.
 
-Job files decode strictly, the way `~/.nacelle.yml` itself does: a typo in a
+Job files decode strictly, the way `~/.kori.yml` itself does: a typo in a
 job file is a hard error naming the file, not a silent half-job. Loud is the
 right setting for something that fires at 2am.
 
@@ -469,29 +469,29 @@ A job file is instructions an agent will follow unattended with your provider
 keys in reach, so it is gated the way project skills and hooks are: a human
 must approve the exact bytes before they run.
 
-- A new file shows up in `nacelle cron list` immediately, marked untrusted.
-- `nacelle cron run` and `nacelle cron install` refuse an untrusted job until
-  someone runs `nacelle cron trust <name>`, which prints the file's path, its
+- A new file shows up in `kori cron list` immediately, marked untrusted.
+- `kori cron run` and `kori cron install` refuse an untrusted job until
+  someone runs `kori cron trust <name>`, which prints the file's path, its
   name and its prompt, and asks before recording anything.
 - Trusting records a SHA-256 hash of the file's contents against its path in
-  `~/.nacelle/trust.json`, the same store that remembers approved skill
+  `~/.kori/trust.json`, the same store that remembers approved skill
   directories. Editing the file changes the hash, and a changed file is
   refused again — trust re-arms on every edit, so no one-line change to a
   trusted job slips through unreviewed.
-- Trust is per machine. A `~/.nacelle/jobs/` folder synced across machines
+- Trust is per machine. A `~/.kori/jobs/` folder synced across machines
   carries the files but not the approvals, so each machine needs its own
-  `nacelle cron trust` — the person trusting is a person at that machine's
+  `kori cron trust` — the person trusting is a person at that machine's
   keyboard, and that is the point.
 
 Trusting makes a job **runnable**, not **scheduled**: it clears `cron run` and
 unblocks `cron install`, and `cron install` still only prints the systemd
-service and timer units for you to save and enable yourself. Nothing nacelle
+service and timer units for you to save and enable yourself. Nothing kori
 does creates the timer.
 
 ### A job file
 
 ```yaml
-# ~/.nacelle/jobs/news.yml — one file, one job; the job's name is the stem.
+# ~/.kori/jobs/news.yml — one file, one job; the job's name is the stem.
 when: daily
 prompt: |-
   Summarise what changed on the pages in my feed list since yesterday.
@@ -521,7 +521,7 @@ limits:
 
 | Field | Default | What it does |
 |---|---|---|
-| `when` | empty (`install` writes `daily`) | The `OnCalendar=` line of the generated timer — any systemd calendar expression. nacelle never parses it; systemd does |
+| `when` | empty (`install` writes `daily`) | The `OnCalendar=` line of the generated timer — any systemd calendar expression. kori never parses it; systemd does |
 | `prompt` | — required | The question the run starts from |
 | `workdir` | — install requires one | The run's root and the unit's `WorkingDirectory=`. Without one the run would execute wherever the scheduler happens to start the unit, which is never the project |
 | `delivery` | empty — no transcript written | `file:<dir>` appends the transcript to `<dir>/<name>-YYYY-MM-DD.md` and one status line per run to `<dir>/<name>.log` |
@@ -550,8 +550,8 @@ exactly on the config's settings.
 
 ### Migration
 
-The inline `cron:` list in `~/.nacelle.yml` is gone. A config still carrying it
-is refused at load with an error naming `~/.nacelle/jobs/` — the same refusal an
+The inline `cron:` list in `~/.kori.yml` is gone. A config still carrying it
+is refused at load with an error naming `~/.kori/jobs/` — the same refusal an
 unknown key gets, because a silently ignored job list is a scheduler that
 quietly stopped existing. Each list entry becomes its own file in the folder:
 the entry's `name` names the file (`news` becomes `news.yml`), the rest of the
@@ -710,7 +710,7 @@ rewrite too large to align line by line reads as one block of removals against a
 draw it; `write_file` carries only the new contents, so what the file held when the call was seen
 becomes the before side — empty for a file being created, which shows as all additions. Only
 these two tools get a diff: search, commands and MCP tools render exactly as they did before.
-Turn it off with `diffs: false` (`NACELLE_DIFFS`, `-diffs`) to restore the bare one-line report.
+Turn it off with `diffs: false` (`KORI_DIFFS`, `-diffs`) to restore the bare one-line report.
 
 **Input with a repeated key is refused rather than summarised.** `encoding/json` keeps the last
 value of a duplicate key silently, so `{"command":"ls","command":"rm -rf /"}` can be shown as

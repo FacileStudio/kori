@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/tasks"
+	"github.com/FacileStudio/kori/internal/tasks"
 )
 
 func TestThePlanToolIsNeverPutInFrontOfAHuman(t *testing.T) {

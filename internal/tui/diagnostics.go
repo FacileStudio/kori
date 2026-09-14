@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/diagnostics"
+	"github.com/FacileStudio/kori/internal/diagnostics"
 )
 
 type startupDiagnostics string

@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/sessions"
+	"github.com/FacileStudio/kori/internal/sessions"
 )
 
 type model = Model

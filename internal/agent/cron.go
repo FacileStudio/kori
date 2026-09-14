@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // findCommand scans os.Args for a subcommand by name: flags typed ahead of it
@@ -47,17 +47,17 @@ func checkCronFlag() (bool, error) {
 		return true, printCronUsage()
 	case "run":
 		if len(sub) < 2 {
-			return true, usagef("usage: nacelle cron run <name>")
+			return true, usagef("usage: kori cron run <name>")
 		}
 		return true, runCronJob(sub[1])
 	case "trust":
 		if len(sub) < 2 {
-			return true, usagef("usage: nacelle cron trust <name>")
+			return true, usagef("usage: kori cron trust <name>")
 		}
 		return true, trustCronJob(sub[1], os.Stdin)
 	case "install":
 		if len(sub) < 2 {
-			return true, usagef("usage: nacelle cron install <name>")
+			return true, usagef("usage: kori cron install <name>")
 		}
 		return true, installCronJob(sub[1])
 	default:
@@ -99,7 +99,7 @@ func loadCronConfig() (settings.Config, error) {
 }
 
 // loadCronState reads the resolved config and every job file in
-// ~/.nacelle/jobs/. Every cron command goes through here, so a file added or
+// ~/.kori/jobs/. Every cron command goes through here, so a file added or
 // removed takes effect on the next invocation with no daemon.
 func loadCronState() (settings.Config, []settings.JobFile, error) {
 	config, err := loadCronConfig()
@@ -133,7 +133,7 @@ func ensureTrusted(f settings.JobFile) error {
 	if ok {
 		return nil
 	}
-	return fmt.Errorf("job %q is not trusted: review %s, then run `nacelle cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
+	return fmt.Errorf("job %q is not trusted: review %s, then run `kori cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
 }
 
 // trustCronJob shows one job file's contents and records the human's approval

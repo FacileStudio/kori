@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/FacileStudio/nacelle-tui/internal/settings"
+	"github.com/FacileStudio/kori/internal/settings"
 )
 
 // listCronJobs prints the configured jobs and how to run or arm them. It arms
-// nothing. Jobs come from ~/.nacelle/jobs/, one file each, so the listing is
+// nothing. Jobs come from ~/.kori/jobs/, one file each, so the listing is
 // the folder as of this invocation.
 func listCronJobs() error {
 	config, files, err := loadCronState()
@@ -39,9 +39,9 @@ func listCronJobs() error {
 		fmt.Printf("%-20s when=%-18s enabled=%t commands=%t trusted=%t workdir=%s delivery=%s\n",
 			job.Name, job.When, jobEnabled(job), jobCommands(job), trusted, job.Workdir, job.Delivery)
 	}
-	fmt.Println("\nrun one now:        nacelle cron run <name>")
-	fmt.Println("trust one:          nacelle cron trust <name>")
-	fmt.Println("arm its timer:      nacelle cron install <name>")
+	fmt.Println("\nrun one now:        kori cron run <name>")
+	fmt.Println("trust one:          kori cron trust <name>")
+	fmt.Println("arm its timer:      kori cron install <name>")
 	return nil
 }
 
@@ -69,12 +69,12 @@ func installCronJob(name string) error {
 	timeout := cmp.Or(job.Timeout, "300")
 	bin, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("locating nacelle: %w", err)
+		return fmt.Errorf("locating kori: %w", err)
 	}
 	svc, timer := cronUnits(job.Name, bin, expandHome(job.Workdir), schedule, timeout)
 	fmt.Println(svc)
 	fmt.Println(timer)
-	fmt.Printf("# save both files, then: systemctl --user enable --now nacelle-%s.timer\n", job.Name)
+	fmt.Printf("# save both files, then: systemctl --user enable --now kori-%s.timer\n", job.Name)
 	return nil
 }
 
@@ -86,7 +86,7 @@ func cronUnits(name, bin, workdir, schedule, timeout string) (service, timer str
 		systemdQuote(name),
 	}, " ")
 	service = fmt.Sprintf(`[Unit]
-Description=nacelle cron %[1]s
+Description=kori cron %[1]s
 
 [Service]
 Type=oneshot
@@ -98,11 +98,11 @@ TimeoutStartSec=%[4]s
 WantedBy=default.target
 `, name, workdir, exec, timeout)
 	timer = fmt.Sprintf(`[Unit]
-Description=schedule for nacelle cron %[1]s
+Description=schedule for kori cron %[1]s
 
 [Timer]
 OnCalendar=%[2]s
-Unit=nacelle-%[1]s.service
+Unit=kori-%[1]s.service
 Persistent=false
 
 [Install]
@@ -131,7 +131,7 @@ func checkCronInstallable(job settings.CronJob) error {
 		return fmt.Errorf("invalid cron job name %q: unit file names only allow letters, digits, and . _ -", job.Name)
 	}
 	if !jobEnabled(job) {
-		return fmt.Errorf("job %q is disabled: run `nacelle cron run %s`, confirm the output, then set enabled: true",
+		return fmt.Errorf("job %q is disabled: run `kori cron run %s`, confirm the output, then set enabled: true",
 			job.Name, job.Name)
 	}
 	if job.Workdir == "" {

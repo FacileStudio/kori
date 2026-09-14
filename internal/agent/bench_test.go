@@ -165,12 +165,12 @@ func TestBenchDispatch(t *testing.T) {
 	}
 	defer func() { _ = null.Close() }()
 
-	os.Args = []string{"nacelle", "cron", "list"}
+	os.Args = []string{"kori", "cron", "list"}
 	if handled, err := checkBenchFlag(); handled || err != nil {
 		t.Errorf("checkBenchFlag for cron args = %t, %v; want false, nil", handled, err)
 	}
 
-	os.Args = []string{"nacelle", "bench"}
+	os.Args = []string{"kori", "bench"}
 	os.Stdin = null
 	handled, err := checkBenchFlag()
 	if !handled {
@@ -180,7 +180,7 @@ func TestBenchDispatch(t *testing.T) {
 		t.Errorf("checkBenchFlag without a prompt = %v; want a usage error", err)
 	}
 
-	os.Args = []string{"nacelle", "bench", "help"}
+	os.Args = []string{"kori", "bench", "help"}
 	if handled, err := checkBenchFlag(); !handled || err != nil {
 		t.Errorf("checkBenchFlag help = %t, %v; want true, nil", handled, err)
 	}

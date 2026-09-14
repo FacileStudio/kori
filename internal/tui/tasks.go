@@ -3,7 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/FacileStudio/nacelle-tui/internal/tasks"
+	"github.com/FacileStudio/kori/internal/tasks"
 )
 
 // watchTasks re-arms the watcher that brings plan updates in from the task

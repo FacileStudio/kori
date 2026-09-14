@@ -176,12 +176,12 @@ func TestStartMessageComesFromTheFileAndDefaultsEmpty(t *testing.T) {
 		t.Errorf("start message = %q, want the defaults' art", *config.StartMessage)
 	}
 
-	written(t, "ui:\n  start_message: |\n    welcome\n    to nacelle\n")
+	written(t, "ui:\n  start_message: |\n    welcome\n    to kori\n")
 	config, err := settings(Config{})
 	if err != nil {
 		t.Fatalf("settings: %v", err)
 	}
-	if *config.StartMessage != "welcome\nto nacelle\n" {
+	if *config.StartMessage != "welcome\nto kori\n" {
 		t.Errorf("start message = %q, want the file's multiline block verbatim", *config.StartMessage)
 	}
 }
@@ -203,7 +203,7 @@ func TestATypoInAKeyIsRefusedRatherThanIgnored(t *testing.T) {
 
 // Under systemd, cron or `env -i` there is no HOME and no config file either,
 // which is the ordinary case this client already handles. Refusing to start
-// meant nacelle could not run with every setting passed on the command line,
+// meant kori could not run with every setting passed on the command line,
 // for want of a file it was never going to read.
 func TestAnUnresolvableHomeMeansNoConfigFileRatherThanNoProgram(t *testing.T) {
 	t.Setenv("HOME", "")

@@ -10,9 +10,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/cost"
+	"github.com/FacileStudio/kori/internal/tasks"
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle-tui/internal/cost"
-	"github.com/FacileStudio/nacelle-tui/internal/tasks"
 )
 
 type command func(m *Model) tea.Cmd
