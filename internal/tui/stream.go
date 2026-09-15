@@ -173,7 +173,7 @@ func (m *Model) commitParagraphs() {
 	m.run.answer.WriteString(partial)
 	m.run.committedLen += len(complete) + 1
 
-	if complete != "" {
+	if strings.TrimSpace(complete) != "" {
 		m.say(fromModel, complete)
 	}
 }

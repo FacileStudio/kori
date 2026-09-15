@@ -34,7 +34,7 @@ func (m *Model) commitTail() {
 	tail := m.run.answer.String()
 	m.run.committedLen += len(tail)
 	m.run.answer.Reset()
-	if tail != "" {
+	if strings.TrimSpace(tail) != "" {
 		m.say(fromModel, tail)
 	}
 }
@@ -138,7 +138,7 @@ func (m *Model) flush() string {
 	m.run.answer.Reset()
 	m.run.fullAnswer.Reset()
 	m.run.committedLen = 0
-	if unprinted != "" {
+	if strings.TrimSpace(unprinted) != "" {
 		m.say(fromModel, unprinted)
 	}
 	return full
