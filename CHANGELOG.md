@@ -2,12 +2,31 @@
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-09-15
+
+### Added
+- Configurable `search_content` and `find_files` flags and settings toggles (`--search-content`, `--find-files`, `KORI_SEARCH_CONTENT`, `KORI_FIND_FILES`).
+- `mcp_files` setting in YAML configuration and `KORI_MCP_FILES` (alongside `NACELLE_MCP_FILES`) environment variable for loading external MCP server definition files.
+- Subprocess user directory PATH discovery (`~/.local/bin`, `~/.cargo/bin`, `~/.bun/bin`) ensuring MCP servers and tools can locate binaries.
+- Home directory tilde (`~`) expansion in MCP server commands, arguments, working directories, and environment variables.
+
+### Changed
+- Raised MCP catalog threshold from 20 to 50 tools, allowing common multi-server setups to expose tools directly rather than requiring two-stage discovery (`search_tools`/`call_tool`).
+- Updated system prompt instructions to guide models to prefer mounted MCP tools over running arbitrary shell commands with `run_command`.
+
+### Fixed
+- Argument normalization in `call_tool` for models passing stringified JSON or null arguments.
+- Fallback suffix matching in MCP tool catalog lookup to resolve doubled server name prefixes.
+- Toggle merging in cron job override application (`cronapply.go`).
+- Removed phantom `list_directory` reference from default system prompt.
+
 ## [0.61.1] - 2026-09-14
 
 ### Fixed
 - Restore `sudo` in `shellElevationCommands` map (replacing `kori` which was mistakenly inserted during the rename).
 - Refactor `security.deny_elevation` command scanning to target executable positions across shell command segments instead of testing all whitespace arguments, eliminating abusive false positives on commit messages, flags, regex patterns, and setuid file arguments.
 
+## [0.61.0] - 2026-09-14
 
 ### Added
 - Cobra and Fang v2 CLI command tree (`cmd/`), adding structured subcommands for `bench` and `cron` with `--runs` and `--json` flags.

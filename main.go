@@ -9,7 +9,7 @@ import (
 	"github.com/FacileStudio/kori/internal/agent"
 )
 
-var version = "v0.61.1"
+var version = "v0.62.0"
 
 func main() {
 	if err := cmd.Execute(version); err != nil {
