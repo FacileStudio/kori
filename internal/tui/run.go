@@ -32,24 +32,36 @@ type LaunchContext struct {
 	Diagnostics bool
 }
 
+// GrindConfig holds spend limits and continuation caps for the grind budget.
+type GrindConfig struct {
+	Cost          float64
+	Tokens        int64
+	Continuations int
+}
+
+// HookUIConfig holds conversation display settings for hooks.
+type HookUIConfig struct {
+	Show       bool
+	ShowOutput bool
+}
+
 // SessionConfig configures the runtime settings for an interactive session.
 type SessionConfig struct {
-	Root               string
-	Model              string
-	Backend            string
-	Diffs              bool
-	GroupTools         *bool
-	ShowThinking       bool
-	CompactAt          int64
-	AutoResume         bool
-	Resume             string
-	PromptPlaceholder  string
-	StartMessage       string
-	Startup            LaunchContext
-	GrindCost          float64
-	GrindTokens        int64
-	GrindContinuations int
-	Editor             EditorConfig
+	Root              string
+	Model             string
+	Backend           string
+	Diffs             bool
+	GroupTools        *bool
+	ShowThinking      bool
+	CompactAt         int64
+	AutoResume        bool
+	Resume            string
+	PromptPlaceholder string
+	StartMessage      string
+	Startup           LaunchContext
+	Grind             GrindConfig
+	Editor            EditorConfig
+	Hooks             HookUIConfig
 }
 
 // EditorConfig holds the editor settings used when editing prompts externally.

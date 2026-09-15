@@ -48,10 +48,15 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 		core:       core{agent: agent, banner: banner, autoResume: c.AutoResume, resumePath: c.Resume, herdrClient: herdr.NewFromEnv()},
 		transcript: transcript{compactAt: c.CompactAt},
 		composer:   composer{prompt: newPrompt(c.PromptPlaceholder, base.Border), hist: history.New()},
-		look:       look{theme: base, spin: status.NewSpinner()},
+		look: look{
+			theme:          base,
+			spin:           status.NewSpinner(),
+			showHooks:      c.Hooks.Show,
+			showHookOutput: c.Hooks.ShowOutput,
+		},
 		account: account{
 			began: time.Now(),
-			grind: grindBudget{cost: c.GrindCost, tokens: c.GrindTokens, cap: c.GrindContinuations},
+			grind: grindBudget{cost: c.Grind.Cost, tokens: c.Grind.Tokens, cap: c.Grind.Continuations},
 		},
 		screen: screen{width: 80, liveRows: 1},
 		commandState: commandState{
@@ -93,7 +98,7 @@ func (m *Model) Init() tea.Cmd {
 	} else if err != "" {
 		m.say(fromClient, err)
 	}
-	return tea.Batch(tea.RequestBackgroundColor, watchDelegations(), watchTasks(), watchTitles(), watchDetached(), watchUpdates(), m.startupDiagnostics())
+	return tea.Batch(tea.RequestBackgroundColor, watchDelegations(), watchTasks(), watchTitles(), watchDetached(), watchUpdates(), watchHooks(), m.startupDiagnostics())
 }
 
 // Update routes each message to the one place that owns it, and hands whatever

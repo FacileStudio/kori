@@ -61,6 +61,8 @@ ui:
   prompt_placeholder: "Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\\ forces it."
   transparent_blocks: true
   cron_list_json: false
+  show_hooks: true
+  show_hook_output: true
 
 editor:
   # editor: ""

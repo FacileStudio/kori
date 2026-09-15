@@ -21,6 +21,8 @@ func uiSetters(f declared) map[string]func(*Config) {
 		"transparent-blocks": func(c *Config) { c.TransparentBlocks = f.transparent },
 		"json":               func(c *Config) { c.JSON = f.json },
 		"no-config":          func(c *Config) { c.NoConfig = f.noConfig },
+		"show-hooks":         func(c *Config) { c.ShowHooks = f.showHooks },
+		"show-hook-output":   func(c *Config) { c.ShowHookOutput = f.showHookOutput },
 	}
 }
 

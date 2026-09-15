@@ -28,12 +28,14 @@ var toolStyles = map[string]lipgloss.Style{
 	"$": lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 	"⏺": lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
 	"✻": lipgloss.NewStyle().Foreground(lipgloss.Color("208")),
+	"⟡": lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
 }
 
 var toolANSI = map[string]string{
 	"$": "35",
 	"⏺": "34",
 	"✻": "208",
+	"⟡": "36",
 }
 
 var toolKinds = map[string]string{

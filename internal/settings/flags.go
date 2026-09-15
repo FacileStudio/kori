@@ -37,12 +37,14 @@ type declared struct {
 // the pane backdrop tool results sit on, and json makes cron list print one
 // JSON document.
 type uiFlags struct {
-	cont        *bool
-	resume      *string
-	mode        *string
-	transparent *bool
-	json        *bool
-	noConfig    *bool
+	cont           *bool
+	resume         *string
+	mode           *string
+	transparent    *bool
+	json           *bool
+	noConfig       *bool
+	showHooks      *bool
+	showHookOutput *bool
 }
 
 type togglesFlags struct {
@@ -74,12 +76,14 @@ func declareFlags(fallback Config) declared {
 		root:        flag.String("root", fallback.Root, "directory the file tools may reach"),
 		system:      flag.String("system-prompt", fallback.System, "system prompt"),
 		uiFlags: uiFlags{
-			cont:        flag.Bool("continue", *fallback.Continue, "auto-resume newest session"),
-			resume:      flag.String("resume", *fallback.Resume, "resume a specific session by id or file path"),
-			mode:        flag.String("mode", *fallback.Mode, "inline or tui rendering"),
-			transparent: flag.Bool("transparent-blocks", *fallback.TransparentBlocks, "drop the backdrop on tool result and diff panes"),
-			json:        flag.Bool("json", *fallback.JSON, "print cron list as one JSON document"),
-			noConfig:    flag.Bool("no-config", false, "start with default settings, ignoring ~/.kori.yml"),
+			cont:           flag.Bool("continue", *fallback.Continue, "auto-resume newest session"),
+			resume:         flag.String("resume", *fallback.Resume, "resume a specific session by id or file path"),
+			mode:           flag.String("mode", *fallback.Mode, "inline or tui rendering"),
+			transparent:    flag.Bool("transparent-blocks", *fallback.TransparentBlocks, "drop the backdrop on tool result and diff panes"),
+			json:           flag.Bool("json", *fallback.JSON, "print cron list as one JSON document"),
+			noConfig:       flag.Bool("no-config", false, "start with default settings, ignoring ~/.kori.yml"),
+			showHooks:      flag.Bool("show-hooks", *fallback.ShowHooks, "show hook execution in conversation"),
+			showHookOutput: flag.Bool("show-hook-output", *fallback.ShowHookOutput, "show hook output preview in conversation"),
 		},
 		reasoningFlags: reasoningFlags{
 			effort:   flag.String("effort", fallback.Effort, "none, minimal, low, medium, high, xhigh or max"),

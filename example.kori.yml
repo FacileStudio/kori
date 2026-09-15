@@ -61,6 +61,8 @@ ui:
   start_message: ""
   transparent_blocks: false
   cron_list_json: false
+  show_hooks: true
+  show_hook_output: true
 
 editor:
   editor: ""             # empty uses the system EDITOR; set a path to force an editor (e.g. /usr/bin/vim)

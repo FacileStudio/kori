@@ -108,15 +108,14 @@ func (c *Config) mergeSecurity(over Config) {
 
 // mergeUI overwrites every pointer field in UI that over actually mentions.
 func (c *Config) mergeUI(over Config) {
-	if over.GroupTools != nil {
-		c.GroupTools = over.GroupTools
-	}
-	if over.ShowThinking != nil {
-		c.ShowThinking = over.ShowThinking
-	}
-	if over.Continue != nil {
-		c.Continue = over.Continue
-	}
+	mergeBool(&c.GroupTools, over.GroupTools)
+	mergeBool(&c.ShowThinking, over.ShowThinking)
+	mergeBool(&c.Continue, over.Continue)
+	mergeBool(&c.TransparentBlocks, over.TransparentBlocks)
+	mergeBool(&c.JSON, over.JSON)
+	mergeBool(&c.ShowHooks, over.ShowHooks)
+	mergeBool(&c.ShowHookOutput, over.ShowHookOutput)
+	mergeBool(&c.HookOutput, over.HookOutput)
 	if over.Resume != nil {
 		c.Resume = over.Resume
 	}
@@ -128,12 +127,6 @@ func (c *Config) mergeUI(over Config) {
 	}
 	if over.StartMessage != nil {
 		c.StartMessage = over.StartMessage
-	}
-	if over.TransparentBlocks != nil {
-		c.TransparentBlocks = over.TransparentBlocks
-	}
-	if over.JSON != nil {
-		c.JSON = over.JSON
 	}
 	c.mergeEditor(over)
 }

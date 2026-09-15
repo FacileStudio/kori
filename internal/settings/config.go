@@ -123,6 +123,9 @@ type UI struct {
 	StartMessage      *string `yaml:"start_message"`
 	TransparentBlocks *bool   `yaml:"transparent_blocks"`
 	JSON              *bool   `yaml:"cron_list_json"`
+	ShowHooks         *bool   `yaml:"show_hooks"`
+	ShowHookOutput    *bool   `yaml:"show_hook_output"`
+	HookOutput        *bool   `yaml:"hook_output"`
 }
 
 // Reasoning holds the three settings that decide how hard the model thinks.

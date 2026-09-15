@@ -37,8 +37,11 @@ func FromEnv() Config {
 			GrindContinuations: envInt(EnvPrefix + "GRIND_CONTINUATIONS"),
 		},
 		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS"), MCPFiles: envList(EnvPrefix + "MCP_FILES")},
-		UI:      UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
-		Editor:  Editor{Editor: envGet("EDITOR"), PromptEditKey: envGet("PROMPT_EDIT_KEY")},
+		UI: UI{
+			Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS"),
+			ShowHooks: envBool(EnvPrefix + "SHOW_HOOKS"), ShowHookOutput: envBool(EnvPrefix + "SHOW_HOOK_OUTPUT"), HookOutput: envBool(EnvPrefix + "HOOK_OUTPUT"),
+		},
+		Editor: Editor{Editor: envGet("EDITOR"), PromptEditKey: envGet("PROMPT_EDIT_KEY")},
 		Toggles: Toggles{
 			Bash: envBool(EnvPrefix + "BASH"), ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),
 			Fetch: envBool(EnvPrefix + "FETCH"), Tasks: envBool(EnvPrefix + "TASKS"),
@@ -46,20 +49,14 @@ func FromEnv() Config {
 			FindFiles: envBool(EnvPrefix + "FIND_FILES"),
 		},
 		Security: Security{
-			ApproveTools:  envBool(EnvPrefix + "APPROVE_TOOLS"),
-			PathIsolation: envBool(EnvPrefix + "PATH_ISOLATION"),
-			DenyElevation: envBool(EnvPrefix + "DENY_ELEVATION"),
-			EnvIsolation:  envBool(EnvPrefix + "ENV_ISOLATION"),
+			ApproveTools: envBool(EnvPrefix + "APPROVE_TOOLS"), PathIsolation: envBool(EnvPrefix + "PATH_ISOLATION"),
+			DenyElevation: envBool(EnvPrefix + "DENY_ELEVATION"), EnvIsolation: envBool(EnvPrefix + "ENV_ISOLATION"),
 		},
 		Reasoning: Reasoning{
-			Effort:   envGet("EFFORT"),
-			Thinking: envBool(EnvPrefix + "THINKING"),
-			Budget:   envInt64(EnvPrefix + "REASONING_BUDGET"),
+			Effort: envGet("EFFORT"), Thinking: envBool(EnvPrefix + "THINKING"), Budget: envInt64(EnvPrefix + "REASONING_BUDGET"),
 		},
 		Discovery: Discovery{
-			ProjectContext: envBool(EnvPrefix + "PROJECT_CONTEXT"),
-			Skills:         envBool(EnvPrefix + "SKILLS"),
-			TrustSkills:    envBool(EnvPrefix + "TRUST_SKILLS"),
+			ProjectContext: envBool(EnvPrefix + "PROJECT_CONTEXT"), Skills: envBool(EnvPrefix + "SKILLS"), TrustSkills: envBool(EnvPrefix + "TRUST_SKILLS"),
 		},
 	}
 }

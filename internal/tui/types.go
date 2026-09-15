@@ -44,11 +44,13 @@ type commandState struct {
 // a style here would emit its own reset in the middle of that span and drop
 // the colour from everything after the spinner — see working().
 type look struct {
-	theme        theme.Palette
-	pretty       *glamour.TermRenderer
-	spin         status.Spinner
-	groupTools   bool
-	promptStyles textarea.Styles
+	theme          theme.Palette
+	pretty         *glamour.TermRenderer
+	spin           status.Spinner
+	groupTools     bool
+	showHooks      bool
+	showHookOutput bool
+	promptStyles   textarea.Styles
 }
 
 // core groups the agent and the startup banner so model stays under filet's

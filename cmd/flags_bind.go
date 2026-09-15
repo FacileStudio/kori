@@ -11,14 +11,16 @@ type modelFlags struct {
 }
 
 type sessionFlags struct {
-	root        string
-	system      string
-	cont        bool
-	resume      string
-	mode        string
-	transparent bool
-	noConfig    bool
-	printPrompt string
+	root           string
+	system         string
+	cont           bool
+	resume         string
+	mode           string
+	transparent    bool
+	noConfig       bool
+	printPrompt    string
+	showHooks      bool
+	showHookOutput bool
 }
 
 type toolFlags struct {
@@ -79,6 +81,8 @@ func bindSessionFlags(cmd *cobra.Command, f *sessionFlags) {
 	fl.BoolVar(&f.transparent, "transparent-blocks", true, "Drop backdrop on tool result and diff panes")
 	fl.BoolVar(&f.noConfig, "no-config", false, "Start with default settings, ignoring ~/.kori.yml")
 	fl.StringVar(&f.printPrompt, "print", "", "Run prompt in headless mode and stream response to stdout")
+	fl.BoolVar(&f.showHooks, "show-hooks", true, "Show hook execution in conversation")
+	fl.BoolVar(&f.showHookOutput, "show-hook-output", true, "Show hook output preview in conversation")
 }
 
 func bindToolFlags(cmd *cobra.Command, f *toolFlags) {

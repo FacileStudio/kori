@@ -95,20 +95,22 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 // snapshot, so the two cannot disagree about what was loaded.
 func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.SessionConfig {
 	return tui.SessionConfig{
-		Root:               p.config.Root,
-		Model:              p.config.Model,
-		Backend:            p.config.Backend,
-		Diffs:              *p.config.Diffs,
-		GroupTools:         p.config.GroupTools,
-		ShowThinking:       *p.config.ShowThinking,
-		CompactAt:          resolveCompactAt(*p.config.CompactAt, backend),
-		GrindCost:          *p.config.GrindCost,
-		GrindTokens:        *p.config.GrindTokens,
-		GrindContinuations: *p.config.GrindContinuations,
-		AutoResume:         *p.config.Continue,
-		Resume:             *p.config.Resume,
-		PromptPlaceholder:  *p.config.PromptPlaceholder,
-		StartMessage:       *p.config.StartMessage,
+		Root:         p.config.Root,
+		Model:        p.config.Model,
+		Backend:      p.config.Backend,
+		Diffs:        *p.config.Diffs,
+		GroupTools:   p.config.GroupTools,
+		ShowThinking: *p.config.ShowThinking,
+		CompactAt:    resolveCompactAt(*p.config.CompactAt, backend),
+		Grind: tui.GrindConfig{
+			Cost:          *p.config.GrindCost,
+			Tokens:        *p.config.GrindTokens,
+			Continuations: *p.config.GrindContinuations,
+		},
+		AutoResume:        *p.config.Continue,
+		Resume:            *p.config.Resume,
+		PromptPlaceholder: *p.config.PromptPlaceholder,
+		StartMessage:      *p.config.StartMessage,
 		Editor: tui.EditorConfig{
 			PromptEditKey: p.config.PromptEditKey,
 			Editor:        p.config.Editor.Editor,
@@ -118,6 +120,10 @@ func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.S
 			ContextTokens: tokenEstimate(found.contextChars),
 			SystemTokens:  tokenEstimate(found.systemChars),
 			Diagnostics:   settings.DerefBool(p.config.Diagnostics),
+		},
+		Hooks: tui.HookUIConfig{
+			Show:       settings.DerefBool(p.config.ShowHooks),
+			ShowOutput: settings.DerefBool(p.config.ShowHookOutput) || settings.DerefBool(p.config.HookOutput),
 		},
 	}
 }

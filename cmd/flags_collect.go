@@ -56,6 +56,12 @@ func collectSessionFlags(cmd *cobra.Command, f *sessionFlags, cfg *settings.Conf
 	if fl.Changed("no-config") {
 		cfg.NoConfig = &f.noConfig
 	}
+	if fl.Changed("show-hooks") {
+		cfg.ShowHooks = &f.showHooks
+	}
+	if fl.Changed("show-hook-output") {
+		cfg.ShowHookOutput = &f.showHookOutput
+	}
 }
 
 func collectToolFlags(cmd *cobra.Command, f *toolFlags, cfg *settings.Config) {

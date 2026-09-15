@@ -10,9 +10,39 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/FacileStudio/nacelle"
 )
+
+// HookReport records the execution details and outcome of a hook run.
+type HookReport struct {
+	Event    nacelle.HookPoint
+	Tool     string
+	Command  string
+	Duration time.Duration
+	ExitCode int
+	Err      error
+	Stdout   string
+	Stderr   string
+	Denied   bool
+	Reason   string
+}
+
+var hookReports = make(chan HookReport, 128)
+
+// ReportHook records one hook execution report on the global report channel.
+func ReportHook(r HookReport) {
+	select {
+	case hookReports <- r:
+	default:
+	}
+}
+
+// HookReports returns the channel that hook reports are delivered to.
+func HookReports() <-chan HookReport {
+	return hookReports
+}
 
 // execHook builds the hook that runs one spec's command and translates its
 // exit back into a decision. A leading ~ in the command is expanded once at
@@ -24,11 +54,26 @@ func execHook(spec HookSpec) nacelle.Hook {
 		if !spec.Matches(ev.Tool) {
 			return nacelle.HookResult{}
 		}
+		start := time.Now()
 		out, errOut, runErr := runCommand(ctx, command, hookPayload{
 			Event: string(ev.Point), Tool: ev.Tool,
 			Input: ev.Input, Result: ev.Result, Retry: ev.Retry,
 		})
-		return interpret(command, ev, runErr, out, errOut)
+		dur := time.Since(start)
+		res := interpret(command, ev, runErr, out, errOut)
+		ReportHook(HookReport{
+			Event:    ev.Point,
+			Tool:     ev.Tool,
+			Command:  spec.Run,
+			Duration: dur,
+			ExitCode: exitCode(runErr),
+			Err:      runErr,
+			Stdout:   string(out),
+			Stderr:   string(errOut),
+			Denied:   res.Deny != "",
+			Reason:   res.Deny,
+		})
+		return res
 	}
 }
 

@@ -10,18 +10,10 @@ const DefaultCompactAt int64 = 75_000
 func Defaults(system string) Config {
 	bash, thinking, projectContext, skills, trustSkills, approveTools, trustHooks, diffs, tasks, strict :=
 		true, true, true, true, false, false, false, true, true, false
-	envIsolation := false
-	denyElevation := true
-	parallelAgents := true
-	diagnostics := true
-	iterations, budget := 5, int64(0)
-	compactAt, grindCost, grindTokens, grindContinuations := int64(75000), 0.0, int64(0), 2
-	fetch := true
-	searchContent := true
-	findFiles := true
-	groupTools, showThinking := true, true
-	cont, resume := false, ""
-	mode, transparent, json := "tui", true, false
+	envIsolation, denyElevation, parallelAgents, diagnostics := false, true, true, true
+	iterations, budget, compactAt, grindCost, grindTokens, grindContinuations := 5, int64(0), int64(75000), 0.0, int64(0), 2
+	fetch, searchContent, findFiles, groupTools, showThinking, showHooks, showHookOutput := true, true, true, true, true, true, true
+	cont, resume, mode, transparent, json := false, "", "tui", true, false
 	promptPlaceholder := "Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\\ forces it."
 	startMessage := strings.Join([]string{
 		"▄▄ ▄▄  ▄▄▄  ▄▄▄▄  ▄▄ ",
@@ -41,6 +33,6 @@ func Defaults(system string) Config {
 			TrustSkills:    &trustSkills,
 			TrustHooks:     &trustHooks,
 		},
-		UI: UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json}, Editor: Editor{Editor: "", PromptEditKey: ""},
+		UI: UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput}, Editor: Editor{Editor: "", PromptEditKey: ""},
 	}
 }
