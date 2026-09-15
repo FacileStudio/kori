@@ -88,7 +88,7 @@ func collectToolFlags(cmd *cobra.Command, f *toolFlags, cfg *settings.Config) {
 		cfg.FindFiles = &f.findFiles
 	}
 	if fl.Changed("mcp") {
-		cfg.MCPFiles = f.mcp
+		cfg.MCPFiles = append(cfg.MCPFiles, f.mcp...)
 	}
 }
 

@@ -64,6 +64,7 @@ ui:
 
 sources:
   skill_dirs: []
+  mcp_files: []
   mcp: {}
 
 hooks: []

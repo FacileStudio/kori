@@ -15,7 +15,7 @@ func TestApplyJobOverridesEachGroup(t *testing.T) {
 	job := settings.CronJob{
 		Provider:  settings.Provider{Backend: "openai", Model: "gpt-x", BaseURL: "https://api.example.com", APIKey: "k"},
 		Security:  settings.Security{PathIsolation: &fetch, DenyElevation: &fetch, EnvIsolation: &fetch},
-		Toggles:   settings.Toggles{Bash: &bash, Fetch: &fetch, Tasks: &fetch},
+		Toggles:   settings.Toggles{Bash: &bash, Fetch: &fetch, Tasks: &fetch, SearchContent: &fetch, FindFiles: &fetch},
 		Reasoning: settings.Reasoning{Effort: "high", Thinking: &fetch},
 		Limits:    settings.Limits{MaxIterations: &iterationsOverride, CompactAt: &compactOverride},
 	}
@@ -26,7 +26,7 @@ func TestApplyJobOverridesEachGroup(t *testing.T) {
 	if *cfg.PathIsolation || *cfg.DenyElevation || *cfg.EnvIsolation {
 		t.Errorf("security overrides not applied")
 	}
-	if !*cfg.Bash || *cfg.Fetch || *cfg.Tasks {
+	if !*cfg.Bash || *cfg.Fetch || *cfg.Tasks || *cfg.SearchContent || *cfg.FindFiles {
 		t.Errorf("tool overrides not applied")
 	}
 	if cfg.Effort != "high" || *cfg.Thinking {

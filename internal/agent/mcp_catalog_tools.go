@@ -69,5 +69,5 @@ func (t callToolTool) Run(ctx context.Context, input json.RawMessage) (string, e
 	if tool == nil {
 		return "", fmt.Errorf("no bridged tool named %s; run search_tools first", in.Name)
 	}
-	return tool.Run(ctx, in.Arguments)
+	return tool.Run(ctx, normalizeCallToolArgs(in.Arguments))
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
@@ -75,15 +74,20 @@ type connected struct {
 // asked anything at all. Doing it safely means that same trust gate, which is
 // a feature of its own rather than a line in this function.
 func mcpTools(config settings.Config, local []nacelle.Tool) (connected, []nacelle.Tool, error) {
+	ensureUserPath()
 	defs := map[string]client.ServerDef{}
 	if config.MCP != nil {
-		maps.Copy(defs, config.MCP)
+		for name, def := range config.MCP {
+			defs[name] = expandServerDef(def)
+		}
 	}
-	flagDefs, err := client.LoadDefs(config.MCPFiles...)
+	flagDefs, err := client.LoadDefs(expandPaths(config.MCPFiles)...)
 	if err != nil {
 		return connected{}, nil, err
 	}
-	maps.Copy(defs, flagDefs)
+	for name, def := range flagDefs {
+		defs[name] = expandServerDef(def)
+	}
 
 	servers, err := client.Parse(defs)
 	if err != nil {
@@ -120,7 +124,7 @@ func unwrapCallTool(approve nacelle.Approve) nacelle.Approve {
 				Arguments json.RawMessage `json:"arguments"`
 			}
 			if err := json.Unmarshal(input, &in); err == nil && in.Name != "" {
-				return approve(ctx, in.Name, in.Arguments)
+				return approve(ctx, in.Name, normalizeCallToolArgs(in.Arguments))
 			}
 		}
 		return approve(ctx, name, input)
@@ -156,7 +160,7 @@ func mcpNote(mcp connected) string {
 		return ""
 	}
 	var body strings.Builder
-	fmt.Fprintf(&body, "\nMCP-bridged tools are mounted from these servers: %s. Their names are prefixed with their server's name; group them by that prefix when several serve one job.\n", strings.Join(mcp.names, ", "))
+	fmt.Fprintf(&body, "\nMCP-bridged tools are mounted from these servers: %s. Their names are prefixed with their server's name; group them by that prefix when several serve one job. Prefer using an MCP-bridged tool over shell commands in run_command whenever one fits the task.\n", strings.Join(mcp.names, ", "))
 	if mcp.catalog {
 		body.WriteString("\nThe set is too large to carry whole, so search_tools, get_tool_details and call_tool stand in for it: search_tools before assuming a bridged tool exists, get_tool_details before the first call to a tool whose schema you have not read, call_tool to execute. The three are the harness's own; every other name they surface is a server's.\n")
 	}

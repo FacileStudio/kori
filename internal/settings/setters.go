@@ -54,7 +54,7 @@ func coreSetters(f declared) map[string]func(*Config) {
 		"compact-at":       func(c *Config) { c.CompactAt = f.compactAt },
 		"reasoning-budget": func(c *Config) { c.Budget = f.budget },
 		"skill-dir":        func(c *Config) { c.SkillDirs = []string(*f.skillDirs) },
-		"mcp":              func(c *Config) { c.MCPFiles = []string(*f.mcp) },
+		"mcp":              func(c *Config) { c.MCPFiles = append(c.MCPFiles, *f.mcp...) },
 		"gates-file":       func(c *Config) { c.GatesFile = *f.gatesFile },
 	}
 }

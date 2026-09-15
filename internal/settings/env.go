@@ -36,7 +36,7 @@ func FromEnv() Config {
 			GrindCost: envFloat(EnvPrefix + "GRIND_MIN_COST"), GrindTokens: envInt64(EnvPrefix + "GRIND_MIN_TOKENS"),
 			GrindContinuations: envInt(EnvPrefix + "GRIND_CONTINUATIONS"),
 		},
-		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS")},
+		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS"), MCPFiles: envList(EnvPrefix + "MCP_FILES")},
 		UI:      UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
 		Toggles: Toggles{
 			Bash: envBool(EnvPrefix + "BASH"), ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),

@@ -90,6 +90,12 @@ func mergeToggles(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Toggles.Diagnostics != nil {
 		cfg.Diagnostics = job.Toggles.Diagnostics
 	}
+	if job.Toggles.SearchContent != nil {
+		cfg.SearchContent = job.Toggles.SearchContent
+	}
+	if job.Toggles.FindFiles != nil {
+		cfg.FindFiles = job.Toggles.FindFiles
+	}
 	return cfg
 }
 

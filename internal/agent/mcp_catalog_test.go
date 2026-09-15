@@ -111,3 +111,45 @@ func TestASmallBridgedSetIsMountedWhole(t *testing.T) {
 		t.Errorf("mounted = %+v, want the bridged tool itself", mounted)
 	}
 }
+
+func TestCallToolNormalizesStringifiedArguments(t *testing.T) {
+	c := catalogOf(t, 1)
+	got, err := callToolTool{catalog: c}.Run(context.Background(), []byte(`{"name":"srv_tool_00","arguments":"{\"echo\":\"stringified\"}"}`))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(got, "stringified") {
+		t.Errorf("got = %q, want stringified arguments parsed", got)
+	}
+}
+
+func TestCallToolNormalizesEmptyAndNullArguments(t *testing.T) {
+	c := catalogOf(t, 1)
+	got, err := callToolTool{catalog: c}.Run(context.Background(), []byte(`{"name":"srv_tool_00"}`))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(got, "heard {}") {
+		t.Errorf("got = %q, want heard {}", got)
+	}
+
+	got, err = callToolTool{catalog: c}.Run(context.Background(), []byte(`{"name":"srv_tool_00","arguments":null}`))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(got, "heard {}") {
+		t.Errorf("got = %q, want heard {}", got)
+	}
+}
+
+func TestCatalogFindSuffixMatching(t *testing.T) {
+	c := &catalog{tools: []nacelle.Tool{
+		echoTool{name: "cercle_cercle_inbox_read", description: "read inbox"},
+	}}
+	if tool := c.find("cercle_inbox_read"); tool == nil || tool.Name() != "cercle_cercle_inbox_read" {
+		t.Errorf("find(cercle_inbox_read) = %v, want cercle_cercle_inbox_read", tool)
+	}
+	if tool := c.find("inbox_read"); tool == nil || tool.Name() != "cercle_cercle_inbox_read" {
+		t.Errorf("find(inbox_read) = %v, want cercle_cercle_inbox_read", tool)
+	}
+}

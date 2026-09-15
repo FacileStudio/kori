@@ -14,7 +14,7 @@ import (
 // stops being mounted and the three catalog tools stand in for it. Past that,
 // every definition resident at once costs context and degrades selection —
 // the corpus put the crossover somewhere between twenty and thirty.
-const mcpCatalogThreshold = 20
+const mcpCatalogThreshold = 50
 
 // catalog stands in for the full bridged tool set when it is too big to mount
 // whole. It holds the real tools and exposes three: search_tools to find
@@ -28,6 +28,11 @@ type catalog struct {
 func (c *catalog) find(name string) nacelle.Tool {
 	for _, t := range c.tools {
 		if t.Name() == name {
+			return t
+		}
+	}
+	for _, t := range c.tools {
+		if strings.HasSuffix(t.Name(), "_"+name) {
 			return t
 		}
 	}

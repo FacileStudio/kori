@@ -148,7 +148,7 @@ type Discovery struct {
 type Sources struct {
 	SkillDirs []string                    `yaml:"skill_dirs"`
 	MCP       map[string]client.ServerDef `yaml:"mcp"`
-	MCPFiles  []string                    `yaml:"-"`
+	MCPFiles  []string                    `yaml:"mcp_files"`
 }
 
 // HookSpec is one entry under a config's `hooks:` key.
