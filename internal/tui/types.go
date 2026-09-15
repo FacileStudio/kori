@@ -70,6 +70,9 @@ type core struct {
 type heldEntry struct {
 	who  speaker
 	text string
+	diff *editChange
+	ok   bool
+	out  string
 }
 
 // transcript groups the conversation, unprinted lines, and transcript-size

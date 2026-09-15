@@ -23,7 +23,7 @@ func (m *Model) renderHeld(width int) []string {
 	m.width = width
 	painted := make([]string, len(m.held))
 	for i, entry := range m.held {
-		painted[i] = strings.Trim(m.paint(entry.who, entry.text), "\n")
+		painted[i] = strings.Trim(m.paintEntry(entry, width), "\n")
 	}
 	var sb strings.Builder
 	sb.WriteString(painted[0])
@@ -38,6 +38,31 @@ func (m *Model) renderHeld(width int) []string {
 		rows = append(rows[:0], rows[over:]...)
 	}
 	return rows
+}
+
+func (m *Model) paintEntry(entry heldEntry, width int) string {
+	if entry.who == fromDiff {
+		if rebuilt := m.rebuildDiff(entry, width); rebuilt != "" {
+			return rebuilt
+		}
+	}
+	return m.paint(entry.who, entry.text)
+}
+
+func (m *Model) rebuildDiff(entry heldEntry, width int) string {
+	if entry.diff == nil && entry.out == "" {
+		return ""
+	}
+	var box strings.Builder
+	if entry.diff != nil {
+		if d := renderDiff(*entry.diff, width, boxBorder(entry.ok), m.theme.Muted, m.transparent); d != "" {
+			box.WriteString(d)
+		}
+	}
+	if entry.out != "" {
+		box.WriteString(m.outputBox(entry.out, entry.ok))
+	}
+	return box.String()
 }
 
 func (m *Model) reflowHold() {
