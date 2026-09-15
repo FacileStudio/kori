@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-09-15
+
+### Added
+- Hook execution reporting in the interactive conversation display, showing hook event type, tool, command, execution duration, and exit status.
+- Hook stdout and stderr output preview in conversation with configurable line truncation (6 lines by default with ellipsis overflow indicator).
+- Hook display configuration settings (`ui.show_hooks`, `ui.show_hook_output`, `ui.hook_output`), environment variables (`KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_HOOK_OUTPUT`), and CLI flags (`--show-hooks`, `--show-hook-output`).
+
 ## [0.63.1] - 2026-09-15
 
 ### Fixed
