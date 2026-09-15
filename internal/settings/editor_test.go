@@ -5,6 +5,7 @@ import (
 )
 
 func TestEditorDefaultsToEmpty(t *testing.T) {
+	written(t, "")
 	config, err := settings(Config{})
 	if err != nil {
 		t.Fatalf("settings: %v", err)
