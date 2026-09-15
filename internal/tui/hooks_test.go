@@ -78,6 +78,31 @@ func TestHookExecutionNotShownWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestHookExecutionWithLabelShown(t *testing.T) {
+	cfg := SessionConfig{
+		Hooks: HookUIConfig{Show: true, ShowOutput: true},
+	}
+	m := NewModel(nil, "banner", nil, cfg)
+	m.recordHook(hookReportMsg{
+		report: settings.HookReport{
+			Event:    nacelle.AfterToolCall,
+			Tool:     "edit_file",
+			Command:  "graft blast --no-refresh",
+			Label:    "post-edit hook",
+			Duration: 15 * time.Millisecond,
+			Stdout:   "blast radius: 2 files",
+		},
+	})
+
+	output := strings.Join(spoken(m), "\n")
+	if !strings.Contains(output, "post-edit hook") {
+		t.Errorf("got %q, want it to show the hook label", output)
+	}
+	if !strings.Contains(output, "blast radius: 2 files") {
+		t.Errorf("got %q, want it to contain preview output", output)
+	}
+}
+
 func TestHookExecutionDeniedAndFailureShown(t *testing.T) {
 	cfg := SessionConfig{
 		Hooks: HookUIConfig{Show: true, ShowOutput: true},

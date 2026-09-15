@@ -28,7 +28,7 @@ func (m *Model) recordHook(msg hookReportMsg) tea.Cmd {
 		return watchHooks()
 	}
 	r := msg.report
-	line := toolview.HookLine(string(r.Event), r.Tool, r.Command, m.width)
+	line := toolview.HookLine(string(r.Event), r.Tool, r.Command, r.Label, m.width)
 	styled := toolview.ColorGlyph(line, "36", "39") + " · " + took(r.Duration)
 	m.say(fromTool, styled)
 	m.recordHookStatus(r)

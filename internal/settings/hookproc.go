@@ -20,6 +20,7 @@ type HookReport struct {
 	Event    nacelle.HookPoint
 	Tool     string
 	Command  string
+	Label    string
 	Duration time.Duration
 	ExitCode int
 	Err      error
@@ -65,6 +66,7 @@ func execHook(spec HookSpec) nacelle.Hook {
 			Event:    ev.Point,
 			Tool:     ev.Tool,
 			Command:  spec.Run,
+			Label:    spec.Name,
 			Duration: dur,
 			ExitCode: exitCode(runErr),
 			Err:      runErr,

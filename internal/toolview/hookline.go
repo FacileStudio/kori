@@ -8,7 +8,12 @@ import (
 )
 
 // HookLine formats a hook event header line with point, tool, and command.
-func HookLine(event, tool, command string, width int) string {
+// If label is non-empty it is shown instead of the default event and command.
+func HookLine(event, tool, command, label string, width int) string {
+	if label != "" {
+		room := width - DurationRoom - len("⟡ ")
+		return "⟡ " + truncate(label, room)
+	}
 	name := "hook:" + event
 	if tool != "" {
 		name += "[" + tool + "]"

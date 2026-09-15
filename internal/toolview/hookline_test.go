@@ -6,7 +6,7 @@ import (
 )
 
 func TestHookLineFormatting(t *testing.T) {
-	line := HookLine("after_tool_call", "edit_file", "graft blast --no-refresh", 80)
+	line := HookLine("after_tool_call", "edit_file", "graft blast --no-refresh", "", 80)
 	if !strings.HasPrefix(line, "⟡ hook:after_tool_call[edit_file](") {
 		t.Errorf("got %q, want prefix hook:after_tool_call[edit_file]", line)
 	}
@@ -14,9 +14,19 @@ func TestHookLineFormatting(t *testing.T) {
 		t.Errorf("got %q, want command in line", line)
 	}
 
-	sessionStart := HookLine("session_start", "", "graft map --no-refresh", 80)
+	sessionStart := HookLine("session_start", "", "graft map --no-refresh", "", 80)
 	if !strings.HasPrefix(sessionStart, "⟡ hook:session_start(") {
 		t.Errorf("got %q, want prefix hook:session_start(", sessionStart)
+	}
+
+	named := HookLine("after_tool_call", "edit_file", "secret command", "blast radius", 80)
+	if named != "⟡ blast radius" {
+		t.Errorf("got %q, want '⟡ blast radius'", named)
+	}
+
+	narrow := HookLine("after_tool_call", "edit_file", "cmd", "very long hook label here", 20)
+	if !strings.HasPrefix(narrow, "⟡ very") || !strings.HasSuffix(narrow, "…") {
+		t.Errorf("got %q, want truncated label", narrow)
 	}
 }
 

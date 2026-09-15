@@ -155,8 +155,10 @@ type Sources struct {
 	MCPFiles  []string                    `yaml:"mcp_files"`
 }
 
-// HookSpec is one entry under a config's `hooks:` key.
+// HookSpec is one entry under a config's `hooks:` key. When Name is set,
+// the conversation displays it instead of the default event and command.
 type HookSpec struct {
+	Name    string   `yaml:"name"`
 	On      string   `yaml:"on"`
 	Match   []string `yaml:"match"`
 	Run     string   `yaml:"run"`
