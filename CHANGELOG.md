@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-09-15
+
+### Fixed
+- Re-render diff and command output blocks on terminal resize.
+- Skip empty answer blocks from whitespace-only model output.
+
 ## [0.64.0] - 2026-09-15
 
 ### Added
