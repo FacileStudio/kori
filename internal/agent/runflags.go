@@ -109,6 +109,10 @@ func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.S
 		Resume:             *p.config.Resume,
 		PromptPlaceholder:  *p.config.PromptPlaceholder,
 		StartMessage:       *p.config.StartMessage,
+		Editor: tui.EditorConfig{
+			PromptEditKey: p.config.PromptEditKey,
+			Editor:        p.config.Editor.Editor,
+		},
 		Startup: tui.LaunchContext{
 			ContextPaths:  found.contextPaths,
 			ContextTokens: tokenEstimate(found.contextChars),
