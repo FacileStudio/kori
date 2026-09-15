@@ -73,16 +73,51 @@ func createTempFile(content string, suffix string) (string, func(), error) {
 	if err != nil {
 		return "", func() {}, fmt.Errorf("creating temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	path := tmpFile.Name()
 
 	if _, err := tmpFile.WriteString(content); err != nil {
-		tmpFile.Close()
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
+		cleanupTemp(path)
 		return "", func() {}, fmt.Errorf("writing temp file: %w", err)
 	}
 
 	if err := tmpFile.Close(); err != nil {
+		cleanupTemp(path)
 		return "", func() {}, fmt.Errorf("closing temp file: %w", err)
 	}
 
-	return tmpFile.Name(), nil, nil
+	return path, func() { cleanupTemp(path) }, nil
+}
+
+func cleanupTemp(path string) {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return
+	}
+}
+
+// openEditor opens the current prompt content in the user's configured
+// external editor and replaces the prompt with the result if it
+// changed. Uses resolveEditor to find the editor (GIT_EDITOR > EDITOR
+// > VISUAL > vi). Does nothing when there is no editor configured
+// or the prompt is empty — the prompt itself is the editor.
+func (m *Model) openEditor() {
+	editor := resolveEditor(settings.Config{Editor: settings.Editor{Editor: m.run.editorPath, PromptEditKey: m.run.promptEditKey}})
+	if editor == "" {
+		return
+	}
+	content := m.prompt.Value()
+	if content == "" {
+		return
+	}
+
+	edited, err := editInExternalEditor(content, editor)
+	if err != nil {
+		m.say(fromReader, "editor failed: "+err.Error())
+		return
+	}
+	if edited != content {
+		m.prompt.SetValue(edited)
+	}
 }

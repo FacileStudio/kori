@@ -12,7 +12,6 @@ import (
 	"github.com/FacileStudio/kori/internal/herdr"
 	"github.com/FacileStudio/kori/internal/history"
 	"github.com/FacileStudio/kori/internal/menu"
-	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/kori/internal/status"
 	"github.com/FacileStudio/kori/internal/theme"
 	"github.com/FacileStudio/nacelle"
@@ -22,6 +21,17 @@ import (
 // first asked to stop — long enough to read the status line, short enough that
 // a ctrl+c minutes later still means "stop this run", not "quit".
 const forceQuit = 3 * time.Second
+
+func initialInflight(c SessionConfig) inflight {
+	return inflight{
+		runControl:    runControl{cancel: func() {}},
+		promptEditKey: c.Editor.PromptEditKey,
+		editState: editState{
+			edits:      map[string]editChange{},
+			editorPath: c.Editor.Editor,
+		},
+	}
+}
 
 // NewModel builds the client. The banner names the backend and model, so
 // which provider is billed is visible before typing, not after it fails.
@@ -48,12 +58,7 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 			skills: byName,
 			menu:   *menu.New(menuItems(byName)),
 		},
-		run: inflight{
-			runControl:    runControl{cancel: func() {}},
-			promptEditKey: c.Editor.PromptEditKey,
-			editState: editState{
-				edits: map[string]editChange{}},
-		},
+		run: initialInflight(c),
 	}
 	m.pretty = theme.Prettier(m.theme.Markdown, max(m.width-2, 1))
 	m.promptStyles = m.prompt.Styles()
@@ -205,29 +210,4 @@ func (m *Model) promptRoute(message tea.Msg) tea.Cmd {
 	m.prompt, cmd = m.prompt.Update(message)
 	m.refreshMenu()
 	return cmd
-}
-
-// openEditor opens the current prompt content in the user's configured
-// external editor and replaces the prompt with the result if it
-// changed. Uses resolveEditor to find the editor (GIT_EDITOR > EDITOR
-// > VISUAL > vi). Does nothing when there is no editor configured
-// or the prompt is empty — the prompt itself is the editor.
-func (m *Model) openEditor() {
-	editor := resolveEditor(settings.Config{Editor: settings.Editor{Editor: m.run.editorPath, PromptEditKey: m.run.promptEditKey}})
-	if editor == "" {
-		return
-	}
-	content := m.prompt.Value()
-	if content == "" {
-		return
-	}
-
-	edited, err := editInExternalEditor(content, editor)
-	if err != nil {
-		m.say(fromReader, "editor failed: "+err.Error())
-		return
-	}
-	if edited != content {
-		m.prompt.SetValue(edited)
-	}
 }

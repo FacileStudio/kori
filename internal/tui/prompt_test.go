@@ -87,12 +87,11 @@ func TestEditInExternalEditorWithMockEditor(t *testing.T) {
 // TestEditInExternalEditorWithMockEditorThatChanges: a mock editor
 // that appends a marker line proves the editor's output is read back.
 func TestEditInExternalEditorWithMockEditorThatChanges(t *testing.T) {
-	marker := filepath.Join(os.TempDir(), "kori-editor-marker.sh")
+	marker := filepath.Join(t.TempDir(), "kori-editor-marker.sh")
 	script := "#!/bin/sh\ncat \"$1\"\necho 'edited by mock' >> \"$1\""
 	if err := os.WriteFile(marker, []byte(script), 0o700); err != nil {
 		t.Fatalf("writing mock editor: %v", err)
 	}
-	defer os.Remove(marker)
 
 	original := "before\n"
 	edited, err := editInExternalEditor(original, marker)
@@ -167,5 +166,22 @@ func TestEditInExternalEditorMissingEditorBinary(t *testing.T) {
 	_, err := editInExternalEditor("content", "/no/such/editor/exists/here")
 	if err == nil {
 		t.Fatal("editInExternalEditor with missing binary: expected an error")
+	}
+}
+
+// TestNewModelSetsEditorPath verifies that NewModel populates editorPath on the inflight run.
+func TestNewModelSetsEditorPath(t *testing.T) {
+	cfg := SessionConfig{
+		Editor: EditorConfig{
+			Editor:        "/usr/local/bin/custom-editor",
+			PromptEditKey: "custom_key",
+		},
+	}
+	m := NewModel(nil, "banner", nil, cfg)
+	if m.run.editorPath != "/usr/local/bin/custom-editor" {
+		t.Errorf("m.run.editorPath = %q, want /usr/local/bin/custom-editor", m.run.editorPath)
+	}
+	if m.run.promptEditKey != "custom_key" {
+		t.Errorf("m.run.promptEditKey = %q, want custom_key", m.run.promptEditKey)
 	}
 }

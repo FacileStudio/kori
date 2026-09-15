@@ -12,8 +12,8 @@ func TestEditorDefaultsToEmpty(t *testing.T) {
 	if config.Editor.Editor != "" {
 		t.Errorf("editor = %q, want empty by default", config.Editor.Editor)
 	}
-	if config.Editor.PromptEditKey != "" {
-		t.Errorf("prompt_edit_key = %q, want empty by default", config.Editor.PromptEditKey)
+	if config.PromptEditKey != "" {
+		t.Errorf("prompt_edit_key = %q, want empty by default", config.PromptEditKey)
 	}
 }
 
@@ -27,8 +27,8 @@ func TestEditorComesFromTheFile(t *testing.T) {
 	if config.Editor.Editor != "/usr/bin/nano" {
 		t.Errorf("editor = %q, want the file's value", config.Editor.Editor)
 	}
-	if config.Editor.PromptEditKey != "message" {
-		t.Errorf("prompt_edit_key = %q, want the file's value", config.Editor.PromptEditKey)
+	if config.PromptEditKey != "message" {
+		t.Errorf("prompt_edit_key = %q, want the file's value", config.PromptEditKey)
 	}
 }
 
@@ -122,8 +122,8 @@ func TestEditorPartialConfigFromFile(t *testing.T) {
 	if config.Editor.Editor != "/usr/bin/nano" {
 		t.Errorf("editor = %q, want the file's editor", config.Editor.Editor)
 	}
-	if config.Editor.PromptEditKey != "" {
-		t.Errorf("prompt_edit_key = %q, want empty when not set in file", config.Editor.PromptEditKey)
+	if config.PromptEditKey != "" {
+		t.Errorf("prompt_edit_key = %q, want empty when not set in file", config.PromptEditKey)
 	}
 }
 
@@ -135,7 +135,23 @@ func TestEditorPromptEditKeyFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settings: %v", err)
 	}
-	if config.Editor.PromptEditKey != "content" {
-		t.Errorf("prompt_edit_key = %q, want the env to win", config.Editor.PromptEditKey)
+	if config.PromptEditKey != "content" {
+		t.Errorf("prompt_edit_key = %q, want the env to win", config.PromptEditKey)
+	}
+}
+
+func TestEditorMergePreservesIndividualFields(t *testing.T) {
+	written(t, "editor:\n  editor: /usr/bin/nano")
+	t.Setenv(EnvPrefix+"PROMPT_EDIT_KEY", "custom_key")
+
+	config, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if config.Editor.Editor != "/usr/bin/nano" {
+		t.Errorf("editor = %q, want file value preserved", config.Editor.Editor)
+	}
+	if config.PromptEditKey != "custom_key" {
+		t.Errorf("prompt_edit_key = %q, want env value merged", config.PromptEditKey)
 	}
 }

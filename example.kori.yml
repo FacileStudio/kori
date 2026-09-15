@@ -62,6 +62,10 @@ ui:
   transparent_blocks: false
   cron_list_json: false
 
+editor:
+  editor: ""             # empty uses the system EDITOR; set a path to force an editor (e.g. /usr/bin/vim)
+  prompt_edit_key: ""    # names the input field the editor writes back to; empty means every message uses the full editor
+
 sources:
   skill_dirs: []
   mcp_files: []
