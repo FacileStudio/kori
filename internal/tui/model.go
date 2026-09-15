@@ -12,6 +12,7 @@ import (
 	"github.com/FacileStudio/kori/internal/herdr"
 	"github.com/FacileStudio/kori/internal/history"
 	"github.com/FacileStudio/kori/internal/menu"
+	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/kori/internal/status"
 	"github.com/FacileStudio/kori/internal/theme"
 	"github.com/FacileStudio/nacelle"
@@ -48,7 +49,8 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 			menu:   *menu.New(menuItems(byName)),
 		},
 		run: inflight{
-			runControl: runControl{cancel: func() {}},
+			runControl:    runControl{cancel: func() {}},
+			promptEditKey: c.Editor.PromptEditKey,
 			editState: editState{
 				edits: map[string]editChange{}},
 		},
@@ -203,4 +205,29 @@ func (m *Model) promptRoute(message tea.Msg) tea.Cmd {
 	m.prompt, cmd = m.prompt.Update(message)
 	m.refreshMenu()
 	return cmd
+}
+
+// openEditor opens the current prompt content in the user's configured
+// external editor and replaces the prompt with the result if it
+// changed. Uses resolveEditor to find the editor (GIT_EDITOR > EDITOR
+// > VISUAL > vi). Does nothing when there is no editor configured
+// or the prompt is empty — the prompt itself is the editor.
+func (m *Model) openEditor() {
+	editor := resolveEditor(settings.Config{Editor: settings.Editor{Editor: m.run.editorPath, PromptEditKey: m.run.promptEditKey}})
+	if editor == "" {
+		return
+	}
+	content := m.prompt.Value()
+	if content == "" {
+		return
+	}
+
+	edited, err := editInExternalEditor(content, editor)
+	if err != nil {
+		m.say(fromReader, "editor failed: "+err.Error())
+		return
+	}
+	if edited != content {
+		m.prompt.SetValue(edited)
+	}
 }

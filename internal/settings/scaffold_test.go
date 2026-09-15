@@ -54,3 +54,12 @@ func TestTemplateScaffoldsDenyElevation(t *testing.T) {
 		t.Error("the template does not scaffold deny_elevation: true")
 	}
 }
+
+func TestTemplateScaffoldsEditorFields(t *testing.T) {
+	if !strings.Contains(Template, "editor:") {
+		t.Error("the template does not scaffold editor:")
+	}
+	if !strings.Contains(Template, "prompt_edit_key:") {
+		t.Error("the template does not scaffold prompt_edit_key:")
+	}
+}

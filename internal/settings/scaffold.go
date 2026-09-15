@@ -62,6 +62,10 @@ ui:
   transparent_blocks: true
   cron_list_json: false
 
+editor:
+  # editor: ""
+  # prompt_edit_key: ""
+
 sources:
   skill_dirs: []
   mcp_files: []

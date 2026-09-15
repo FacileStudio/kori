@@ -135,4 +135,13 @@ func (c *Config) mergeUI(over Config) {
 	if over.JSON != nil {
 		c.JSON = over.JSON
 	}
+	c.mergeEditor(over)
+}
+
+// mergeEditor applies the editor settings from over when either field
+// is set, preserving the existing editor when both are empty.
+func (c *Config) mergeEditor(over Config) {
+	if over.Editor.Editor != "" || over.PromptEditKey != "" {
+		c.Editor = over.Editor
+	}
 }

@@ -34,24 +34,28 @@ type LaunchContext struct {
 
 // SessionConfig configures the runtime settings for an interactive session.
 type SessionConfig struct {
-	Root              string
-	Model             string
-	Backend           string
-	Diffs             bool
-	GroupTools        *bool
-	ShowThinking      bool
-	CompactAt         int64
-	AutoResume        bool
-	Resume            string
-	PromptPlaceholder string
-	StartMessage      string
-	Startup           LaunchContext
-	// Grind is the per-run minimum spend: dollars, output tokens, and how
-	// many continuation notices one run may be given. Both floors at zero
-	// leave the budget off.
+	Root               string
+	Model              string
+	Backend            string
+	Diffs              bool
+	GroupTools         *bool
+	ShowThinking       bool
+	CompactAt          int64
+	AutoResume         bool
+	Resume             string
+	PromptPlaceholder  string
+	StartMessage       string
+	Startup            LaunchContext
 	GrindCost          float64
 	GrindTokens        int64
 	GrindContinuations int
+	Editor             EditorConfig
+}
+
+// EditorConfig holds the editor settings used when editing prompts externally.
+type EditorConfig struct {
+	PromptEditKey string
+	Editor        string
 }
 
 // UISession holds the complete state needed to run an interactive terminal session.

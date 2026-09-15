@@ -70,9 +70,10 @@ type inflight struct {
 	editState
 	clock
 	turn
-	groups     []toolGroup
-	groupIndex map[string]int
-	failures   failureCollapse
+	groups        []toolGroup
+	groupIndex    map[string]int
+	failures      failureCollapse
+	promptEditKey string
 }
 
 // clock is when this run started and when esc was first pressed this one.
@@ -98,10 +99,11 @@ type turn struct {
 // here rather than on the model because a run's edits and outputs are not a
 // property of the client.
 type editState struct {
-	root    string
-	diffs   bool
-	edits   map[string]editChange
-	outputs map[string]string
+	root       string
+	diffs      bool
+	edits      map[string]editChange
+	outputs    map[string]string
+	editorPath string
 }
 
 // beginTool turns a call into a group row. A new call either extends the

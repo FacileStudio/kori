@@ -74,6 +74,7 @@ type Config struct {
 	UI         `yaml:"ui"`
 	Sources    `yaml:"sources"`
 	Automation `yaml:",inline"`
+	Editor     `yaml:"editor"`
 }
 
 // Toggles is the tool-mount settings: whether the model gets each optional
@@ -230,13 +231,12 @@ func Settings(system string, flags Config) (Config, error) {
 	if created, err := Scaffold(ConfigPath()); err != nil {
 		return Config{}, err
 	} else if created {
-		fmt.Fprintln(os.Stderr, "wrote ~/.kori.yml with the default settings — edit it, or delete it to regenerate")
+		fmt.Fprintln(os.Stderr, "wrote ~/.kori.yml with the default settings")
 	}
 	file, err := Load(ConfigPath())
 	if err != nil {
 		return Config{}, err
 	}
-
 	resolved := Defaults(system)
 	resolved.merge(file)
 	resolved.merge(FromEnv())

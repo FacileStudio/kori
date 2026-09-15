@@ -38,6 +38,7 @@ func FromEnv() Config {
 		},
 		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS"), MCPFiles: envList(EnvPrefix + "MCP_FILES")},
 		UI:      UI{Mode: envString(EnvPrefix + "MODE"), TransparentBlocks: envBool(EnvPrefix + "TRANSPARENT_BLOCKS"), Diffs: envBool(EnvPrefix + "DIFFS")},
+		Editor:  Editor{Editor: envGet("EDITOR"), PromptEditKey: envGet("PROMPT_EDIT_KEY")},
 		Toggles: Toggles{
 			Bash: envBool(EnvPrefix + "BASH"), ParallelAgents: envBool(EnvPrefix + "PARALLEL_AGENTS"),
 			Fetch: envBool(EnvPrefix + "FETCH"), Tasks: envBool(EnvPrefix + "TASKS"),
