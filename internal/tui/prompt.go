@@ -33,7 +33,7 @@ const minHeightRows = 1
 func newPrompt(placeholder string, spine lipgloss.Style) textarea.Model {
 	prompt := textarea.New()
 	prompt.Placeholder = placeholder
-	prompt.SetPromptFunc(1, promptBorder(spine))
+	prompt.SetPromptFunc(2, promptBorder(spine))
 	prompt.ShowLineNumbers = false
 	prompt.DynamicHeight = true
 	prompt.MinHeight = minHeightRows

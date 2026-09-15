@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
-## [0.63.0] - 2026-09-15
+## [0.63.1] - 2026-09-15
+
+### Fixed
+- Interactive prompt external editor execution via `Ctrl+E` using `tea.ExecProcess` to pause Bubbletea and restore terminal raw mode, preventing `read /dev/stdin: resource temporarily unavailable` crashes.
+- Allow opening the external editor via `Ctrl+E` when the prompt input is empty.
+- Prompt textarea border gutter width reservation (`prompt.SetPromptFunc(2, ...)`), preventing line overflow and cursor displacement over the left border on soft-wrapped lines.
+
 
 ### Added
 - External prompt editor configuration (`editor:` section in settings with `editor` and `prompt_edit_key`, and `KORI_EDITOR` / `KORI_PROMPT_EDIT_KEY` environment variables).

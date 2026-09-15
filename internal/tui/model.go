@@ -132,6 +132,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 // because the dispatch is wide (13 arms plus the catch-all), not because any
 // arm does much.
 func (m *Model) route(message tea.Msg) tea.Cmd {
+	if cmd, ok := m.routeTask(message); ok {
+		return cmd
+	}
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		return m.resize(message)
@@ -147,22 +150,14 @@ func (m *Model) route(message tea.Msg) tea.Cmd {
 		return m.consume(message)
 	case finished:
 		return m.settle()
-	case spentDelegation:
-		return m.recordDelegation(message)
-	case detachedResult:
-		return m.recordDetached(message)
-	case subagentUpdate:
-		return m.recordUpdate(message)
-	case taskTitled:
-		return m.recordTitle(message)
-	case taskUpdate:
-		return m.recordTasks(message)
 	case compactOutcome:
 		return m.settleCompaction(message)
 	case compactFinished:
 		return m.finishCompaction()
 	case startupDiagnostics:
 		return m.recordStartupDiagnostics(message)
+	case editorFinishedMsg:
+		return m.finishEditor(message)
 	case tea.KeyboardEnhancementsMsg:
 		return nil
 	}

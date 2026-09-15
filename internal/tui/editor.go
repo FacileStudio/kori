@@ -5,15 +5,19 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-// resolveEditor determines which editor to use for editing a prompt
-// externally. It searches in order: the configured editor path, the
-// GIT_EDITOR environment variable, the system EDITOR variable, the VISUAL
-// variable, and finally "vi" as a last resort. Returns an empty string only
-// if every source is silent, which callers treat as "no editor available".
+type editorFinishedMsg struct {
+	path    string
+	cleanup func()
+	err     error
+}
+
 func resolveEditor(cfg settings.Config) string {
 	if cfg.Editor.Editor != "" {
 		return cfg.Editor.Editor
@@ -30,12 +34,6 @@ func resolveEditor(cfg settings.Config) string {
 	return "vi"
 }
 
-// editInExternalEditor opens the given content in the user's editor,
-// waits for the process to exit, and returns whatever the editor wrote
-// back. The content is written to a temporary file, the editor is launched
-// with that file as its argument, and the file is read again once the editor
-// closes. If the editor cannot be found or launched, or if the temporary file
-// cannot be written, the error is returned and the original content is untouched.
 func editInExternalEditor(content string, editor string) (string, error) {
 	if editor == "" {
 		return content, errors.New("no editor configured")
@@ -47,7 +45,13 @@ func editInExternalEditor(content string, editor string) (string, error) {
 	}
 	defer closeFn()
 
-	cmd := exec.Command(editor, tmpPath)
+	parts := strings.Fields(editor)
+	var cmd *exec.Cmd
+	if len(parts) > 1 {
+		cmd = exec.Command(parts[0], append(parts[1:], tmpPath)...)
+	} else {
+		cmd = exec.Command(editor, tmpPath)
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -65,9 +69,6 @@ func editInExternalEditor(content string, editor string) (string, error) {
 	return string(edited), nil
 }
 
-// createTempFile writes content to a temporary file and returns the path and
-// a cleanup function that removes the file. The cleanup must be deferred by
-// the caller.
 func createTempFile(content string, suffix string) (string, func(), error) {
 	tmpFile, err := os.CreateTemp("", suffix)
 	if err != nil {
@@ -97,27 +98,58 @@ func cleanupTemp(path string) {
 	}
 }
 
-// openEditor opens the current prompt content in the user's configured
-// external editor and replaces the prompt with the result if it
-// changed. Uses resolveEditor to find the editor (GIT_EDITOR > EDITOR
-// > VISUAL > vi). Does nothing when there is no editor configured
-// or the prompt is empty — the prompt itself is the editor.
-func (m *Model) openEditor() {
+func (m *Model) openEditor() tea.Cmd {
 	editor := resolveEditor(settings.Config{Editor: settings.Editor{Editor: m.run.editorPath, PromptEditKey: m.run.promptEditKey}})
 	if editor == "" {
-		return
+		return nil
 	}
 	content := m.prompt.Value()
-	if content == "" {
-		return
-	}
 
-	edited, err := editInExternalEditor(content, editor)
+	tmpPath, cleanup, err := createTempFile(content, "*.kori")
 	if err != nil {
 		m.say(fromReader, "editor failed: "+err.Error())
-		return
+		return nil
 	}
-	if edited != content {
-		m.prompt.SetValue(edited)
+
+	parts := strings.Fields(editor)
+	var cmd *exec.Cmd
+	if len(parts) > 1 {
+		cmd = exec.Command(parts[0], append(parts[1:], tmpPath)...)
+	} else {
+		cmd = exec.Command(editor, tmpPath)
 	}
+
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return editorFinishedMsg{
+			path:    tmpPath,
+			cleanup: cleanup,
+			err:     err,
+		}
+	})
+}
+
+func (m *Model) finishEditor(msg editorFinishedMsg) tea.Cmd {
+	defer msg.cleanup()
+	if msg.err != nil {
+		if exitErr, ok := errors.AsType[*exec.ExitError](msg.err); ok {
+			m.say(fromReader, fmt.Sprintf("editor exited with code %d", exitErr.ExitCode()))
+		} else {
+			m.say(fromReader, "editor failed: "+msg.err.Error())
+		}
+		return nil
+	}
+
+	editedBytes, err := os.ReadFile(msg.path)
+	if err != nil {
+		m.say(fromReader, "reading edited file: "+err.Error())
+		return nil
+	}
+
+	edited := string(editedBytes)
+	edited = strings.TrimSuffix(edited, "\r\n")
+	edited = strings.TrimSuffix(edited, "\n")
+	m.prompt.SetValue(edited)
+	m.prompt.CursorEnd()
+	m.refreshMenu()
+	return nil
 }
