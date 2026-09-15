@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-09-15
+
 ### Added
 - External prompt editor configuration (`editor:` section in settings with `editor` and `prompt_edit_key`, and `KORI_EDITOR` / `KORI_PROMPT_EDIT_KEY` environment variables).
 - `ctrl+e` keybinding in prompt to open and edit prompt content in an external editor (`GIT_EDITOR` > `EDITOR` > `VISUAL` > `vi`).
