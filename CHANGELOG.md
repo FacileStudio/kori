@@ -21,6 +21,11 @@
 
 ## [Unreleased]
 
+## [0.65.4] - 2026-09-16
+
+### Fixed
+- fix: cron install command installs to crontab
+
 
 ## [0.65.0] - 2026-09-15
 
