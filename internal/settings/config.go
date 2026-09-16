@@ -51,13 +51,8 @@ type Session struct {
 	Resume   *string `yaml:"-"`
 }
 
-// NoConfig skips the file entirely; it comes from -no-config, never the
-// file it is about to ignore.
-
-// Config is one layer of settings. Every field is a pointer or an empty-able
-// string so a layer can say nothing about a setting rather than saying zero:
-// "false" and "not mentioned" are different answers and a bool cannot tell
-// them apart. Its only credential is a custom endpoint's own api_key.
+// Config is one layer of settings. Every field is a pointer or an empty-able string so a layer
+// can say nothing about a setting rather than saying zero. Its only credential is a custom endpoint's api_key.
 type Config struct {
 	NoConfig *bool `yaml:"-"`
 
@@ -75,6 +70,7 @@ type Config struct {
 	Sources    `yaml:"sources"`
 	Automation `yaml:",inline"`
 	Editor     `yaml:"editor"`
+	Sandbox    Sandbox `yaml:"sandbox"`
 }
 
 // Toggles is the tool-mount settings: whether the model gets each optional

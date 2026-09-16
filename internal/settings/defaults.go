@@ -20,6 +20,7 @@ func Defaults(system string) Config {
 		"██▄█▀ ██▀██ ██▄█▄ ██ ",
 		"██ ██ ▀███▀ ██ ██ ██ ",
 	}, "\n")
+	autoSync, autoSnapshot := true, false
 	return Config{
 		Provider:  Provider{Backend: "anthropic"},
 		Session:   Session{Root: ".", System: system, Continue: &cont, Resume: &resume},
@@ -33,6 +34,8 @@ func Defaults(system string) Config {
 			TrustSkills:    &trustSkills,
 			TrustHooks:     &trustHooks,
 		},
-		UI: UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput}, Editor: Editor{Editor: "", PromptEditKey: "ctrl+shift+u"},
+		UI:      UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput},
+		Editor:  Editor{Editor: "", PromptEditKey: "ctrl+shift+u"},
+		Sandbox: Sandbox{VMName: "pingu", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", Root: "/home/yann/project", AutoSync: &autoSync, AutoSnapshot: &autoSnapshot},
 	}
 }

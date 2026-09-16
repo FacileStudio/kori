@@ -6,8 +6,8 @@
 #
 # Usage: boite-sync.sh <vm-name> [port] [--dry-run] [--exclude pattern] [--quiet]
 #
-# Requires: boite (in PATH), rsync, ssh
-# Environment: Uses ~/.boite/state.json for VM configuration if port not specified
+# Requires: boite (in PATH) or ~/.boite state, rsync, ssh
+# Environment: Uses ~/.boite/instances/<name>/state.json or ~/.boite/state.json
 #
 # Exit codes:
 #   0 - Success
@@ -18,16 +18,14 @@
 
 set -euo pipefail
 
-# Default values
 DRY_RUN=false
 QUIET=false
 EXCLUDES=()
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 log_info() {
     if [[ "$QUIET" == "false" ]]; then
@@ -51,7 +49,7 @@ Syncs the current project directory to a boite VM's overlay disk.
 
 Arguments:
   <vm-name>     Name of the boite VM (required)
-  [port]        SSH port (optional, defaults to value in ~/.boite/state.json or 2226)
+  [port]        SSH port (optional, defaults to value in boite state or 2226)
 
 Options:
   --dry-run     Show what would be transferred without actually syncing
@@ -75,7 +73,6 @@ Exit codes:
 EOF
 }
 
-# Parse arguments
 if [[ $# -lt 1 ]]; then
     usage
     exit 1
@@ -84,13 +81,11 @@ fi
 VM_NAME="$1"
 shift
 
-# Parse port (if first remaining argument is a number)
 if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
     PORT="$1"
     shift
 fi
 
-# Parse remaining options
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)
@@ -121,35 +116,39 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate VM name
 if [[ -z "$VM_NAME" ]]; then
     log_error "VM name is required"
     usage
     exit 1
 fi
 
-# Get SSH connection details from boite state or defaults
 get_boite_config() {
-    local home
-    home=$(eval echo ~"$USER")
+    local home="${HOME:-$(eval echo ~"$USER")}"
+    local instance_state="$home/.boite/instances/${VM_NAME}/state.json"
     local state_file="$home/.boite/state.json"
-    
-    if [[ -f "$state_file" ]]; then
-        # Try to parse JSON state file
-        if command -v jq >/dev/null 2>&1; then
-            local port key
-            port=$(jq -r ".VMs.${VM_NAME}.ssh_port // empty" "$state_file" 2>/dev/null || true)
-            key=$(jq -r ".VMs.${VM_NAME}.ssh_key_path // empty" "$state_file" 2>/dev/null || true)
-            
-            if [[ -n "$port" && "$port" != "null" ]]; then
-                echo "$port"
-                echo "$key"
-                return 0
-            fi
+
+    if [[ -f "$instance_state" ]] && command -v jq >/dev/null 2>&1; then
+        local port key
+        port=$(jq -r '.ssh_port // empty' "$instance_state" 2>/dev/null || true)
+        key=$(jq -r '.key_path // empty' "$instance_state" 2>/dev/null || true)
+        if [[ -n "$port" && "$port" != "null" ]]; then
+            echo "$port"
+            echo "${key:-~/.ssh/id_ed25519}"
+            return 0
         fi
     fi
-    
-    # Fallback to boite list command if JSON parsing fails or jq not available
+
+    if [[ -f "$state_file" ]] && command -v jq >/dev/null 2>&1; then
+        local port key
+        port=$(jq -r ".VMs.${VM_NAME}.ssh_port // empty" "$state_file" 2>/dev/null || true)
+        key=$(jq -r ".VMs.${VM_NAME}.ssh_key_path // empty" "$state_file" 2>/dev/null || true)
+        if [[ -n "$port" && "$port" != "null" ]]; then
+            echo "$port"
+            echo "${key:-~/.ssh/id_ed25519}"
+            return 0
+        fi
+    fi
+
     if command -v boite >/dev/null 2>&1; then
         local output
         output=$(boite list --json 2>/dev/null || true)
@@ -157,79 +156,76 @@ get_boite_config() {
             local port key
             port=$(echo "$output" | jq -r ".VMs.${VM_NAME}.ssh_port // empty" 2>/dev/null || true)
             key=$(echo "$output" | jq -r ".VMs.${VM_NAME}.ssh_key_path // empty" 2>/dev/null || true)
-            
             if [[ -n "$port" && "$port" != "null" ]]; then
                 echo "$port"
-                echo "$key"
+                echo "${key:-~/.ssh/id_ed25519}"
                 return 0
             fi
         fi
     fi
-    
-    # Default values
+
     echo "2226"
     echo "~/.ssh/id_ed25519"
 }
 
-# Get VM configuration
 read -r PORT_DEFAULT KEY_PATH <<< "$(get_boite_config)"
 PORT=${PORT:-$PORT_DEFAULT}
 SSH_KEY_PATH=${SSH_KEY_PATH:-$KEY_PATH}
 
-# Validate VM exists in boite state
-if ! boite list --json 2>/dev/null | jq -e ".VMs.${VM_NAME}" >/dev/null 2>&1; then
-    log_error "VM '$VM_NAME' not found in boite state"
-    log_info "Available VMs:"
-    boite list --json 2>/dev/null | jq -r '.VMs | keys[]' 2>/dev/null || boite list 2>/dev/null
-    exit 2
+home_dir="${HOME:-$(eval echo ~"$USER")}"
+instance_state_file="$home_dir/.boite/instances/${VM_NAME}/state.json"
+legacy_state_file="$home_dir/.boite/state.json"
+
+if [[ ! -f "$instance_state_file" ]]; then
+    if [[ -f "$legacy_state_file" ]] && command -v jq >/dev/null 2>&1; then
+        if ! jq -e ".VMs.${VM_NAME}" "$legacy_state_file" >/dev/null 2>&1; then
+            log_warn "VM '$VM_NAME' not found in legacy state file, proceeding with port $PORT"
+        fi
+    fi
 fi
 
-# Validate SSH key exists
 SSH_KEY_PATH=$(eval echo "$SSH_KEY_PATH")
 if [[ ! -f "$SSH_KEY_PATH" ]]; then
-    log_error "SSH key not found: $SSH_KEY_PATH"
-    exit 3
+    log_warn "SSH key not found at $SSH_KEY_PATH, ssh will use default key identity"
 fi
 
-# Get current working directory
 LOCAL_DIR="$(pwd)/"
 REMOTE_PATH="/home/yann/project/"
 
 log_info "Syncing project to VM '$VM_NAME'"
 log_info "  Local:  $LOCAL_DIR"
-log_info "  Remote: $SSH_KEY_PATH@localhost:$PORT:$REMOTE_PATH"
+log_info "  Remote: localhost:$PORT:$REMOTE_PATH"
 log_info "  Port:   $PORT"
-log_info "  Key:    $SSH_KEY_PATH"
 
 if [[ "$DRY_RUN" == "true" ]]; then
     log_info "DRY RUN MODE - No actual transfer will occur"
 fi
 
-# Build rsync command
+SSH_CMD="ssh -p $PORT -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null"
+if [[ -f "$SSH_KEY_PATH" ]]; then
+    SSH_CMD="$SSH_CMD -i $SSH_KEY_PATH"
+fi
+
 RSYNC_OPTS=(
     -avz
     --delete
     "${EXCLUDES[@]}"
     --exclude=.boite/
-    -e "ssh -p $PORT -i $SSH_KEY_PATH -o StrictHostKeyChecking=accept-new"
+    --exclude=.git/
+    -e "$SSH_CMD"
 )
 
 if [[ "$DRY_RUN" == "true" ]]; then
     RSYNC_OPTS+=(--dry-run)
 fi
 
-RSYNC_OPTS+=("$LOCAL_DIR" "")
+RSYNC_OPTS+=("$LOCAL_DIR")
 RSYNC_OPTS+=("${VM_NAME}@localhost:$REMOTE_PATH")
 
-# Execute rsync
 if ! rsync "${RSYNC_OPTS[@]}"; then
     log_error "rsync failed"
     exit 4
 fi
 
 log_info "Sync completed successfully"
-if [[ "$DRY_RUN" == "true" ]]; then
-    log_info "Remember to run without --dry-run to perform actual sync"
-fi
-
 exit 0

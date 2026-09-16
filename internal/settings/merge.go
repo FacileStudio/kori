@@ -10,6 +10,7 @@ func (c *Config) merge(over Config) {
 	c.mergeSecurity(over)
 	c.mergeUI(over)
 	c.mergeLimits(over)
+	c.Sandbox.merge(over.Sandbox)
 	if over.Budget != nil {
 		c.Budget = over.Budget
 	}

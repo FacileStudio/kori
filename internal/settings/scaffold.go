@@ -76,6 +76,15 @@ sources:
 hooks: []
 # Scheduled jobs no longer live in this file: one YAML file per job under
 # ~/.kori/jobs/ (e.g. news.yml), approved with kori cron trust <name>.
+
+# Sandbox: start kori inside a boite VM via SSH.
+sandbox:
+  vm_name: pingu
+  port: 2226
+  ssh_key_path: ~/.ssh/id_ed25519
+  root: /home/yann/project
+  auto_sync: true
+  auto_snapshot: false
 `
 
 // Scaffold writes the template when no config file exists yet, and reports

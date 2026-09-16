@@ -105,7 +105,7 @@ func (m *Model) openEditor() tea.Cmd {
 	}
 	content := m.prompt.Value()
 
-	tmpPath, cleanup, err := createTempFile(content, ".md")
+	tmpPath, cleanup, err := createTempFile(content, "kori-prompt-*.md")
 	if err != nil {
 		m.say(fromReader, "editor failed: "+err.Error())
 		return nil
