@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.7] - 2026-09-17
+
+### Fixed
+- fix(cron): direct crontab install and uninstall with atomic blocks and log redirection
+- fix(cron): automatic PATH augmentation and secret retrieval for unattended runs
+- fix(cron): context timeout enforcement and error reporting in delivery logs
+- feat(sandbox): isolated boite sandbox environment support
+
 ## [0.65.6] - 2026-09-17
 
 ### Fixed
