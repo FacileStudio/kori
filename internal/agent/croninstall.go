@@ -75,9 +75,15 @@ func installCronJob(name string) error {
 	svc, timer := cronUnits(job.Name, bin, workdir, cmp.Or(job.When, "daily"), cmp.Or(job.Timeout, "300"))
 
 	dir := filepath.Join(expandHome("~"), ".config", "systemd", "user")
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name)), []byte(svc), 0o644)
-	os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name)), []byte(timer), 0o644)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name)), []byte(svc), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name)), []byte(timer), 0o644); err != nil {
+		return err
+	}
 	if exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", job.Name)).Run() != nil {
 		return exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", job.Name)).Run()
 	}
