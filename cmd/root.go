@@ -16,7 +16,7 @@ import (
 func Execute(version string) error {
 	normalizeArgs()
 	root := newRootCmd(version)
-	return fang.Execute(context.Background(), root, fang.WithVersion(version))
+	return fang.Execute(context.Background(), root, fang.WithVersion(version), fang.WithColorSchemeFunc(fang.DefaultColorScheme))
 }
 
 func newRootCmd(version string) *cobra.Command {

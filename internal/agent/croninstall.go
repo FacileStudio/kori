@@ -80,7 +80,7 @@ func installCronJob(name string) error {
 	return nil
 }
 
-// writeCronUnits writes the systemd service+timer files and enables+starts the timer.
+// writeCronUnits writes the systemd service+timer files and attempts to enable+start the timer.
 func writeCronUnits(name, svc, timer string) error {
 	dir := filepath.Join(expandHome("~"), ".config", "systemd", "user")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -92,8 +92,11 @@ func writeCronUnits(name, svc, timer string) error {
 	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", name)), []byte(timer), 0o644); err != nil {
 		return err
 	}
-	if exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", name)).Run() != nil {
-		return exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", name)).Run()
+	if err := exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", name)).Run(); err != nil {
+		return fmt.Errorf("enabling kori-%s.timer: %w", name, err)
+	}
+	if err := exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", name)).Run(); err != nil {
+		return fmt.Errorf("starting kori-%s.timer: %w", name, err)
 	}
 	return nil
 }
