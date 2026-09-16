@@ -11,33 +11,13 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-func TestOpenEditorWhenPromptIsEmpty(t *testing.T) {
+func TestKeyCtrlShiftUTriggersEditorWhenEmpty(t *testing.T) {
 	t.Setenv("EDITOR", "cat")
 	m := sized()
 	m.prompt.SetValue("")
-	cmd := m.openEditor()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl | tea.ModShift})
 	if cmd == nil {
-		t.Fatal("openEditor returned nil for empty prompt, expected tea.Cmd")
-	}
-}
-
-func TestOpenEditorWhenPromptHasContent(t *testing.T) {
-	t.Setenv("EDITOR", "cat")
-	m := sized()
-	m.prompt.SetValue("some draft text")
-	cmd := m.openEditor()
-	if cmd == nil {
-		t.Fatal("openEditor returned nil for non-empty prompt, expected tea.Cmd")
-	}
-}
-
-func TestKeyCtrlETriggersEditorWhenEmpty(t *testing.T) {
-	t.Setenv("EDITOR", "cat")
-	m := sized()
-	m.prompt.SetValue("")
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
-	if cmd == nil {
-		t.Fatal("Update with ctrl+e returned nil cmd for empty prompt")
+		t.Fatal("Update with ctrl+shift+u returned nil cmd for empty prompt")
 	}
 }
 
@@ -45,7 +25,7 @@ func TestFinishEditorSetsPromptValueAndTrimsNewline(t *testing.T) {
 	m := sized()
 	m.prompt.SetValue("original")
 
-	tmpFile := filepath.Join(t.TempDir(), "test-prompt.kori")
+	tmpFile := filepath.Join(t.TempDir(), "test-prompt.md")
 	if err := os.WriteFile(tmpFile, []byte("edited from external\n"), 0o600); err != nil {
 		t.Fatalf("writing temp file: %v", err)
 	}

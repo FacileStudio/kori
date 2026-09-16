@@ -33,6 +33,6 @@ func Defaults(system string) Config {
 			TrustSkills:    &trustSkills,
 			TrustHooks:     &trustHooks,
 		},
-		UI: UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput}, Editor: Editor{Editor: "", PromptEditKey: ""},
+		UI: UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput}, Editor: Editor{Editor: "", PromptEditKey: "ctrl+shift+u"},
 	}
 }
