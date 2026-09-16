@@ -39,7 +39,7 @@ func editInExternalEditor(content string, editor string) (string, error) {
 		return content, errors.New("no editor configured")
 	}
 
-	tmpPath, closeFn, err := createTempFile(content, "*.kori")
+	tmpPath, closeFn, err := createTempFile(content, "kori-*.kori")
 	if err != nil {
 		return content, err
 	}
@@ -105,7 +105,7 @@ func (m *Model) openEditor() tea.Cmd {
 	}
 	content := m.prompt.Value()
 
-	tmpPath, cleanup, err := createTempFile(content, "*.kori")
+	tmpPath, cleanup, err := createTempFile(content, ".kori")
 	if err != nil {
 		m.say(fromReader, "editor failed: "+err.Error())
 		return nil

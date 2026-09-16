@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -45,10 +46,9 @@ func listCronJobs() error {
 	return nil
 }
 
-// installCronJob prints the systemd service + timer pair that arm one job, for
-// the user to drop under ~/.config/systemd/user/ (or /etc/systemd/system/ for a
-// system timer). It refuses any job that is untrusted or fails the arm-time
-// policy in checkCronInstallable.
+// installCronJob generates, writes, and arms the systemd service + timer pair
+// for one job under ~/.config/systemd/user/. It enables and starts the timer
+// automatically so the job runs on schedule without further manual steps.
 func installCronJob(name string) error {
 	_, files, err := loadCronState()
 	if err != nil {
@@ -65,16 +65,29 @@ func installCronJob(name string) error {
 	if err := checkCronInstallable(job); err != nil {
 		return err
 	}
-	schedule := cmp.Or(job.When, "daily")
-	timeout := cmp.Or(job.Timeout, "300")
 	bin, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("locating kori: %w", err)
 	}
-	svc, timer := cronUnits(job.Name, bin, expandHome(job.Workdir), schedule, timeout)
-	fmt.Println(svc)
-	fmt.Println(timer)
-	fmt.Printf("# save both files, then: systemctl --user enable --now kori-%s.timer\n", job.Name)
+	svc, timer := cronUnits(job.Name, bin, expandHome(job.Workdir), cmp.Or(job.When, "daily"), cmp.Or(job.Timeout, "300"))
+
+	dir := filepath.Join(expandHome("~"), ".config", "systemd", "user")
+	svcPath := filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name))
+	os.MkdirAll(dir, 0o755)
+	if err := os.WriteFile(svcPath, []byte(svc), 0o644); err != nil {
+		return fmt.Errorf("writing service file: %w", err)
+	}
+	timerPath := filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name))
+	if err := os.WriteFile(timerPath, []byte(timer), 0o644); err != nil {
+		return fmt.Errorf("writing timer file: %w", err)
+	}
+
+	if err := exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", job.Name)).Run(); err != nil {
+		return fmt.Errorf("enabling timer: %w", err)
+	}
+	if err := exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", job.Name)).Run(); err != nil {
+		return fmt.Errorf("starting timer: %w", err)
+	}
 	return nil
 }
 
