@@ -13,8 +13,8 @@ func TestEditorDefaultsToEmpty(t *testing.T) {
 	if config.Editor.Editor != "" {
 		t.Errorf("editor = %q, want empty by default", config.Editor.Editor)
 	}
-	if config.PromptEditKey != "" {
-		t.Errorf("prompt_edit_key = %q, want empty by default", config.PromptEditKey)
+	if config.PromptEditKey != "ctrl+shift+u" {
+		t.Errorf("prompt_edit_key = %q, want ctrl+shift+u by default", config.PromptEditKey)
 	}
 }
 
@@ -123,8 +123,8 @@ func TestEditorPartialConfigFromFile(t *testing.T) {
 	if config.Editor.Editor != "/usr/bin/nano" {
 		t.Errorf("editor = %q, want the file's editor", config.Editor.Editor)
 	}
-	if config.PromptEditKey != "" {
-		t.Errorf("prompt_edit_key = %q, want empty when not set in file", config.PromptEditKey)
+	if config.PromptEditKey != "ctrl+shift+u" {
+		t.Errorf("prompt_edit_key = %q, want ctrl+shift+u when not set in file", config.PromptEditKey)
 	}
 }
 

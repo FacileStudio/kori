@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newSandboxCmd() *cobra.Command { //nolint:unusedfunc
+func newSandboxCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sandbox <vm-name>",
 		Short: "Start kori inside a boite VM sandbox",
