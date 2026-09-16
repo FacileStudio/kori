@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.65.1] - 2026-09-16
+
+### Changed
+- Fixed cron command description formatting (trim leading/trailing whitespace)
+
 ## [Unreleased]
 
 ## [0.65.0] - 2026-09-15

@@ -15,8 +15,8 @@ func newCronCmd() *cobra.Command {
 
 Jobs are defined as YAML files in ~/.kori/jobs/. Use one of the
 subcommands to list, run, trust, or install them. Each job can be
-trusted with \`kori cron trust <name>\` before it can be run or
-installed. Use \`kori cron install <name>\` to generate systemd unit
+trusted with kori cron trust <name> before it can be run or
+installed. Use kori cron install <name> to generate systemd unit
 files for automated scheduling.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return agent.ListCronJobs()

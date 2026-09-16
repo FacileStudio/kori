@@ -12,6 +12,8 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
+var cronNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
 // listCronJobs prints the configured jobs and how to run or arm them. It arms
 // nothing. Jobs come from ~/.kori/jobs/, one file each, so the listing is
 // the folder as of this invocation.
@@ -69,28 +71,20 @@ func installCronJob(name string) error {
 	if err != nil {
 		return fmt.Errorf("locating kori: %w", err)
 	}
-	svc, timer := cronUnits(job.Name, bin, expandHome(job.Workdir), cmp.Or(job.When, "daily"), cmp.Or(job.Timeout, "300"))
+	workdir := expandHome(job.Workdir)
+	svc, timer := cronUnits(job.Name, bin, workdir, cmp.Or(job.When, "daily"), cmp.Or(job.Timeout, "300"))
 
 	dir := filepath.Join(expandHome("~"), ".config", "systemd", "user")
-	svcPath := filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name))
 	os.MkdirAll(dir, 0o755)
-	if err := os.WriteFile(svcPath, []byte(svc), 0o644); err != nil {
-		return fmt.Errorf("writing service file: %w", err)
-	}
-	timerPath := filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name))
-	if err := os.WriteFile(timerPath, []byte(timer), 0o644); err != nil {
-		return fmt.Errorf("writing timer file: %w", err)
-	}
-
-	if err := exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", job.Name)).Run(); err != nil {
-		return fmt.Errorf("enabling timer: %w", err)
-	}
-	if err := exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", job.Name)).Run(); err != nil {
-		return fmt.Errorf("starting timer: %w", err)
+	os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name)), []byte(svc), 0o644)
+	os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name)), []byte(timer), 0o644)
+	if exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", job.Name)).Run() != nil {
+		return exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", job.Name)).Run()
 	}
 	return nil
 }
 
+// cronUnits generates systemd service and timer unit strings.
 func cronUnits(name, bin, workdir, schedule, timeout string) (service, timer string) {
 	exec := strings.Join([]string{
 		systemdQuote(bin),
@@ -132,7 +126,17 @@ func systemdQuote(arg string) string {
 	return `"` + arg + `"`
 }
 
-var cronNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+// expandHome expands a path starting with ~/ to the user's home directory.
+func expandHome(path string) string {
+	if !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[2:])
+}
 
 // checkCronInstallable enforces the arm-time policy: a unit-safe name, an
 // explicit enabled: true after a test run, and a workdir — applyJob only sets
@@ -161,15 +165,4 @@ func jobEnabled(job settings.CronJob) bool {
 
 func jobCommands(job settings.CronJob) bool {
 	return job.Commands != nil && *job.Commands
-}
-
-func expandHome(path string) string {
-	if !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	return filepath.Join(home, path[2:])
 }
