@@ -12,6 +12,8 @@
 - Fixed cron command description formatting (trim leading/trailing whitespace)
 
 ## [Unreleased]
+- Fixed: add error handling for systemctl enable/start in cron job installation
+- Changed: add color scheme support to root command
 
 ## [0.65.0] - 2026-09-15
 
