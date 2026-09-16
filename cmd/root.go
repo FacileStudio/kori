@@ -38,7 +38,6 @@ func newRootCmd(version string) *cobra.Command {
 	bindFlags(cmd, &f)
 	cmd.AddCommand(newCronCmd())
 	cmd.AddCommand(newBenchCmd())
-	cmd.AddCommand(newSandboxCmd())
 	return cmd
 }
 
