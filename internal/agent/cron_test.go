@@ -133,6 +133,7 @@ func TestCronUsageErrors(t *testing.T) {
 	for _, args := range [][]string{
 		{"kori", "cron", "run"},
 		{"kori", "cron", "install"},
+		{"kori", "cron", "uninstall"},
 		{"kori", "cron", "bogus"},
 	} {
 		os.Args = args

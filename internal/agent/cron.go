@@ -13,10 +13,6 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-// findCommand scans os.Args for a subcommand by name: flags typed ahead of it
-// stay where they are, where the settings flag parser reads them; the scan
-// only skips leading dash-tokens, so a flag that takes a value must follow
-// the subcommand instead.
 func findCommand(name string) (prefix, sub []string, ok bool) {
 	args := os.Args[1:]
 	first := 0
@@ -29,46 +25,38 @@ func findCommand(name string) (prefix, sub []string, ok bool) {
 	return args[:first], args[first+1:], true
 }
 
-// checkCronFlag handles the `cron` subcommand, which fronts the headless run
-// path so a scheduled job can be invoked from systemd or crontab with no TUI.
-// It returns true when it recognised a cron command, and the caller should then
-// treat its error as the process's result.
 func checkCronFlag() (bool, error) {
 	prefix, sub, ok := findCommand("cron")
 	if !ok {
 		return false, nil
 	}
-	sub = hoistJSON(prefix, sub)
+	return true, dispatchCron(hoistJSON(prefix, sub))
+}
+
+func dispatchCron(sub []string) error {
 	if len(sub) == 0 || sub[0] == "list" || sub[0] == "status" {
-		return true, listCronJobs()
+		return listCronJobs()
+	}
+	if sub[0] == "help" || sub[0] == "-h" || sub[0] == "--help" {
+		return printCronUsage()
+	}
+	if len(sub) < 2 {
+		return usagef("usage: kori cron %s <name>", sub[0])
 	}
 	switch sub[0] {
-	case "help", "-h", "--help":
-		return true, printCronUsage()
 	case "run":
-		if len(sub) < 2 {
-			return true, usagef("usage: kori cron run <name>")
-		}
-		return true, runCronJob(sub[1])
+		return runCronJob(sub[1])
 	case "trust":
-		if len(sub) < 2 {
-			return true, usagef("usage: kori cron trust <name>")
-		}
-		return true, trustCronJob(sub[1], os.Stdin)
+		return trustCronJob(sub[1], os.Stdin)
 	case "install":
-		if len(sub) < 2 {
-			return true, usagef("usage: kori cron install <name>")
-		}
-		return true, installCronJob(sub[1])
+		return installCronJob(sub[1])
+	case "uninstall", "remove", "rm":
+		return uninstallCronJob(sub[1])
 	default:
-		return true, usagef("unknown cron command %q: want run, trust, install, or list", sub[0])
+		return usagef("unknown cron command %q: want run, trust, install, uninstall, or list", sub[0])
 	}
 }
 
-// hoistJSON moves a trailing -json ahead of the subcommand: the settings flag
-// parser stops at the first non-flag word, which "cron" always is, so a flag
-// typed after the subcommand would otherwise be invisible to it. There is a
-// precedent for rewriting os.Args mid-dispatch in extractPrintFlag.
 func hoistJSON(prefix, sub []string) []string {
 	rest := make([]string, 0, len(sub))
 	json := ""
@@ -86,21 +74,15 @@ func hoistJSON(prefix, sub []string) []string {
 }
 
 var cronConfigOnce = sync.OnceValues(func() (settings.Config, error) {
+	ensureUserPath()
 	flags := settings.FromFlags(settings.Defaults(""))
 	return settings.Settings(DefaultSystemPrompt(), flags)
 })
 
-// loadCronConfig resolves the settings layer once per process: the flag
-// parser cannot be run twice, and every cron command in one invocation reads
-// the same config anyway. Job files stay outside the cache — the folder is
-// re-read per command so the sync stays live.
 func loadCronConfig() (settings.Config, error) {
 	return cronConfigOnce()
 }
 
-// loadCronState reads the resolved config and every job file in
-// ~/.kori/jobs/. Every cron command goes through here, so a file added or
-// removed takes effect on the next invocation with no daemon.
 func loadCronState() (settings.Config, []settings.JobFile, error) {
 	config, err := loadCronConfig()
 	if err != nil {
@@ -113,32 +95,6 @@ func loadCronState() (settings.Config, []settings.JobFile, error) {
 	return config, files, nil
 }
 
-func findJobFile(files []settings.JobFile, name string) (settings.JobFile, error) {
-	for _, f := range files {
-		if f.Job.Name == name {
-			return f, nil
-		}
-	}
-	return settings.JobFile{}, fmt.Errorf("no cron job named %q", name)
-}
-
-// ensureTrusted refuses a job whose file is not the exact content a human
-// trusted. The refusal names the trust command so the way forward is on
-// screen, not in the docs.
-func ensureTrusted(f settings.JobFile) error {
-	ok, err := settings.IsTrusted(f.Path, f.Raw)
-	if err != nil {
-		return err
-	}
-	if ok {
-		return nil
-	}
-	return fmt.Errorf("job %q is not trusted: review %s, then run `kori cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
-}
-
-// trustCronJob shows one job file's contents and records the human's approval
-// keyed on the file path and content hash. An edit re-arms the gate; removal
-// of the file retires the record with the job.
 func trustCronJob(name string, in io.Reader) error {
 	_, files, err := loadCronState()
 	if err != nil {

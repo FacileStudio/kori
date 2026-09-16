@@ -35,12 +35,14 @@ func runHeadless(prompt string) error {
 // with the results — the -print path drops both, a cron run delivers the text
 // and records the stats.
 func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
-	return runHeadlessConfigTo(os.Stdout, prompt, config, extra)
+	return runHeadlessConfigToContext(context.Background(), os.Stdout, prompt, config, extra)
 }
 
-// runHeadlessConfigTo is runHeadlessConfig with the streamed text going to w
-// instead of stdout; bench discards the text and keeps the measurements.
 func runHeadlessConfigTo(w io.Writer, prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
+	return runHeadlessConfigToContext(context.Background(), w, prompt, config, extra)
+}
+
+func runHeadlessConfigToContext(parent context.Context, w io.Writer, prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
 	var stats runStats
 	agent, cleanup, err := buildHeadlessAgent(config, mergeHooks(stats.compactHook(), extra))
 	if err != nil {
@@ -48,7 +50,7 @@ func runHeadlessConfigTo(w io.Writer, prompt string, config settings.Config, ext
 	}
 	defer cleanup()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(parent, os.Interrupt)
 	defer cancel()
 
 	var out strings.Builder

@@ -11,13 +11,13 @@ func newCronCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cron [command]",
 		Short: "Manage scheduled headless agent jobs",
-		Long: `Manage scheduled headless agent jobs that run from systemd or crontab.
+		Long: `Manage scheduled headless agent jobs that run from crontab.
 
 Jobs are defined as YAML files in ~/.kori/jobs/. Use one of the
-subcommands to list, run, trust, or install them. Each job can be
+subcommands to list, run, trust, install, or uninstall them. Each job can be
 trusted with kori cron trust <name> before it can be run or
-installed. Use kori cron install <name> to generate systemd unit
-files for automated scheduling.`,
+installed. Use kori cron install <name> to install a job into
+the user's crontab.`,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return c.Help()
 		},
@@ -26,6 +26,7 @@ files for automated scheduling.`,
 	cmd.AddCommand(newCronRunCmd())
 	cmd.AddCommand(newCronTrustCmd())
 	cmd.AddCommand(newCronInstallCmd())
+	cmd.AddCommand(newCronUninstallCmd())
 	return cmd
 }
 
@@ -66,13 +67,29 @@ func newCronTrustCmd() *cobra.Command {
 }
 
 func newCronInstallCmd() *cobra.Command {
-	return &cobra.Command{
+	var printOnly bool
+	cmd := &cobra.Command{
 		Use:   "install <name>",
-		Short: "Install a systemd service and timer for a job",
-		Long:  "Print a systemd service and timer unit file for a cron job, which you can save and enable.",
+		Short: "Install a cron job directly to crontab",
+		Long:  "Install a configured and trusted cron job directly to the user's crontab.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return agent.InstallCronJob(args[0])
+			return agent.InstallCronJobOptions(args[0], printOnly)
+		},
+	}
+	cmd.Flags().BoolVarP(&printOnly, "print", "p", false, "print crontab entry without installing")
+	return cmd
+}
+
+func newCronUninstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "uninstall <name>",
+		Aliases: []string{"remove", "rm"},
+		Short:   "Remove a cron job from crontab",
+		Long:    "Remove an installed cron job from the user's crontab.",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			return agent.UninstallCronJob(args[0])
 		},
 	}
 }

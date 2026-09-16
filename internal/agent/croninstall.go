@@ -17,9 +17,6 @@ var cronNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 
 var cronNameStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Green)
 
-// listCronJobs prints the configured jobs and how to run or arm them. It arms
-// nothing. Jobs come from ~/.kori/jobs/, one file each, so the listing is
-// the folder as of this invocation.
 func listCronJobs() error {
 	config, files, err := loadCronState()
 	if err != nil {
@@ -50,58 +47,111 @@ func listCronJobs() error {
 	return nil
 }
 
-// installCronJob outputs a single crontab line that can be copied into `crontab -e`.
-// It validates the job using gronx and prints the schedule and command to run.
 func installCronJob(name string) error {
+	return installCronJobOptions(name, false)
+}
+
+func resolveInstallJob(name string) (settings.CronJob, string, error) {
 	_, files, err := loadCronState()
 	if err != nil {
-		return err
+		return settings.CronJob{}, "", err
 	}
 	f, err := findJobFile(files, name)
 	if err != nil {
-		return err
+		return settings.CronJob{}, "", err
 	}
 	if err := ensureTrusted(f); err != nil {
-		return err
+		return settings.CronJob{}, "", err
 	}
-	job := f.Job
-	if err := checkCronInstallable(job); err != nil {
+	if err := checkCronInstallable(f.Job); err != nil {
+		return settings.CronJob{}, "", err
+	}
+	schedule, err := normalizeCronSchedule(f.Job.When)
+	if err != nil {
+		return settings.CronJob{}, "", fmt.Errorf("job %q: %w", f.Job.Name, err)
+	}
+	return f.Job, schedule, nil
+}
+
+func installCronJobOptions(name string, printOnly bool) error {
+	ensureUserPath()
+	job, schedule, err := resolveInstallJob(name)
+	if err != nil {
 		return err
 	}
 	bin, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("locating kori: %w", err)
 	}
-	schedule := cmp.Or(job.When, "daily")
-	if schedule == "daily" || schedule == "*-*-*" {
-		schedule = "0 0 * * *"
+	logsDir := filepath.Join(settings.JobsDir(), "..", "logs")
+	logsDir = filepath.Clean(expandHome(logsDir))
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return fmt.Errorf("creating logs directory %s: %w", logsDir, err)
 	}
-	if !gronx.IsValid(schedule) {
-		return fmt.Errorf("invalid cron expression %q in job %q: must be a valid cron expression", schedule, job.Name)
+	block := formatCronBlock(job.Name, schedule, bin, logsDir)
+	if printOnly {
+		fmt.Println(block)
+		return nil
 	}
-	cmd := fmt.Sprintf("%s cron run %s", bin, name)
-	fmt.Printf("%s %s\n\n", schedule, cmd)
-	fmt.Println("(Use \"crontab -e\" command and paste the line above into it then save and close)")
+	current, err := readCrontab()
+	if err != nil {
+		return err
+	}
+	if err := writeCrontab(applyCrontabBlock(current, name, block)); err != nil {
+		return err
+	}
+	fmt.Printf("installed cron job %q (%s) to crontab\n", name, schedule)
 	return nil
 }
 
-// expandHome expands a path starting with ~/ to the user's home directory.
-func expandHome(path string) string {
-	if !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
+func uninstallCronJob(name string) error {
+	ensureUserPath()
+	current, err := readCrontab()
 	if err != nil {
-		return path
+		return err
 	}
-	return filepath.Join(home, path[2:])
+	updated, removed := stripCrontabBlock(current, name)
+	if !removed {
+		fmt.Printf("cron job %q is not installed in crontab\n", name)
+		return nil
+	}
+	if err := writeCrontab(updated); err != nil {
+		return err
+	}
+	fmt.Printf("uninstalled cron job %q from crontab\n", name)
+	return nil
 }
 
-// checkCronInstallable enforces the arm-time policy: a unit-safe name, an
-// explicit enabled: true after a test run, and a workdir — applyJob only sets
-// Root from an explicit workdir, so a job without one would execute wherever
-// the scheduler starts the unit. cron run needs the workdir rule alone; the
-// enabled rule is install-only.
+func normalizeCronSchedule(when string) (string, error) {
+	schedule := cmp.Or(when, "daily")
+	switch schedule {
+	case "daily", "*-*-*", "@daily", "@midnight":
+		schedule = "0 0 * * *"
+	case "hourly", "@hourly":
+		schedule = "0 * * * *"
+	case "weekly", "@weekly":
+		schedule = "0 0 * * 0"
+	case "monthly", "@monthly":
+		schedule = "0 0 1 * *"
+	case "yearly", "@yearly", "@annually":
+		schedule = "0 0 1 1 *"
+	}
+	if !gronx.IsValid(schedule) {
+		return "", fmt.Errorf("invalid cron expression %q", when)
+	}
+	fields := strings.Fields(schedule)
+	if len(fields) != 5 {
+		return "", fmt.Errorf("cron expression %q must have exactly 5 fields, got %d", when, len(fields))
+	}
+	return schedule, nil
+}
+
+func formatCronBlock(name, schedule, bin, logsDir string) string {
+	logPath := filepath.Join(logsDir, name+".log")
+	return fmt.Sprintf("# BEGIN KORI JOB %s\n%s %s cron run %s >> %s 2>&1\n# END KORI JOB %s",
+		name, schedule, bin, name, logPath, name)
+}
+
 func checkCronInstallable(job settings.CronJob) error {
 	if !cronNameRe.MatchString(job.Name) {
 		return fmt.Errorf("invalid cron job name %q: unit file names only allow letters, digits, and . _ -", job.Name)

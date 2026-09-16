@@ -23,13 +23,14 @@ func usagef(format string, args ...any) error {
 func printCronUsage() error {
 	fmt.Println(`usage: kori cron <command> [args]
 
-  list              show the jobs in ~/.kori/jobs/
-  run <name>        run one job now through the headless path
-  trust <name>      review one job file and approve its contents
-  install <name>    print the systemd service and timer that arm one job
-  help              show this text
+  list                 show the jobs in ~/.kori/jobs/
+  run <name>           run one job now through the headless path
+  trust <name>         review one job file and approve its contents
+  install <name>       install one job directly to crontab
+  uninstall <name>     remove one job from crontab
+  help                 show this text
 
-  --json            with list, print one JSON document instead of the text table`)
+  --json               with list, print one JSON document instead of the text table`)
 	return nil
 }
 

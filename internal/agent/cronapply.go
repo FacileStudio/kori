@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/FacileStudio/nacelle"
@@ -10,21 +13,13 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-// applyJob projects a job's overrides onto the resolved session config, group
-// by group, member by member: an empty member falls back to the config, a set
-// one wins. The two autonomy fields deliberately invert the interactive
-// defaults and are applied last so a job cannot re-arm them: a run no one is
-// watching cannot answer an approval prompt, so the gate is never armed and
-// shell stays off unless the job opts in.
 func applyJob(config settings.Config, job settings.CronJob) settings.Config {
 	cfg := config
 	if job.Workdir != "" {
 		cfg.Root = expandHome(job.Workdir)
 	}
-	cfg = mergeProvider(cfg, job)
-	cfg = mergeSecurity(cfg, job)
+	cfg = mergeConfig(cfg, job)
 	cfg = mergeToggles(cfg, job)
-	cfg = mergeReasoning(cfg, job)
 	cfg = mergeLimits(cfg, job)
 	cfg.Gates = append(cfg.Gates, job.Gates...)
 	bash := false
@@ -40,9 +35,7 @@ func applyJob(config settings.Config, job settings.CronJob) settings.Config {
 	return cfg
 }
 
-// mergeProvider copies the job's provider members that say something, the
-// group's model beating the flat model key.
-func mergeProvider(cfg settings.Config, job settings.CronJob) settings.Config {
+func mergeConfig(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Provider.Backend != "" {
 		cfg.Backend = job.Provider.Backend
 	}
@@ -57,12 +50,6 @@ func mergeProvider(cfg settings.Config, job settings.CronJob) settings.Config {
 	} else if job.Model != "" {
 		cfg.Model = job.Model
 	}
-	return cfg
-}
-
-// mergeSecurity copies the job's set security pointers; approve_tools is
-// ignored because applyJob forces it off afterwards.
-func mergeSecurity(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Security.PathIsolation != nil {
 		cfg.PathIsolation = job.Security.PathIsolation
 	}
@@ -75,8 +62,6 @@ func mergeSecurity(cfg settings.Config, job settings.CronJob) settings.Config {
 	return cfg
 }
 
-// mergeToggles copies the job's set tool toggles; run_command is handled in
-// applyJob where the commands: default lives.
 func mergeToggles(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Toggles.ParallelAgents != nil {
 		cfg.ParallelAgents = job.Toggles.ParallelAgents
@@ -99,8 +84,7 @@ func mergeToggles(cfg settings.Config, job settings.CronJob) settings.Config {
 	return cfg
 }
 
-// mergeReasoning copies the job's set reasoning members.
-func mergeReasoning(cfg settings.Config, job settings.CronJob) settings.Config {
+func mergeLimits(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Reasoning.Effort != "" {
 		cfg.Effort = job.Reasoning.Effort
 	}
@@ -110,11 +94,6 @@ func mergeReasoning(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Reasoning.Budget != nil {
 		cfg.Budget = job.Reasoning.Budget
 	}
-	return cfg
-}
-
-// mergeLimits copies the job's set limit members.
-func mergeLimits(cfg settings.Config, job settings.CronJob) settings.Config {
 	if job.Limits.MaxIterations != nil {
 		cfg.MaxIterations = job.Limits.MaxIterations
 	}
@@ -124,8 +103,6 @@ func mergeLimits(cfg settings.Config, job settings.CronJob) settings.Config {
 	return cfg
 }
 
-// jobHooks builds the library hooks a job's own hooks: block lists. They ride
-// the headless build's extra parameter next to the compaction counter.
 func jobHooks(job settings.CronJob) (map[nacelle.HookPoint][]nacelle.Hook, error) {
 	if len(job.Hooks) == 0 {
 		return nil, nil
@@ -133,33 +110,57 @@ func jobHooks(job settings.CronJob) (map[nacelle.HookPoint][]nacelle.Hook, error
 	return settings.BuildHooks(job.Hooks)
 }
 
-func runCronJob(name string) error {
+func jobContext(timeout string) (context.Context, context.CancelFunc) {
+	if timeout == "" {
+		return context.Background(), func() {}
+	}
+	d, err := time.ParseDuration(timeout)
+	if err != nil || d <= 0 {
+		return context.Background(), func() {}
+	}
+	return context.WithTimeout(context.Background(), d)
+}
+
+func loadExecutableJob(name string) (settings.CronJob, settings.Config, error) {
 	config, files, err := loadCronState()
 	if err != nil {
-		return err
+		return settings.CronJob{}, settings.Config{}, err
 	}
 	f, err := findJobFile(files, name)
 	if err != nil {
-		return err
+		return settings.CronJob{}, settings.Config{}, err
 	}
-	job := f.Job
 	if err := ensureTrusted(f); err != nil {
+		return settings.CronJob{}, settings.Config{}, err
+	}
+	if f.Job.Prompt == "" {
+		return settings.CronJob{}, settings.Config{}, fmt.Errorf("job %q has no prompt: nothing to run", name)
+	}
+	if err := validateDelivery(f.Job.Delivery); err != nil {
+		return settings.CronJob{}, settings.Config{}, err
+	}
+	return f.Job, applyJob(config, f.Job), nil
+}
+
+func runCronJob(name string) error {
+	ensureUserPath()
+	job, cfg, err := loadExecutableJob(name)
+	if err != nil {
 		return err
 	}
-	if job.Prompt == "" {
-		return fmt.Errorf("job %q has no prompt: nothing to run", name)
-	}
-	if err := validateDelivery(job.Delivery); err != nil {
-		return err
-	}
-	cfg := applyJob(config, job)
 	extra, err := jobHooks(job)
 	if err != nil {
 		return err
 	}
+	ctx, cancel := jobContext(job.Timeout)
+	defer cancel()
 	started := time.Now()
-	text, stats, runErr := runHeadlessConfig(job.Prompt, cfg, extra)
+	text, stats, runErr := runHeadlessConfigToContext(ctx, os.Stdout, job.Prompt, cfg, extra)
 	rec, status := stats.record(job, cfg.Model, started, runErr)
-	logErr := appendCronLog(job.Delivery, job.Name, status, text)
+	logText := text
+	if runErr != nil && strings.TrimSpace(logText) == "" {
+		logText = fmt.Sprintf("Error: %s\n", runErr.Error())
+	}
+	logErr := appendCronLog(job.Delivery, job.Name, status, logText)
 	return errors.Join(runErr, logErr, appendCronRun(rec))
 }

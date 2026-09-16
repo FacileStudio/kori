@@ -14,6 +14,7 @@ import (
 
 // Execute runs the kori command tree through fang and returns the execution error.
 func Execute(version string) error {
+	agent.EnsureUserPath()
 	normalizeArgs()
 	root := newRootCmd(version)
 	return fang.Execute(context.Background(), root, fang.WithVersion(version), fang.WithColorSchemeFunc(fang.DefaultColorScheme))

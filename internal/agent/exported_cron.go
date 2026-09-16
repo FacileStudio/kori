@@ -1,0 +1,40 @@
+package agent
+
+import (
+	"io"
+)
+
+// ListCronJobs lists all scheduled jobs.
+func ListCronJobs() error {
+	return listCronJobs()
+}
+
+// RunCronJob executes a scheduled cron job by name.
+func RunCronJob(name string) error {
+	return runCronJob(name)
+}
+
+// TrustCronJob reviews and trusts a cron job file.
+func TrustCronJob(name string, in io.Reader) error {
+	return trustCronJob(name, in)
+}
+
+// InstallCronJob installs a cron job to crontab.
+func InstallCronJob(name string) error {
+	return installCronJob(name)
+}
+
+// InstallCronJobOptions installs a cron job to crontab with optional print-only mode.
+func InstallCronJobOptions(name string, printOnly bool) error {
+	return installCronJobOptions(name, printOnly)
+}
+
+// UninstallCronJob removes a cron job from crontab.
+func UninstallCronJob(name string) error {
+	return uninstallCronJob(name)
+}
+
+// EnsureUserPath augments PATH with common user binary directories.
+func EnsureUserPath() {
+	ensureUserPath()
+}

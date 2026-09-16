@@ -33,6 +33,9 @@ func TestCronHelpCommand(t *testing.T) {
 	if !bytes.Contains(buf.Bytes(), []byte("install")) {
 		t.Errorf("expected install subcommand in cron help, got: %s", buf.String())
 	}
+	if !bytes.Contains(buf.Bytes(), []byte("uninstall")) {
+		t.Errorf("expected uninstall subcommand in cron help, got: %s", buf.String())
+	}
 }
 
 func TestBenchHelpCommand(t *testing.T) {

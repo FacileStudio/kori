@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,12 +17,40 @@ func ensureUserPath() {
 	}
 	current := os.Getenv("PATH")
 	toAdd := missingUserDirs(home, current)
-	if len(toAdd) == 0 {
-		return
+	if len(toAdd) > 0 {
+		if err := os.Setenv("PATH", strings.Join(toAdd, string(filepath.ListSeparator))+string(filepath.ListSeparator)+current); err != nil {
+			return
+		}
 	}
-	if err := os.Setenv("PATH", strings.Join(toAdd, string(filepath.ListSeparator))+string(filepath.ListSeparator)+current); err != nil {
-		return
+	ensureUserEnv()
+}
+
+func ensureUserEnv() {
+	keys := []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"}
+	for _, k := range keys {
+		if os.Getenv(k) != "" {
+			continue
+		}
+		val := getTiroirKey(k)
+		if val == "" {
+			continue
+		}
+		if err := os.Setenv(k, val); err != nil {
+			return
+		}
 	}
+}
+
+func getTiroirKey(key string) string {
+	bin, err := exec.LookPath("tiroir")
+	if err != nil {
+		return ""
+	}
+	out, err := exec.Command(bin, "get", key).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func missingUserDirs(home, current string) []string {
@@ -29,6 +58,16 @@ func missingUserDirs(home, current string) []string {
 		filepath.Join(home, ".local", "bin"),
 		filepath.Join(home, ".cargo", "bin"),
 		filepath.Join(home, ".bun", "bin"),
+		filepath.Join(home, ".local", "share", "mise", "shims"),
+		filepath.Join(home, "go", "bin"),
+		filepath.Join(home, ".local", "share", "bob", "nvim-bin"),
+		filepath.Join(home, ".grok", "bin"),
+		filepath.Join(home, ".opencode", "bin"),
+		"/usr/local/bin",
+		"/snap/bin",
+	}
+	if matches, err := filepath.Glob(filepath.Join(home, ".local", "share", "pi-node", "*", "bin")); err == nil {
+		candidates = append(candidates, matches...)
 	}
 	var missing []string
 	for _, c := range candidates {

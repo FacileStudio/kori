@@ -440,7 +440,8 @@ subcommand ties the two together:
 ```sh
 kori cron list            # every job, trusted or not
 kori cron run news        # run one job now, through the headless path
-kori cron install news    # print the systemd service and timer that arm it
+kori cron install news    # install the job directly into crontab
+kori cron uninstall news  # remove the job from crontab
 kori cron trust news      # approve one job file's current contents
 ```
 
