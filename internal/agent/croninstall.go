@@ -40,7 +40,7 @@ func listCronJobs() error {
 		}
 		job := f.Job
 		fmt.Printf("%-20s when=%-18s enabled=%t commands=%t trusted=%t workdir=%s delivery=%s\n",
-			job.Name, job.When, jobEnabled(job), jobCommands(job), trusted, job.Workdir, job.Delivery)
+			job.Name, job.When, jobEnabled(job), job.Commands != nil && *job.Commands, trusted, job.Workdir, job.Delivery)
 	}
 	fmt.Println("\nrun one now:        kori cron run <name>")
 	fmt.Println("trust one:          kori cron trust <name>")
@@ -74,18 +74,26 @@ func installCronJob(name string) error {
 	workdir := expandHome(job.Workdir)
 	svc, timer := cronUnits(job.Name, bin, workdir, cmp.Or(job.When, "daily"), cmp.Or(job.Timeout, "300"))
 
+	if err := writeCronUnits(job.Name, svc, timer); err != nil {
+		return err
+	}
+	return nil
+}
+
+// writeCronUnits writes the systemd service+timer files and enables+starts the timer.
+func writeCronUnits(name, svc, timer string) error {
 	dir := filepath.Join(expandHome("~"), ".config", "systemd", "user")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.service", job.Name)), []byte(svc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.service", name)), []byte(svc), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", job.Name)), []byte(timer), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("kori-%s.timer", name)), []byte(timer), 0o644); err != nil {
 		return err
 	}
-	if exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", job.Name)).Run() != nil {
-		return exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", job.Name)).Run()
+	if exec.Command("systemctl", "--user", "enable", fmt.Sprintf("kori-%s.timer", name)).Run() != nil {
+		return exec.Command("systemctl", "--user", "start", fmt.Sprintf("kori-%s.timer", name)).Run()
 	}
 	return nil
 }
@@ -163,12 +171,8 @@ func checkCronInstallable(job settings.CronJob) error {
 	return nil
 }
 
-// jobEnabled and jobCommands read a job's pointer settings with the policy
+// jobEnabled reads a job's pointer settings with the policy
 // defaults filled in: a job is disabled and shell-less until it says otherwise.
 func jobEnabled(job settings.CronJob) bool {
 	return job.Enabled != nil && *job.Enabled
-}
-
-func jobCommands(job settings.CronJob) bool {
-	return job.Commands != nil && *job.Commands
 }
