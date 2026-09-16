@@ -57,10 +57,11 @@ func TestFindJobFile(t *testing.T) {
 }
 
 func TestJobPointerDefaults(t *testing.T) {
-	if jobEnabled(settings.CronJob{}) {
+	job := settings.CronJob{}
+	if job.IsEnabled() {
 		t.Errorf("a job with no enabled setting must default to disabled")
 	}
-	if jobCommands(settings.CronJob{}) {
+	if jobCommands(job) {
 		t.Errorf("a job with no commands setting must default to shell-less")
 	}
 }

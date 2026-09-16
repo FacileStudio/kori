@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/adhocore/gronx v1.20.3 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.63.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

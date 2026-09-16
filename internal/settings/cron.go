@@ -136,6 +136,12 @@ func decodeJob(raw []byte, path string) (CronJob, error) {
 	return job, nil
 }
 
+// IsEnabled returns whether the job is enabled. A nil pointer (the
+// default when the job file is silent) means disabled.
+func (j CronJob) IsEnabled() bool {
+	return j.Enabled != nil && *j.Enabled
+}
+
 // repointCronKey rewrites the strict refusal of a top-level cron: key so the
 // error says where jobs live now; every other unknown field keeps the
 // decoder's own message.

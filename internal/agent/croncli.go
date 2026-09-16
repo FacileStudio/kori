@@ -50,7 +50,7 @@ func cronJobsJSON(jobs []settings.CronJob) ([]byte, error) {
 		out = append(out, cronJobJSON{
 			Name:     job.Name,
 			When:     job.When,
-			Enabled:  jobEnabled(job),
+			Enabled:  job.IsEnabled(),
 			Commands: jobCommands(job),
 			Workdir:  job.Workdir,
 			Delivery: job.Delivery,
