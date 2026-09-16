@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.65.2] - 2026-09-16
+
+### Added
+- Refactor croninstall: extract writeCronUnits helper, rename parameter job→name
+- Add jobcommands.go with jobCommands helper function
+
 ## [0.65.1] - 2026-09-16
 
 ### Changed
