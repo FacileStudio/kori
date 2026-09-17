@@ -55,6 +55,7 @@ func TestModelCommandOpensMenuWhenEmpty(t *testing.T) {
 }
 
 func TestModelCommandSwitchDirectModel(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
 	m := &Model{}
 	m.activeBackend = "anthropic"
 	m.activeModel = "claude-opus-5"
@@ -64,11 +65,12 @@ func TestModelCommandSwitchDirectModel(t *testing.T) {
 		t.Errorf("expected nil cmd, got %v", cmd)
 	}
 	if m.activeBackend != "openai" || m.activeModel != "gpt-4o" {
-		t.Errorf("got %s/%s, want openai/gpt-4o", m.activeBackend, m.activeModel)
+		t.Errorf("got %s/%s, want openai/gpt-4o (unprinted: %v)", m.activeBackend, m.activeModel, m.unprinted)
 	}
 }
 
 func TestModelCommandSwitchProfile(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-key")
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	profilesDir := filepath.Join(dir, ".kori", "profiles")
@@ -114,6 +116,7 @@ func TestStatusCmdOutputsActiveModel(t *testing.T) {
 }
 
 func TestApplyProfileSwitchResetsReasoningBudget(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-key")
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	profilesDir := filepath.Join(dir, ".kori", "profiles")
@@ -135,11 +138,8 @@ reasoning:
 	m.activeBackend = "anthropic"
 	m.activeModel = "claude-opus-5"
 	m.delegate = nacelle.Config{
-		System: "test",
-		Thinking: nacelle.Thinking{
-			Budget: 4096,
-			Effort: nacelle.EffortHigh,
-		},
+		System:   "test",
+		Thinking: nacelle.Thinking{Budget: 4096, Effort: nacelle.EffortHigh},
 	}
 
 	if cmd := m.modelCmd("nobudget"); cmd != nil {

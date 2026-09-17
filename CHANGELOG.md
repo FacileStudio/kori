@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.67.1] - 2026-09-18
+
+### Fixed
+- fix(tui): isolate model command unit tests from environment API keys
+
 ## [0.67.0] - 2026-09-18
 
 ### Added
