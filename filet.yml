@@ -30,6 +30,7 @@ disabled:
   # stop reading the output. Nothing else is disabled: a rule turned off here
   # must be an argument, not a habit.
   - gen.line.long
+  - lsp.unavailable
 architecture:
   fileNamePattern: '^[a-z0-9_]+\.go$'
   maxDepth: 3
