@@ -149,6 +149,10 @@ func (m *Model) decide(press tea.KeyPressMsg) {
 
 func (m *Model) refreshMenu() {
 	m.prompt.SetStyles(m.promptStyles)
+	if m.modelPicker {
+		m.modelPicker = false
+		m.menu = *menu.New(menuItems(m.skills))
+	}
 	w := m.cursorWordAt()
 	if strings.HasPrefix(w.text, "/") && w.full == 0 {
 		m.menu.Filter(w.text)
@@ -166,11 +170,22 @@ func (m *Model) navigateMenu(press tea.KeyPressMsg) bool {
 		m.menu.Down()
 	case "tab", "enter":
 		if it, ok := m.menu.SelectedItem(); ok {
-			m.prompt.SetValue(m.replaceCursorWord(it.Value))
-			m.prompt.CursorEnd()
-			m.menu.Dismiss()
+			if m.modelPicker {
+				m.modelPicker = false
+				m.menu.Dismiss()
+				m.menu = *menu.New(menuItems(m.skills))
+				m.switchModel(strings.TrimPrefix(it.Value, "/model "))
+			} else {
+				m.prompt.SetValue(m.replaceCursorWord(it.Value))
+				m.prompt.CursorEnd()
+				m.menu.Dismiss()
+			}
 		}
 	case "esc":
+		if m.modelPicker {
+			m.modelPicker = false
+			m.menu = *menu.New(menuItems(m.skills))
+		}
 		m.menu.Dismiss()
 	default:
 		return false

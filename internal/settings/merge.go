@@ -80,6 +80,9 @@ func (c *Config) mergeStrings(over Config) {
 	if over.System != "" {
 		c.System = over.System
 	}
+	if over.Profile != "" {
+		c.Profile = over.Profile
+	}
 }
 
 func mergeBool(dst **bool, src *bool) {

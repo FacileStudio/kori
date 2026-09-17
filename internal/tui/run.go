@@ -81,6 +81,8 @@ type UISession struct {
 	DelegateConfig    nacelle.Config
 	Mode              string
 	TransparentBlocks bool
+	BaseURL           string
+	APIKey            string
 	SessionConfig
 }
 

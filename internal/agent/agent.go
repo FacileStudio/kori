@@ -2,15 +2,10 @@
 package agent
 
 import (
-	"fmt"
-
 	"github.com/FacileStudio/nacelle"
-	"github.com/FacileStudio/nacelle/anthropic"
-	"github.com/FacileStudio/nacelle/google"
-	"github.com/FacileStudio/nacelle/openai"
-	"github.com/FacileStudio/nacelle/openrouter"
 
 	"github.com/FacileStudio/kori/internal/diagnostics"
+	"github.com/FacileStudio/kori/internal/provider"
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
@@ -87,34 +82,10 @@ func build(config settings.Config, local []nacelle.Tool, approve nacelle.Approve
 // caller did not choose and will be billed for, which is the same reason the
 // library itself ships no default backend.
 func chosen(config Config) (nacelle.Backend, error) {
-	switch config.Backend {
-	case "anthropic":
-		if config.BaseURL != "" || config.APIKey != "" {
-			return nil, fmt.Errorf("anthropic takes no custom endpoint: base_url and api_key apply only to google, openai, or openrouter")
-		}
-		return anthropic.New(anthropic.Config{Model: config.Model}), nil
-	case "google":
-		return google.New(google.Config{
-			Model:   config.Model,
-			BaseURL: config.BaseURL,
-			APIKey:  config.APIKey,
-		})
-	case "openai":
-		return openai.New(openai.Config{
-			Model:   config.Model,
-			BaseURL: config.BaseURL,
-			APIKey:  config.APIKey,
-		})
-	case "openrouter":
-		if config.Model == "" {
-			return nil, fmt.Errorf("openrouter needs a model: pass -model, or set model in ~/%s", settings.ConfigFile)
-		}
-		return openrouter.New(openrouter.Config{
-			Model:   config.Model,
-			BaseURL: config.BaseURL,
-			APIKey:  config.APIKey,
-		})
-	default:
-		return nil, fmt.Errorf("unknown backend %q, want anthropic, google, openai, or openrouter", config.Backend)
-	}
+	return provider.New(provider.Config{
+		Backend: config.Backend,
+		Model:   config.Model,
+		BaseURL: config.BaseURL,
+		APIKey:  config.APIKey,
+	})
 }

@@ -5,6 +5,7 @@ import "github.com/spf13/cobra"
 type modelFlags struct {
 	backend  string
 	model    string
+	profile  string
 	effort   string
 	thinking bool
 	budget   int64
@@ -69,6 +70,7 @@ func bindModelFlags(cmd *cobra.Command, f *modelFlags) {
 	fl := cmd.Flags()
 	fl.StringVar(&f.backend, "backend", "anthropic", "Model provider: anthropic, google, openai, or openrouter")
 	fl.StringVar(&f.model, "model", "", "Model identifier, defaulting to provider default")
+	fl.StringVar(&f.profile, "profile", "", "Profile name from ~/.kori/profiles/")
 	fl.StringVar(&f.effort, "effort", "", "Reasoning effort: none, minimal, low, medium, high, xhigh, max")
 	fl.BoolVar(&f.thinking, "thinking", true, "Stream the model's internal reasoning")
 	fl.Int64Var(&f.budget, "reasoning-budget", 0, "Token ceiling for reasoning per turn (0 sets no ceiling)")

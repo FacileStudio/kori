@@ -18,6 +18,10 @@ func boot(m *Model, c UISession) {
 	m.run.root = c.Root
 	m.run.diffs = c.Diffs
 	m.delegate = c.DelegateConfig
+	m.activeBackend = c.Backend
+	m.activeModel = c.Model
+	m.activeBaseURL = c.BaseURL
+	m.activeAPIKey = c.APIKey
 	m.mode = renderMode(c.Mode)
 	m.transparent = c.TransparentBlocks
 	m.diagLoop = c.Startup.Diagnostics

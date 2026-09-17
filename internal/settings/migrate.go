@@ -52,3 +52,12 @@ func missing(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsNotExist(err)
 }
+
+// ConfigPath is where the config file lives (HOME).
+func ConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ConfigFile)
+}

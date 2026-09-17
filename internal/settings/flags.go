@@ -18,7 +18,7 @@ func (p *pathList) Set(v string) error { *p = append(*p, v); return nil }
 
 // declared holds every flag pointer returned by declareFlags.
 type declared struct {
-	backend, model, root, system *string
+	backend, model, root, system, profile *string
 	reasoningFlags
 	togglesFlags
 	iterations *int
@@ -75,6 +75,7 @@ func declareFlags(fallback Config) declared {
 		sourceFlags: declareSources(fallback),
 		backend:     flag.String("backend", fallback.Backend, "anthropic, google, openai, or openrouter"),
 		model:       flag.String("model", fallback.Model, "model id, defaulting to the backend's own"),
+		profile:     flag.String("profile", fallback.Profile, "profile name from ~/.kori/profiles/"),
 		root:        flag.String("root", fallback.Root, "directory the file tools may reach"),
 		system:      flag.String("system-prompt", fallback.System, "system prompt"),
 		uiFlags: uiFlags{

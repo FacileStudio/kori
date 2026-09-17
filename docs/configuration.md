@@ -275,6 +275,41 @@ uses.
 than a URL and key. `openai`, `openrouter` and `google` all take a `BaseURL`. A local OpenAI-compatible
 gateway is the overwhelmingly common case, and it is the case that works.
 
+### Profiles and /model command
+
+Profiles define reusable model and provider configurations in `~/.kori/profiles/<name>.yml`. Kori reads any `.yml` file in that folder on startup and during interactive sessions.
+
+```yaml
+# ~/.kori/profiles/fast.yml
+name: fast
+provider:
+  backend: google
+  model: gemini-2.5-flash
+reasoning:
+  effort: low
+  thinking: true
+  budget: 2048
+```
+
+You can select a profile in `~/.kori.yml` using the top-level `profile` key:
+
+```yaml
+profile: fast
+```
+
+Or pass `-profile <name>` on the command line, or set `KORI_PROFILE=<name>` in the environment. Precedence order follows:
+
+```
+defaults < profile < ~/.kori.yml < environment < flags
+```
+
+During an interactive session, the `/model` command switches models on the fly:
+
+- `/model` opens an interactive dropdown menu listing discovered profiles and detected provider models.
+- `/model <name>` switches immediately to the named profile or model string (e.g. `/model fast` or `/model openai/gpt-5.4`).
+
+The conversation history remains intact when switching models mid-session.
+
 ## Context and skills
 
 Four things the TUI adds beyond flags and the model's own tools, all client-side, none of them
@@ -573,6 +608,7 @@ question:
 | `/clear` | Reset the transcript, the conversation sent to the model, and the running cost total. Same client, new session. Never starts a run. |
 | `/cost` | Display cumulative token usage, cost, and tools executed so far. Never starts a run. |
 | `/help` | List the commands above and the keybindings (esc, ctrl+c/ctrl+\, ctrl+t, ctrl+g). Never starts a run. |
+| `/model [name]` | Switch active model or profile mid-session, or open model picker. Never starts a run. |
 | `/quit` | Quit. Never starts a run. |
 | `/resume` | Resume the most recent recorded session for the current project. Never starts a run. |
 | `/sessions` | List recorded sessions for the current project with timestamps and models. Never starts a run. |

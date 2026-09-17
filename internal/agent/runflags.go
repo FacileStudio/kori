@@ -86,6 +86,8 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 		DelegateConfig:    get.config,
 		Mode:              *p.config.Mode,
 		TransparentBlocks: *p.config.TransparentBlocks,
+		BaseURL:           p.config.BaseURL,
+		APIKey:            p.config.APIKey,
 		SessionConfig:     sessionConfig(p, found, get.backend),
 	}, nil
 }

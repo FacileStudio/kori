@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/FacileStudio/nacelle/mcp/client"
 	"go.yaml.in/yaml/v4"
@@ -58,6 +57,8 @@ type Session struct {
 // can say nothing about a setting rather than saying zero. Its only credential is a custom endpoint's api_key.
 type Config struct {
 	NoConfig *bool `yaml:"-"`
+
+	Profile string `yaml:"profile"`
 
 	// GatesFile is the --gates-file path; flag-only, like resume.
 	GatesFile string `yaml:"-"`
@@ -187,15 +188,6 @@ func DerefBool(b *bool) bool {
 	return b != nil && *b
 }
 
-// ConfigPath is where the config file lives (HOME).
-func ConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ConfigFile)
-}
-
 // Load reads the config file. A missing file is not an error — most people
 // never write one — but an unreadable or malformed one is.
 func Load(path string) (Config, error) {
@@ -226,11 +218,9 @@ func Load(path string) (Config, error) {
 func Settings(system string, flags Config) (Config, error) {
 	migrateLegacyHome()
 	migrateLegacyConfig()
+	env := FromEnv()
 	if flags.NoConfig != nil && *flags.NoConfig {
-		resolved := Defaults(system)
-		resolved.merge(FromEnv())
-		resolved.merge(flags)
-		return resolveGates(resolved, flags.GatesFile)
+		return settingsNoConfig(system, flags, env)
 	}
 	if created, err := Scaffold(ConfigPath()); err != nil {
 		return Config{}, err
@@ -242,8 +232,10 @@ func Settings(system string, flags Config) (Config, error) {
 		return Config{}, err
 	}
 	resolved := Defaults(system)
-	resolved.merge(file)
-	resolved.merge(FromEnv())
-	resolved.merge(flags)
+	for _, layer := range []Config{file, env, flags} {
+		if err := applyLayer(&resolved, layer); err != nil {
+			return Config{}, err
+		}
+	}
 	return resolveGates(resolved, flags.GatesFile)
 }

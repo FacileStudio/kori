@@ -29,6 +29,7 @@ func providerEnv() Provider {
 // FromEnv is the settings layer the environment supplies.
 func FromEnv() Config {
 	return Config{
+		Profile:  envGet("PROFILE"),
 		Provider: providerEnv(),
 		Session:  Session{Root: envGet("ROOT"), System: envGet("SYSTEM_PROMPT")},
 		Limits: Limits{

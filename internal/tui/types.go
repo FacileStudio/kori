@@ -24,8 +24,9 @@ import (
 // exists only to keep model's own field count from growing by one every
 // time this list does.
 type commandState struct {
-	skills map[string]skill
-	menu   menu.Menu
+	skills      map[string]skill
+	menu        menu.Menu
+	modelPicker bool
 }
 
 // look is how a line is drawn rather than what it says: the palette resolved
@@ -58,15 +59,19 @@ type look struct {
 // delegate is the Config the main agent was built from, kept so a /parallel
 // fan-out clones it for its own nested agents.
 type core struct {
-	agent       *nacelle.Agent
-	banner      string
-	autoResume  bool
-	resumePath  string
-	delegate    nacelle.Config
-	herdrClient *herdr.Client
-	diagLoop    bool
-	detached    bool
-	detachedMsg string
+	agent         *nacelle.Agent
+	banner        string
+	autoResume    bool
+	resumePath    string
+	delegate      nacelle.Config
+	herdrClient   *herdr.Client
+	diagLoop      bool
+	detached      bool
+	detachedMsg   string
+	activeBackend string
+	activeModel   string
+	activeBaseURL string
+	activeAPIKey  string
 }
 
 type heldEntry struct {

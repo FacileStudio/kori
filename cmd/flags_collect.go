@@ -23,6 +23,9 @@ func collectModelFlags(cmd *cobra.Command, f *modelFlags, cfg *settings.Config) 
 	if fl.Changed("model") {
 		cfg.Model = f.model
 	}
+	if fl.Changed("profile") {
+		cfg.Profile = f.profile
+	}
 	if fl.Changed("effort") {
 		cfg.Effort = f.effort
 	}

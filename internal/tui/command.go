@@ -29,6 +29,7 @@ var commands = map[string]command{
 	},
 	"detach":   (*Model).detachCmd,
 	"help":     (*Model).help,
+	"model":    func(m *Model) tea.Cmd { return m.modelCmd("") },
 	"quit":     func(_ *Model) tea.Cmd { return tea.Quit },
 	"resume":   (*Model).resumeCmd,
 	"sessions": (*Model).sessionsCmd,
@@ -42,6 +43,9 @@ func (m *Model) parseCommand(line string) (command, bool) {
 	name, rest, _ := strings.Cut(line[1:], " ")
 	if name == "parallel" {
 		return func(m *Model) tea.Cmd { return m.handleParallelCommand(rest) }, true
+	}
+	if name == "model" {
+		return func(m *Model) tea.Cmd { return m.modelCmd(rest) }, true
 	}
 	if cmd, ok := commands[name]; ok {
 		return cmd, true
@@ -94,6 +98,7 @@ func (m *Model) help() tea.Cmd {
 		"/cost — what this session has spent so far",
 		"/detach — detach session to background (also /bg, /background)",
 		"/help — show this message",
+		"/model [name] — switch active model or profile mid-session, or open model picker",
 		"/quit — quit",
 		"/resume — resume the most recent session for this project",
 		"/sessions — list all available sessions for this project",
@@ -117,6 +122,7 @@ func (m *Model) help() tea.Cmd {
 func (m *Model) statusCmd() tea.Cmd {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("session · %s", lasted(time.Since(m.began))))
+	lines = append(lines, fmt.Sprintf("model · %s/%s", m.activeBackend, m.activeModel))
 	lines = append(lines, fmt.Sprintf("tools · %d total · %d failed", m.tools, m.failed))
 	total := m.spent.Add(m.run.usage)
 	lines = append(lines, fmt.Sprintf("tokens · ↑%s ↓%s",
