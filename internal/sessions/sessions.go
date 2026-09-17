@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/FacileStudio/kori/internal/settings"
@@ -145,7 +144,7 @@ func newSessionLog(backend, model, root string) *sessionLog {
 		absRoot = abs
 	}
 	now := time.Now()
-	name := now.UTC().Format("20060102T150405Z") + "-" + strconv.Itoa(os.Getpid()) + ".jsonl"
+	name := generateSessionID(dir) + ".jsonl"
 	log := &sessionLog{
 		path:    filepath.Join(dir, name),
 		backend: backend,

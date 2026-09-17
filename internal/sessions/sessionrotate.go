@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/FacileStudio/nacelle"
@@ -87,7 +86,7 @@ func (l *SessionLog) rotate() {
 		return
 	}
 	now := time.Now()
-	name := now.UTC().Format("20060102T150405.000Z") + "-" + strconv.Itoa(os.Getpid()) + ".jsonl"
+	name := generateSessionID(filepath.Dir(l.path)) + ".jsonl"
 	l.path = filepath.Join(filepath.Dir(l.path), name)
 	l.lastSize = 0
 	l.write(sessionHeader{

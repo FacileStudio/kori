@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +79,18 @@ func TestBuildDetachedArgs(t *testing.T) {
 	}
 	if args[0] != "--print" || args[1] != "hello world" {
 		t.Errorf("expected --print 'hello world', got %v", args)
+	}
+}
+
+func TestResumeNoSessionsReturnsError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cmd := newRootCmd("v0.57.0")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"resume"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "no session found to resume") {
+		t.Fatalf("expected 'no session found to resume', got %v", err)
 	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/FacileStudio/kori/internal/agent"
 	"github.com/FacileStudio/kori/internal/sessions"
@@ -18,7 +19,7 @@ func newSessionsCmd(version string) *cobra.Command {
 		Long: `Manage background and interactive kori agent sessions.
 
 Use 'kori sessions list' (or 'kori list') to view active and past sessions.
-Use 'kori sessions attach <id>' to resume an interactive session.
+Use 'kori sessions attach [id]' to resume an interactive session.
 Use 'kori sessions kill <id>' to terminate a running background session.
 Use 'kori sessions rm <id>' to delete a session.`,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -35,26 +36,34 @@ Use 'kori sessions rm <id>' to delete a session.`,
 
 func newResumeCmd(version string) *cobra.Command {
 	return &cobra.Command{
-		Use:     "resume <id>",
+		Use:     "resume [id]",
 		Aliases: []string{"attach"},
 		Short:   "Resume an agent session interactively",
-		Long:    "Attach to and resume an existing agent session by session ID or PID.",
-		Args:    cobra.ExactArgs(1),
+		Long:    "Attach to and resume an existing agent session by session ID or PID. If no ID is given, resumes the last session.",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runSessionsAttach(version, args[0])
+			id := ""
+			if len(args) > 0 {
+				id = args[0]
+			}
+			return runSessionsAttach(version, id)
 		},
 	}
 }
 
 func newSessionsAttachCmd(version string) *cobra.Command {
 	return &cobra.Command{
-		Use:     "attach <id>",
+		Use:     "attach [id]",
 		Aliases: []string{"resume"},
 		Short:   "Resume an agent session interactively",
-		Long:    "Attach to and resume an existing agent session by session ID or PID.",
-		Args:    cobra.ExactArgs(1),
+		Long:    "Attach to and resume an existing agent session by session ID or PID. If no ID is given, resumes the last session.",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return runSessionsAttach(version, args[0])
+			id := ""
+			if len(args) > 0 {
+				id = args[0]
+			}
+			return runSessionsAttach(version, id)
 		},
 	}
 }
@@ -86,6 +95,20 @@ func newSessionsDeleteCmd() *cobra.Command {
 }
 
 func runSessionsAttach(version string, id string) error {
+	if id == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
+		files := sessions.ListSessionFiles(cwd)
+		if len(files) == 0 {
+			files = sessions.ListSessionFiles("")
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("no session found to resume")
+		}
+		id = files[0]
+	}
 	cfg, err := settings.Settings("", settings.Config{})
 	if err != nil {
 		return err

@@ -129,26 +129,3 @@ func parseSessionEntry(line string) (nacelle.Message, bool) {
 		return nacelle.Message{}, false
 	}
 }
-
-// ResolveSession turns a --resume value into a session file path. A value
-// that names an existing file is used as-is; anything else is matched against
-// every session on disk by file name, so a bare id like
-// 2026-09-10T14:03:00Z-1234 (with or without the .jsonl suffix) works from
-// any directory. Returns "" when nothing matches.
-func ResolveSession(value string) string {
-	if value == "" {
-		return ""
-	}
-	if info, err := os.Stat(value); err == nil && !info.IsDir() {
-		return value
-	}
-	trimmed := strings.TrimSuffix(value, ".jsonl")
-	for _, p := range ListSessionFiles("") {
-		name := filepath.Base(p)
-		base := strings.TrimSuffix(name, ".jsonl")
-		if name == value || name == trimmed || name == trimmed+".jsonl" || base == trimmed || strings.HasSuffix(base, "-"+trimmed) {
-			return p
-		}
-	}
-	return ""
-}
