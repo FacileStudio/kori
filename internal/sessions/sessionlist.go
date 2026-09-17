@@ -1,15 +1,14 @@
 package sessions
 
 import (
+	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/FacileStudio/kori/internal/settings"
 	"sort"
 	"strings"
 
+	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/nacelle"
 )
 
@@ -17,11 +16,11 @@ import (
 // for the given project root. If projectRoot is empty, it lists all sessions.
 // If the sessions directory doesn't exist, it returns an empty slice.
 func ListSessionFiles(projectRoot string) []string {
-	sessionsDir := projectSessionsDir(projectRoot)
-	if sessionsDir == "" {
+	base, err := settings.HomeDir()
+	if err != nil {
 		return nil
 	}
-
+	sessionsDir := filepath.Join(base, "sessions")
 	files, err := os.ReadDir(sessionsDir)
 	if err != nil {
 		return nil
@@ -30,35 +29,49 @@ func ListSessionFiles(projectRoot string) []string {
 	var sessionFiles []string
 	for _, f := range files {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".jsonl") {
-			sessionFiles = append(sessionFiles, filepath.Join(sessionsDir, f.Name()))
+			fullPath := filepath.Join(sessionsDir, f.Name())
+			if matchProjectRoot(fullPath, projectRoot) {
+				sessionFiles = append(sessionFiles, fullPath)
+			}
 		}
 	}
 	sortSessionsByMtime(sessionFiles)
 	return sessionFiles
 }
 
-func projectSessionsDir(projectRoot string) string {
-	base, err := settings.HomeDir()
+func peekSessionRoot(path string) string {
+	file, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
-	dir := filepath.Join(base, "sessions")
-	if projectRoot == "" {
-		return dir
-	}
-	clean := filepath.Clean(projectRoot)
-	switch clean {
-	case ".":
-		return dir
-	case "..":
-		return filepath.Join(dir, filepath.Base(clean))
-	default:
-		candidate := filepath.Join(dir, clean)
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		var header sessionHeader
+		if json.Unmarshal([]byte(scanner.Text()), &header) == nil && header.Version == 1 {
+			return header.Root
 		}
-		return dir
 	}
+	return ""
+}
+
+func matchProjectRoot(path, projectRoot string) bool {
+	if projectRoot == "" {
+		return true
+	}
+	root := peekSessionRoot(path)
+	if root == "" || root == "." {
+		return false
+	}
+	targetAbs, err := filepath.Abs(projectRoot)
+	if err != nil {
+		targetAbs = filepath.Clean(projectRoot)
+	}
+	headerAbs, err := filepath.Abs(root)
+	if err != nil {
+		headerAbs = filepath.Clean(root)
+	}
+	return filepath.Clean(targetAbs) == filepath.Clean(headerAbs)
 }
 
 func sortSessionsByMtime(files []string) {
@@ -138,41 +151,4 @@ func ResolveSession(value string) string {
 		}
 	}
 	return ""
-}
-
-// FormatSessionEntry formats a session file entry for display.
-func FormatSessionEntry(filePath string) string {
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return fmt.Sprintf("  %s (error reading file)", filepath.Base(filePath))
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Sprintf("  %s (unreadable)", filepath.Base(filePath))
-	}
-
-	linesData := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	if len(linesData) == 0 {
-		return fmt.Sprintf("  %s · %s",
-			filepath.Base(filePath),
-			info.ModTime().Format("2006-01-02 15:04:05"))
-	}
-
-	var header sessionHeader
-	if err := json.Unmarshal([]byte(linesData[0]), &header); err == nil && header.Version == 1 {
-		started := header.Started
-		if len(started) > 19 {
-			started = started[:19]
-		}
-		return fmt.Sprintf("  %s · %s · %s · %s",
-			filepath.Base(filePath),
-			header.Backend,
-			header.Model,
-			started)
-	}
-
-	return fmt.Sprintf("  %s · %s",
-		filepath.Base(filePath),
-		info.ModTime().Format("2006-01-02 15:04:05"))
 }

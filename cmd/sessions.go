@@ -19,7 +19,8 @@ func newSessionsCmd(version string) *cobra.Command {
 
 Use 'kori sessions list' (or 'kori list') to view active and past sessions.
 Use 'kori sessions attach <id>' to resume an interactive session.
-Use 'kori sessions kill <id>' to terminate a running background session.`,
+Use 'kori sessions kill <id>' to terminate a running background session.
+Use 'kori sessions rm <id>' to delete a session.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			return c.Help()
 		},
@@ -28,6 +29,7 @@ Use 'kori sessions kill <id>' to terminate a running background session.`,
 	cmd.AddCommand(newSessionsListCmd(&f))
 	cmd.AddCommand(newSessionsAttachCmd(version))
 	cmd.AddCommand(newSessionsKillCmd())
+	cmd.AddCommand(newSessionsDeleteCmd())
 	return cmd
 }
 
@@ -70,6 +72,19 @@ func newSessionsKillCmd() *cobra.Command {
 	}
 }
 
+func newSessionsDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "rm <id>",
+		Aliases: []string{"delete", "remove"},
+		Short:   "Delete a session file",
+		Long:    "Permanently remove an agent session by session ID or PID.",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			return runSessionsDelete(args[0])
+		},
+	}
+}
+
 func runSessionsAttach(version string, id string) error {
 	cfg, err := settings.Settings("", settings.Config{})
 	if err != nil {
@@ -88,5 +103,13 @@ func runSessionsKill(id string) error {
 		return err
 	}
 	fmt.Printf("killed session %s (PID %d)\n", id, session.PID)
+	return nil
+}
+
+func runSessionsDelete(id string) error {
+	if err := sessions.DeleteSession(id); err != nil {
+		return err
+	}
+	fmt.Printf("deleted session %s\n", id)
 	return nil
 }

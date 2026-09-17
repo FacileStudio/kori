@@ -140,20 +140,24 @@ func newSessionLog(backend, model, root string) *sessionLog {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil
 	}
+	absRoot := root
+	if abs, err := filepath.Abs(root); err == nil {
+		absRoot = abs
+	}
 	now := time.Now()
 	name := now.UTC().Format("20060102T150405Z") + "-" + strconv.Itoa(os.Getpid()) + ".jsonl"
 	log := &sessionLog{
 		path:    filepath.Join(dir, name),
 		backend: backend,
 		model:   model,
-		root:    root,
+		root:    absRoot,
 	}
 	if !log.write(sessionHeader{
 		Version: 1,
 		Started: now.Format(time.RFC3339Nano),
 		Backend: backend,
 		Model:   model,
-		Root:    root,
+		Root:    absRoot,
 		PID:     os.Getpid(),
 	}) {
 		return nil

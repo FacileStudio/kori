@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -25,7 +26,7 @@ func KillSession(idOrPath string) error {
 		return fmt.Errorf("invalid pid %d for session %s", session.PID, session.ID)
 	}
 	if !IsPIDRunning(session.PID) {
-		return MarkSessionStatus(session.Path, StatusCompleted)
+		return fmt.Errorf("session %s (PID %d) is not running", session.ID, session.PID)
 	}
 
 	if err := terminateProcess(session.PID); err != nil {
@@ -40,4 +41,24 @@ func KillSession(idOrPath string) error {
 	}
 	waitForProcessExit(session.PID, 10, 20*time.Millisecond)
 	return MarkSessionStatus(session.Path, StatusCompleted)
+}
+
+// DeleteSession permanently removes a session file and any associated archives.
+func DeleteSession(idOrPath string) error {
+	path := ResolveSession(idOrPath)
+	if path == "" {
+		if fi, err := os.Stat(idOrPath); err == nil && !fi.IsDir() {
+			path = idOrPath
+		}
+	}
+	if path == "" {
+		return fmt.Errorf("session not found: %s", idOrPath)
+	}
+	gzPath := path + ".gz"
+	if fi, err := os.Stat(gzPath); err == nil && !fi.IsDir() {
+		if err := os.Remove(gzPath); err != nil {
+			return err
+		}
+	}
+	return os.Remove(path)
 }

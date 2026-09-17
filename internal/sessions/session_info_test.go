@@ -146,8 +146,8 @@ func verifyKilledSession(t *testing.T, filename string) {
 	if err != nil || sessionAfter.IsActive || sessionAfter.Status != StatusCompleted {
 		t.Fatalf("session not marked completed: %+v, err: %v", sessionAfter, err)
 	}
-	if err := KillSession(filename); err != nil {
-		t.Errorf("KillSession on dead process should return nil, got %v", err)
+	if err := KillSession(filename); err == nil {
+		t.Errorf("KillSession on dead process should return error")
 	}
 	if err := KillSession("nonexistent-session"); err == nil {
 		t.Errorf("KillSession on nonexistent session should error")
@@ -179,6 +179,25 @@ func TestKillSession(t *testing.T) {
 	}
 	cmd.Wait()
 	verifyKilledSession(t, filename)
+}
+
+func TestDeleteSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	log := newSessionLog("google", "gemini-2.5", "/test")
+	if log == nil {
+		t.Fatal("expected non-nil log")
+	}
+	if err := DeleteSession(log.Path()); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+	if _, err := GetSession(log.Path()); err == nil {
+		t.Errorf("expected error getting deleted session")
+	}
+	if err := DeleteSession("missing-session"); err == nil {
+		t.Errorf("expected error deleting nonexistent session")
+	}
 }
 
 func TestGetSessionErrors(t *testing.T) {

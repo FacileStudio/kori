@@ -43,6 +43,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newSessionsCmd(version))
 	cmd.AddCommand(newResumeCmd(version))
 	cmd.AddCommand(newListCmd())
+	cmd.AddCommand(newSessionsDeleteCmd())
 	return cmd
 }
 

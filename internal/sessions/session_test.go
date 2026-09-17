@@ -69,7 +69,7 @@ func TestFormatSessionEntryShortStarted(t *testing.T) {
 	}
 }
 
-func TestListSessionFilesFallback(t *testing.T) {
+func TestListSessionFilesFilter(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -79,8 +79,12 @@ func TestListSessionFilesFallback(t *testing.T) {
 	}
 
 	files := ListSessionFiles("/nonexistent/project/dir")
-	if len(files) == 0 {
-		t.Fatal("expected fallback to base sessions directory")
+	if len(files) != 0 {
+		t.Fatalf("expected 0 files for unmatched project dir, got %d", len(files))
+	}
+	all := ListSessionFiles("")
+	if len(all) != 1 {
+		t.Fatalf("expected 1 file for all sessions, got %d", len(all))
 	}
 }
 
