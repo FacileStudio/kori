@@ -570,7 +570,7 @@ question:
 |---|---|
 | `/clear` | Reset the transcript, the conversation sent to the model, and the running cost total. Same client, new session. Never starts a run. |
 | `/cost` | Display cumulative token usage, cost, and tools executed so far. Never starts a run. |
-| `/help` | List the commands above and the keybindings (esc, ctrl+c/ctrl+\, ctrl+t). Never starts a run. |
+| `/help` | List the commands above and the keybindings (esc, ctrl+c/ctrl+\, ctrl+t, ctrl+g). Never starts a run. |
 | `/quit` | Quit. Never starts a run. |
 | `/resume` | Resume the most recent recorded session for the current project. Never starts a run. |
 | `/sessions` | List recorded sessions for the current project with timestamps and models. Never starts a run. |
@@ -747,3 +747,34 @@ running left it.
 That used to need a deliberate dump at exit, because the alternate screen hands the old page back
 untouched and quitting un-drew the whole conversation. Inline rendering removed the problem rather
 than the workaround.
+
+## Sandboxes & Remote VMs
+
+The `sandbox:` section in `~/.kori.yml` configures microVM and remote SSH execution targets:
+
+```yaml
+sandbox:
+  default: ""                     # default target name when invoked as 'kori sandbox'
+  user: boite                     # default SSH user
+  port: 2226                      # default port
+  ssh_key_path: ~/.ssh/id_ed25519 # default identity file
+  root: /workspace                # default remote workspace
+  auto_sync: true                 # automatically sync kori binary
+  auto_snapshot: false            # snapshot overlay disk on completion (boite only)
+  targets:
+    staging:
+      backend: ssh
+      host: staging.example.com
+      port: 22
+      user: deploy
+      workdir: /srv/app
+    dev-vm:
+      backend: boite
+      vm_name: dev-box
+```
+
+Commands:
+- `kori sandbox list`: lists configured targets and local Boite VMs.
+- `kori sandbox <target> [prompt]`: launches interactive or headless session inside the target.
+- Direct SSH targets (e.g. `kori sandbox user@host:port` or `~/.ssh/config` host alias) are supported directly even when Boite is not installed.
+

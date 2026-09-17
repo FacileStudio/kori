@@ -25,14 +25,14 @@ func TestFindLocalBinary(t *testing.T) {
 }
 
 func TestCheckRemoteBinary(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
 	runner := &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 			return []byte("/usr/local/bin/kori\n"), nil
 		},
 	}
 	opts := SyncOptions{User: "boite", Runner: runner}
-	path, err := CheckRemoteBinary(context.Background(), inst, opts)
+	path, err := CheckRemoteBinary(context.Background(), target, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestCheckRemoteBinary(t *testing.T) {
 }
 
 func TestCopyBinaryToVM(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
 	var commands []string
 	runner := &mockRunner{
 		runFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
@@ -51,7 +51,7 @@ func TestCopyBinaryToVM(t *testing.T) {
 		},
 	}
 	opts := SyncOptions{User: "boite", RemotePath: "/tmp/kori", Runner: runner}
-	err := CopyBinaryToVM(context.Background(), inst, opts, "/tmp/kori")
+	err := CopyBinaryToVM(context.Background(), target, opts, "/tmp/kori")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,14 +61,14 @@ func TestCopyBinaryToVM(t *testing.T) {
 }
 
 func TestEnsureKoriBinary(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
 	runner := &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 			return []byte("/usr/local/bin/kori\n"), nil
 		},
 	}
 	opts := SyncOptions{User: "boite", Runner: runner}
-	res, err := EnsureKoriBinary(context.Background(), inst, opts)
+	res, err := EnsureKoriBinary(context.Background(), target, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestEnsureKoriBinaryCopy(t *testing.T) {
 	if err := os.WriteFile(dummyBin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("failed to create dummy binary: %v", err)
 	}
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
 	callCount := 0
 	runner := &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
@@ -95,7 +95,7 @@ func TestEnsureKoriBinaryCopy(t *testing.T) {
 		},
 	}
 	opts := SyncOptions{LocalPath: dummyBin, RemotePath: "/tmp/kori", Runner: runner}
-	res, err := EnsureKoriBinary(context.Background(), inst, opts)
+	res, err := EnsureKoriBinary(context.Background(), target, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

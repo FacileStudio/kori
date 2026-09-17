@@ -10,6 +10,14 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
+func isJobInstalled(crontab, name string) bool {
+	if crontab == "" {
+		return false
+	}
+	beginMarker := "# BEGIN KORI JOB " + name
+	return strings.Contains(crontab, beginMarker) || matchesLegacyCron(crontab, name)
+}
+
 func readCrontab() (string, error) {
 	cmd := exec.Command("crontab", "-l")
 	var stdout, stderr bytes.Buffer
@@ -119,15 +127,4 @@ func findJobFile(files []settings.JobFile, name string) (settings.JobFile, error
 		}
 	}
 	return settings.JobFile{}, fmt.Errorf("no cron job named %q", name)
-}
-
-func ensureTrusted(f settings.JobFile) error {
-	ok, err := settings.IsTrusted(f.Path, f.Raw)
-	if err != nil {
-		return err
-	}
-	if ok {
-		return nil
-	}
-	return fmt.Errorf("job %q is not trusted: review %s, then run `kori cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
 }

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// ExecOptions configures interactive SSH session execution into the sandbox.
+// ExecOptions configures interactive SSH execution.
 type ExecOptions struct {
 	Stdin        io.Reader
 	Stdout       io.Writer
@@ -35,15 +35,6 @@ func DefaultExecOptions() ExecOptions {
 	}
 }
 
-func hasRootArg(args []string) bool {
-	for _, arg := range args {
-		if arg == "-root" || arg == "--root" || strings.HasPrefix(arg, "-root=") || strings.HasPrefix(arg, "--root=") {
-			return true
-		}
-	}
-	return false
-}
-
 func quoteShellArg(p string) string {
 	if strings.ContainsAny(p, " \t\n\"'$`\\") {
 		return fmt.Sprintf("%q", p)
@@ -51,14 +42,21 @@ func quoteShellArg(p string) string {
 	return p
 }
 
-// FormatRemoteCommand formats the kori invocation string to execute inside the VM.
+// FormatRemoteCommand formats the kori invocation string to execute inside the target.
 func FormatRemoteCommand(remoteBin string, workDir string, args []string) string {
 	bin := remoteBin
 	if bin == "" {
 		bin = "kori"
 	}
 	parts := []string{bin}
-	if workDir != "" && !hasRootArg(args) {
+	hasRoot := false
+	for _, arg := range args {
+		if arg == "-root" || arg == "--root" || strings.HasPrefix(arg, "-root=") || strings.HasPrefix(arg, "--root=") {
+			hasRoot = true
+			break
+		}
+	}
+	if workDir != "" && !hasRoot {
 		parts = append(parts, "-root", quoteShellArg(workDir))
 	}
 	for _, arg := range args {
@@ -67,34 +65,61 @@ func FormatRemoteCommand(remoteBin string, workDir string, args []string) string
 	return strings.Join(parts, " ")
 }
 
-// BuildSSHArgs constructs the argument list for an interactive SSH invocation with TTY.
-func BuildSSHArgs(inst *InstanceState, user string, remoteCmd string) []string {
-	u := user
-	if u == "" {
-		u = "boite"
+func resolveTargetHostPort(target *Target) (string, int) {
+	host := "127.0.0.1"
+	port := 22
+	if target == nil {
+		return host, port
 	}
+	if target.Host != "" {
+		host = target.Host
+	}
+	if target.Port > 0 {
+		port = target.Port
+	} else if target.Backend == "boite" {
+		port = 2226
+	}
+	return host, port
+}
+
+func resolveSSHUserDestination(target *Target, user, host string) string {
+	u := user
+	if u == "" && target != nil {
+		u = target.User
+	}
+	if u != "" {
+		return fmt.Sprintf("%s@%s", u, host)
+	}
+	return host
+}
+
+// BuildSSHArgs constructs the argument list for an interactive SSH invocation with TTY.
+func BuildSSHArgs(target *Target, user string, remoteCmd string) []string {
+	host, port := resolveTargetHostPort(target)
 	args := []string{
 		"-tt",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(inst.SSHPort),
-		"-i", inst.KeyPath,
-		fmt.Sprintf("%s@127.0.0.1", u),
+		"-p", strconv.Itoa(port),
 	}
+	if target != nil && target.KeyPath != "" {
+		args = append(args, "-i", target.KeyPath)
+	}
+	args = append(args, resolveSSHUserDestination(target, user, host))
 	if remoteCmd != "" {
 		args = append(args, remoteCmd)
 	}
 	return args
 }
 
-// BuildSSHCommand creates an exec.Cmd configured for interactive SSH into the VM.
-func BuildSSHCommand(ctx context.Context, inst *InstanceState, opts ExecOptions) (*exec.Cmd, error) {
-	if inst == nil {
-		return nil, errors.New("instance state is nil")
+// BuildSSHCommand creates an exec.Cmd configured for interactive SSH into the target.
+func BuildSSHCommand(ctx context.Context, target *Target, opts ExecOptions) (*exec.Cmd, error) {
+	if target == nil {
+		return nil, errors.New("target is nil")
 	}
 	remoteCmd := FormatRemoteCommand(opts.RemoteBinary, opts.WorkDir, opts.Args)
-	sshArgs := BuildSSHArgs(inst, opts.User, remoteCmd)
+	sshArgs := BuildSSHArgs(target, opts.User, remoteCmd)
 	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
 	cmd.Stdin = opts.Stdin
 	cmd.Stdout = opts.Stdout
@@ -102,9 +127,9 @@ func BuildSSHCommand(ctx context.Context, inst *InstanceState, opts ExecOptions)
 	return cmd, nil
 }
 
-// RunSSH launches and awaits an interactive SSH session in the VM sandbox.
-func RunSSH(ctx context.Context, inst *InstanceState, opts ExecOptions) error {
-	cmd, err := BuildSSHCommand(ctx, inst, opts)
+// RunSSH launches and awaits an interactive SSH session in the sandbox target.
+func RunSSH(ctx context.Context, target *Target, opts ExecOptions) error {
+	cmd, err := BuildSSHCommand(ctx, target, opts)
 	if err != nil {
 		return err
 	}

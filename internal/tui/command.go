@@ -100,6 +100,7 @@ func (m *Model) help() tea.Cmd {
 		"",
 		"Esc stops a run and nothing else. Ctrl+C stops one too, or quits when idle; ctrl+\\ force-quits.",
 		"Ctrl+T expands the reasoning collapsed to a single line, and keeps showing it in full until pressed again.",
+		"Ctrl+G opens the external editor to edit the prompt.",
 		"Enter during a run queues the line and sends it once the run finishes; stopping the run drops whatever is queued.",
 		"The prompt wraps and grows as you type. Alt+Enter inserts a new line; Enter always sends.",
 		"Scroll, select and copy with the terminal as usual — what was said is ordinary terminal output, not a window this client owns.",

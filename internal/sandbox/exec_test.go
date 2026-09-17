@@ -34,8 +34,8 @@ func TestFormatRemoteCommand(t *testing.T) {
 }
 
 func TestBuildSSHArgs(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
-	args := BuildSSHArgs(inst, "boite", "kori -bash")
+	target := &Target{Name: "test-target", Backend: "ssh", Host: "192.168.1.10", Port: 2222, KeyPath: "/key", User: "dev"}
+	args := BuildSSHArgs(target, "dev", "kori -bash")
 	if len(args) < 7 || args[0] != "-tt" || args[len(args)-1] != "kori -bash" {
 		t.Fatalf("unexpected ssh args: %v", args)
 	}
@@ -43,12 +43,12 @@ func TestBuildSSHArgs(t *testing.T) {
 
 func TestBuildSSHCommand(t *testing.T) {
 	if _, err := BuildSSHCommand(context.Background(), nil, DefaultExecOptions()); err == nil {
-		t.Fatal("expected error for nil instance")
+		t.Fatal("expected error for nil target")
 	}
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "test-target", Backend: "ssh", Host: "127.0.0.1", Port: 2226, KeyPath: "/key"}
 	opts := DefaultExecOptions()
 	opts.Args = []string{"-bash"}
-	cmd, err := BuildSSHCommand(context.Background(), inst, opts)
+	cmd, err := BuildSSHCommand(context.Background(), target, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestBuildSSHCommand(t *testing.T) {
 }
 
 func TestRunSSH(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key"}
+	target := &Target{Name: "test-target", Backend: "ssh", Host: "127.0.0.1", Port: 2226, KeyPath: "/key"}
 	called := false
 	runner := &mockRunner{
 		execFunc: func(_ context.Context, cmd *exec.Cmd) error {
@@ -68,7 +68,7 @@ func TestRunSSH(t *testing.T) {
 	}
 	opts := DefaultExecOptions()
 	opts.Runner = runner
-	if err := RunSSH(context.Background(), inst, opts); err != nil {
+	if err := RunSSH(context.Background(), target, opts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {

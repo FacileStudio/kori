@@ -57,18 +57,18 @@ func TestVerifyIsolation(t *testing.T) {
 }
 
 func TestPreflightCheck(t *testing.T) {
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key", Status: "stopped"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key", Status: "stopped"}
 	opts := DefaultGuardOptions()
-	if _, err := PreflightCheck(context.Background(), inst, opts); err == nil {
+	if _, err := PreflightCheck(context.Background(), target, opts); err == nil {
 		t.Fatal("expected error for stopped VM")
 	}
-	inst.Status = "running"
+	target.Status = "running"
 	opts.Runner = &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 			return []byte("boite\n/home/boite\nVM_HARNESS=12345\n"), nil
 		},
 	}
-	res, err := PreflightCheck(context.Background(), inst, opts)
+	res, err := PreflightCheck(context.Background(), target, opts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestPreflightCheckFailures(t *testing.T) {
 	if _, err := PreflightCheck(context.Background(), nil, DefaultGuardOptions()); err == nil {
 		t.Fatal("expected error for nil instance")
 	}
-	inst := &InstanceState{Name: "pingu", SSHPort: 2226, KeyPath: "/key", Status: "running"}
+	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key", Status: "running"}
 	opts := GuardOptions{
 		Runner: &mockRunner{
 			runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
@@ -89,7 +89,7 @@ func TestPreflightCheckFailures(t *testing.T) {
 			},
 		},
 	}
-	if _, err := PreflightCheck(context.Background(), inst, opts); err == nil {
+	if _, err := PreflightCheck(context.Background(), target, opts); err == nil {
 		t.Fatal("expected error when ssh runner fails")
 	}
 }

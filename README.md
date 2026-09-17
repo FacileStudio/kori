@@ -158,10 +158,44 @@ sources:
   mcp: {}
 
 hooks: []
+
+sandbox:
+  default: ""
+  vm_name: ""
+  port: 2226
+  ssh_key_path: ~/.ssh/id_ed25519
+  root: /workspace
+  auto_sync: true
+  auto_snapshot: false
+  targets: {}
 ```
+
+## Sandboxes & Remote VMs
+
+`kori sandbox` starts agent sessions inside isolated environments over SSH:
+
+```sh
+# Discover configured targets and local Boite VMs
+kori sandbox list
+
+# Launch an interactive session inside a target
+kori sandbox <target>
+
+# Run a prompt headlessly in a remote host or VM
+kori sandbox staging "run test suite and report failures"
+
+# Sync host binary and snapshot overlay disk on completion (Boite only)
+kori sandbox dev-vm --sync --snapshot
+```
+
+Targets are resolved seamlessly:
+1. Defined entries in `~/.kori.yml` under `sandbox.targets`
+2. Discovered local microVMs via [boite](https://github.com/FacileStudio/boite)
+3. Direct OpenSSH hosts (`user@host:port` or `~/.ssh/config` host aliases) when Boite is not installed.
 
 Scheduled jobs are not configured here anymore: one YAML file per job under
 `~/.kori/jobs/`, trusted with `kori cron trust <name>` before it runs.
+Use `kori cron list` to view all jobs along with their enabled and crontab installation status.
 
 ## herdr
 

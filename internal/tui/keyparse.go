@@ -85,7 +85,7 @@ func (m *Model) promptKey(press tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch keyStr {
 	case "ctrl+t":
 		return m.reveal()
-	case "ctrl+o", "ctrl+O", "alt+e", "alt+E":
+	case "ctrl+g":
 		return true, m.openEditor()
 	case "esc":
 		return m.escaped()

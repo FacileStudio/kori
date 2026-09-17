@@ -32,7 +32,7 @@ func DefaultGuardOptions() GuardOptions {
 	}
 }
 
-// BuildGuardProbeCommand generates the shell probe command executed in the VM.
+// BuildGuardProbeCommand generates the shell probe command executed in the target.
 func BuildGuardProbeCommand(workdir string) string {
 	cmd := "whoami; pwd; echo VM_HARNESS=$(date +%s)"
 	if workdir != "" {
@@ -41,7 +41,7 @@ func BuildGuardProbeCommand(workdir string) string {
 	return cmd
 }
 
-// ParseGuardOutput parses the stdout lines produced by the VM probe command.
+// ParseGuardOutput parses the stdout lines produced by the probe command.
 func ParseGuardOutput(output string) (*GuardResult, error) {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) < 2 {
@@ -80,26 +80,46 @@ func VerifyIsolation(res *GuardResult, rawOut string, opts GuardOptions) error {
 	return nil
 }
 
-func runProbe(ctx context.Context, inst *InstanceState, user string, cmd string, runner Runner) ([]byte, error) {
+func runProbe(ctx context.Context, target *Target, user string, cmd string, runner Runner) ([]byte, error) {
+	host := "127.0.0.1"
+	if target.Host != "" {
+		host = target.Host
+	}
+	port := 22
+	if target.Port > 0 {
+		port = target.Port
+	} else if target.Backend == "boite" {
+		port = 2226
+	}
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(inst.SSHPort),
-		"-i", inst.KeyPath,
-		fmt.Sprintf("%s@127.0.0.1", user),
-		cmd,
+		"-p", strconv.Itoa(port),
 	}
+	if target.KeyPath != "" {
+		args = append(args, "-i", target.KeyPath)
+	}
+	u := user
+	if u == "" {
+		u = target.User
+	}
+	if u != "" {
+		args = append(args, fmt.Sprintf("%s@%s", u, host))
+	} else {
+		args = append(args, host)
+	}
+	args = append(args, cmd)
 	return runner.Run(ctx, "ssh", args...)
 }
 
-// PreflightCheck verifies VM state, connectivity, user isolation, and workspace directory.
-func PreflightCheck(ctx context.Context, inst *InstanceState, opts GuardOptions) (*GuardResult, error) {
-	if inst == nil {
-		return nil, errors.New("instance state is nil")
+// PreflightCheck verifies target state, connectivity, user isolation, and workspace directory.
+func PreflightCheck(ctx context.Context, target *Target, opts GuardOptions) (*GuardResult, error) {
+	if target == nil {
+		return nil, errors.New("target is nil")
 	}
-	if inst.Status != "running" {
-		return nil, fmt.Errorf("sandbox %q is %s, must be running (try: boite start %s)", inst.Name, inst.Status, inst.Name)
+	if target.Backend == "boite" && target.Status != "running" {
+		return nil, fmt.Errorf("sandbox %q is %s, must be running (try: boite start %s)", target.Name, target.Status, target.Name)
 	}
 	runner := opts.Runner
 	if runner == nil {
@@ -107,12 +127,15 @@ func PreflightCheck(ctx context.Context, inst *InstanceState, opts GuardOptions)
 	}
 	user := opts.ExpectedUser
 	if user == "" {
+		user = target.User
+	}
+	if user == "" && target.Backend == "boite" {
 		user = "boite"
 	}
 	probeCmd := BuildGuardProbeCommand(opts.ExpectedWorkdir)
-	out, err := runProbe(ctx, inst, user, probeCmd, runner)
+	out, err := runProbe(ctx, target, user, probeCmd, runner)
 	if err != nil {
-		return nil, fmt.Errorf("preflight isolation probe failed on sandbox %s: %w (%s)", inst.Name, err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("preflight isolation probe failed on sandbox %s: %w (%s)", target.Name, err, strings.TrimSpace(string(out)))
 	}
 	res, err := ParseGuardOutput(string(out))
 	if err != nil {

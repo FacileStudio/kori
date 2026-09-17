@@ -7,8 +7,7 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-// UsageError marks a malformed cron invocation: main exits 2, the CLI
-// standard's usage-error code, instead of 1.
+// UsageError marks a malformed cron invocation.
 type UsageError struct {
 	err error
 }
@@ -19,7 +18,6 @@ func usagef(format string, args ...any) error {
 	return &UsageError{err: fmt.Errorf(format, args...)}
 }
 
-// printCronUsage writes the cron subcommand's usage to stdout; help exits 0.
 func printCronUsage() error {
 	fmt.Println(`usage: kori cron <command> [args]
 
@@ -34,34 +32,33 @@ func printCronUsage() error {
 	return nil
 }
 
-// cronJobJSON is one job as cron list --json prints it: the fields the text
-// table shows, with the pointer settings resolved to their policy defaults.
 type cronJobJSON struct {
-	Name     string `json:"name"`
-	When     string `json:"when"`
-	Enabled  bool   `json:"enabled"`
-	Commands bool   `json:"commands"`
-	Workdir  string `json:"workdir"`
-	Delivery string `json:"delivery"`
+	Name      string `json:"name"`
+	When      string `json:"when"`
+	Enabled   bool   `json:"enabled"`
+	Installed bool   `json:"installed"`
+	Commands  bool   `json:"commands"`
+	Workdir   string `json:"workdir"`
+	Delivery  string `json:"delivery"`
 }
 
 func cronJobsJSON(jobs []settings.CronJob) ([]byte, error) {
+	crontabContent, _ := readCrontab()
 	out := make([]cronJobJSON, 0, len(jobs))
 	for _, job := range jobs {
 		out = append(out, cronJobJSON{
-			Name:     job.Name,
-			When:     job.When,
-			Enabled:  job.IsEnabled(),
-			Commands: jobCommands(job),
-			Workdir:  job.Workdir,
-			Delivery: job.Delivery,
+			Name:      job.Name,
+			When:      job.When,
+			Enabled:   job.IsEnabled(),
+			Installed: isJobInstalled(crontabContent, job.Name),
+			Commands:  jobCommands(job),
+			Workdir:   job.Workdir,
+			Delivery:  job.Delivery,
 		})
 	}
 	return json.Marshal(out)
 }
 
-// printCronJSON prints the one JSON document the CLI standard's --json asks
-// for: data alone on stdout, no colors, no footer.
 func printCronJSON(jobs []settings.CronJob) error {
 	data, err := cronJobsJSON(jobs)
 	if err != nil {

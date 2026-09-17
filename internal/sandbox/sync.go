@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -46,26 +47,30 @@ func FindLocalBinary() (string, error) {
 	return "", errors.New("kori executable not found on host")
 }
 
-// CheckRemoteBinary verifies if kori is already executable inside the VM.
-func CheckRemoteBinary(ctx context.Context, inst *InstanceState, opts SyncOptions) (string, error) {
-	checkCmd := "if command -v kori >/dev/null 2>&1; then command -v kori; elif [ -x ~/.local/bin/kori ]; then echo ~/.local/bin/kori; elif [ -x /tmp/kori ]; then echo /tmp/kori; else exit 1; fi"
-	user := opts.User
-	if user == "" {
-		user = "boite"
-	}
-	runner := opts.Runner
-	if runner == nil {
-		runner = NewDefaultRunner()
-	}
+func buildSyncSSHBaseArgs(target *Target, user string) []string {
+	host, port := resolveTargetHostPort(target)
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(inst.SSHPort),
-		"-i", inst.KeyPath,
-		fmt.Sprintf("%s@127.0.0.1", user),
-		checkCmd,
+		"-p", strconv.Itoa(port),
 	}
+	if target != nil && target.KeyPath != "" {
+		args = append(args, "-i", target.KeyPath)
+	}
+	args = append(args, resolveSSHUserDestination(target, user, host))
+	return args
+}
+
+// CheckRemoteBinary verifies if kori is already executable inside the target.
+func CheckRemoteBinary(ctx context.Context, target *Target, opts SyncOptions) (string, error) {
+	if target == nil {
+		return "", errors.New("target is nil")
+	}
+	runner := resolveRunner(opts.Runner)
+	args := buildSyncSSHBaseArgs(target, opts.User)
+	checkCmd := "if command -v kori >/dev/null 2>&1; then command -v kori; elif [ -x ~/.local/bin/kori ]; then echo ~/.local/bin/kori; elif [ -x /tmp/kori ]; then echo /tmp/kori; else exit 1; fi"
+	args = append(args, checkCmd)
 	out, err := runner.Run(ctx, "ssh", args...)
 	if err != nil {
 		return "", err
@@ -77,92 +82,67 @@ func CheckRemoteBinary(ctx context.Context, inst *InstanceState, opts SyncOption
 	return remote, nil
 }
 
-func copyFileSCP(ctx context.Context, inst *InstanceState, opts SyncOptions, local, remote string) error {
-	user := opts.User
-	if user == "" {
-		user = "boite"
-	}
-	runner := opts.Runner
-	if runner == nil {
-		runner = NewDefaultRunner()
-	}
+func buildSCPArgs(target *Target, user, local, remote string) []string {
+	host, port := resolveTargetHostPort(target)
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
-		"-P", strconv.Itoa(inst.SSHPort),
-		"-i", inst.KeyPath,
-		local,
-		fmt.Sprintf("%s@127.0.0.1:%s", user, remote),
+		"-P", strconv.Itoa(port),
 	}
+	if target != nil && target.KeyPath != "" {
+		args = append(args, "-i", target.KeyPath)
+	}
+	dest := fmt.Sprintf("%s:%s", resolveSSHUserDestination(target, user, host), remote)
+	return append(args, local, dest)
+}
+
+func copyFileSCP(ctx context.Context, target *Target, opts SyncOptions, local, remote string) error {
+	runner := resolveRunner(opts.Runner)
+	args := buildSCPArgs(target, opts.User, local, remote)
 	if out, err := runner.Run(ctx, "scp", args...); err != nil {
 		return fmt.Errorf("scp failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-// CopyBinaryToVM copies a local executable binary to the remote VM and sets execute permissions.
-func CopyBinaryToVM(ctx context.Context, inst *InstanceState, opts SyncOptions, localPath string) error {
-	user := opts.User
-	if user == "" {
-		user = "boite"
+// CopyBinaryToVM copies a local executable binary to the remote target and sets execute permissions.
+func CopyBinaryToVM(ctx context.Context, target *Target, opts SyncOptions, localPath string) error {
+	if target == nil {
+		return errors.New("target is nil")
 	}
-	runner := opts.Runner
-	if runner == nil {
-		runner = NewDefaultRunner()
-	}
-	remote := opts.RemotePath
-	if remote == "" {
-		remote = "/tmp/kori"
-	}
-	if err := copyFileSCP(ctx, inst, opts, localPath, remote); err != nil {
+	remote := cmp.Or(opts.RemotePath, "/tmp/kori")
+	if err := copyFileSCP(ctx, target, opts, localPath, remote); err != nil {
 		return err
 	}
-	chmodArgs := []string{
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(inst.SSHPort),
-		"-i", inst.KeyPath,
-		fmt.Sprintf("%s@127.0.0.1", user),
-		fmt.Sprintf("chmod +x %s", remote),
-	}
+	runner := resolveRunner(opts.Runner)
+	chmodArgs := append(buildSyncSSHBaseArgs(target, opts.User), fmt.Sprintf("chmod +x %s", remote))
 	if out, err := runner.Run(ctx, "ssh", chmodArgs...); err != nil {
 		return fmt.Errorf("remote chmod failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-func resolveLocalBinary(localPath string) (string, error) {
-	if localPath != "" {
-		return localPath, nil
-	}
-	found, err := FindLocalBinary()
-	if err != nil {
-		return "", fmt.Errorf("cannot sync kori binary: %w", err)
-	}
-	return found, nil
-}
-
-// EnsureKoriBinary ensures the kori binary is installed and executable inside the VM sandbox.
-func EnsureKoriBinary(ctx context.Context, inst *InstanceState, opts SyncOptions) (string, error) {
-	if inst == nil {
-		return "", errors.New("instance state is nil")
+// EnsureKoriBinary ensures the kori binary is installed and executable inside the target sandbox.
+func EnsureKoriBinary(ctx context.Context, target *Target, opts SyncOptions) (string, error) {
+	if target == nil {
+		return "", errors.New("target is nil")
 	}
 	if !opts.Force {
-		if path, err := CheckRemoteBinary(ctx, inst, opts); err == nil && path != "" {
+		if path, err := CheckRemoteBinary(ctx, target, opts); err == nil && path != "" {
 			return path, nil
 		}
 	}
-	localPath, err := resolveLocalBinary(opts.LocalPath)
-	if err != nil {
-		return "", err
+	localPath := opts.LocalPath
+	if localPath == "" {
+		found, err := FindLocalBinary()
+		if err != nil {
+			return "", fmt.Errorf("cannot sync kori binary: %w", err)
+		}
+		localPath = found
 	}
-	remoteTarget := opts.RemotePath
-	if remoteTarget == "" {
-		remoteTarget = "/tmp/kori"
-	}
-	if err := CopyBinaryToVM(ctx, inst, opts, localPath); err != nil {
+	remoteTarget := cmp.Or(opts.RemotePath, "/tmp/kori")
+	if err := CopyBinaryToVM(ctx, target, opts, localPath); err != nil {
 		return "", err
 	}
 	return remoteTarget, nil

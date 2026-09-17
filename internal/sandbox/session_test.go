@@ -28,7 +28,7 @@ func setupTestInstance(t *testing.T, name string, status string) string {
 func TestRunSessionValidation(t *testing.T) {
 	err := RunSession(context.Background(), SessionOptions{})
 	if err == nil {
-		t.Fatal("expected error for empty VM name")
+		t.Fatal("expected error for empty target")
 	}
 }
 

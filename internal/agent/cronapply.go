@@ -18,9 +18,7 @@ func applyJob(config settings.Config, job settings.CronJob) settings.Config {
 	if job.Workdir != "" {
 		cfg.Root = expandHome(job.Workdir)
 	}
-	cfg = mergeConfig(cfg, job)
-	cfg = mergeToggles(cfg, job)
-	cfg = mergeLimits(cfg, job)
+	cfg = mergeJobConfig(cfg, job)
 	cfg.Gates = append(cfg.Gates, job.Gates...)
 	bash := false
 	if job.Commands != nil {
@@ -32,74 +30,6 @@ func applyJob(config settings.Config, job settings.CronJob) settings.Config {
 	cfg.Bash = &bash
 	approve := false
 	cfg.ApproveTools = &approve
-	return cfg
-}
-
-func mergeConfig(cfg settings.Config, job settings.CronJob) settings.Config {
-	if job.Provider.Backend != "" {
-		cfg.Backend = job.Provider.Backend
-	}
-	if job.Provider.BaseURL != "" {
-		cfg.BaseURL = job.Provider.BaseURL
-	}
-	if job.Provider.APIKey != "" {
-		cfg.APIKey = job.Provider.APIKey
-	}
-	if job.Provider.Model != "" {
-		cfg.Model = job.Provider.Model
-	} else if job.Model != "" {
-		cfg.Model = job.Model
-	}
-	if job.Security.PathIsolation != nil {
-		cfg.PathIsolation = job.Security.PathIsolation
-	}
-	if job.Security.DenyElevation != nil {
-		cfg.DenyElevation = job.Security.DenyElevation
-	}
-	if job.Security.EnvIsolation != nil {
-		cfg.EnvIsolation = job.Security.EnvIsolation
-	}
-	return cfg
-}
-
-func mergeToggles(cfg settings.Config, job settings.CronJob) settings.Config {
-	if job.Toggles.ParallelAgents != nil {
-		cfg.ParallelAgents = job.Toggles.ParallelAgents
-	}
-	if job.Toggles.Fetch != nil {
-		cfg.Fetch = job.Toggles.Fetch
-	}
-	if job.Toggles.Tasks != nil {
-		cfg.Tasks = job.Toggles.Tasks
-	}
-	if job.Toggles.Diagnostics != nil {
-		cfg.Diagnostics = job.Toggles.Diagnostics
-	}
-	if job.Toggles.SearchContent != nil {
-		cfg.SearchContent = job.Toggles.SearchContent
-	}
-	if job.Toggles.FindFiles != nil {
-		cfg.FindFiles = job.Toggles.FindFiles
-	}
-	return cfg
-}
-
-func mergeLimits(cfg settings.Config, job settings.CronJob) settings.Config {
-	if job.Reasoning.Effort != "" {
-		cfg.Effort = job.Reasoning.Effort
-	}
-	if job.Reasoning.Thinking != nil {
-		cfg.Thinking = job.Reasoning.Thinking
-	}
-	if job.Reasoning.Budget != nil {
-		cfg.Budget = job.Reasoning.Budget
-	}
-	if job.Limits.MaxIterations != nil {
-		cfg.MaxIterations = job.Limits.MaxIterations
-	}
-	if job.Limits.CompactAt != nil {
-		cfg.CompactAt = job.Limits.CompactAt
-	}
 	return cfg
 }
 
@@ -119,6 +49,17 @@ func jobContext(timeout string) (context.Context, context.CancelFunc) {
 		return context.Background(), func() {}
 	}
 	return context.WithTimeout(context.Background(), d)
+}
+
+func ensureTrusted(f settings.JobFile) error {
+	ok, err := settings.IsTrusted(f.Path, f.Raw)
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
+	return fmt.Errorf("job %q is not trusted: review %s, then run `kori cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
 }
 
 func loadExecutableJob(name string) (settings.CronJob, settings.Config, error) {

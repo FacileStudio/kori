@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.65.9] - 2026-09-17
+
+### Added
+- feat(sandbox): multi-target sandbox support with ssh and boite backends
+- feat(cron): display enabled and crontab installation status in cron list
+
+### Fixed
+- fix(editor): use ctrl+g as default keybinding for external prompt editor
+- fix(sandbox): direct ssh fallback when boite is not installed
+
 ## [0.65.8] - 2026-09-17
 
 ### Fixed

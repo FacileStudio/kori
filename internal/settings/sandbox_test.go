@@ -8,8 +8,8 @@ import (
 
 func TestSandboxDefaults(t *testing.T) {
 	cfg := Defaults("test")
-	if cfg.Sandbox.VMName != "pingu" {
-		t.Fatalf("expected VMName pingu, got %s", cfg.Sandbox.VMName)
+	if cfg.Sandbox.VMName != "" {
+		t.Fatalf("expected VMName empty string, got %s", cfg.Sandbox.VMName)
 	}
 	if cfg.Sandbox.Port != 2226 {
 		t.Fatalf("expected Port 2226, got %d", cfg.Sandbox.Port)
@@ -31,6 +31,8 @@ func testSandboxMergeObj() (Config, Config) {
 	snapVal := true
 	over := Config{
 		Sandbox: Sandbox{
+			Default:      "remote",
+			User:         "deploy",
 			VMName:       "tux",
 			Port:         2230,
 			SSHKeyPath:   "/custom/key",
@@ -46,6 +48,12 @@ func testSandboxMergeObj() (Config, Config) {
 
 func TestSandboxMerge(t *testing.T) {
 	base, _ := testSandboxMergeObj()
+	if base.Sandbox.Default != "remote" {
+		t.Fatalf("expected Default remote, got %s", base.Sandbox.Default)
+	}
+	if base.Sandbox.User != "deploy" {
+		t.Fatalf("expected User deploy, got %s", base.Sandbox.User)
+	}
 	if base.Sandbox.VMName != "tux" || base.Sandbox.Port != 2230 {
 		t.Fatalf("expected tux:2230, got %s:%d", base.Sandbox.VMName, base.Sandbox.Port)
 	}

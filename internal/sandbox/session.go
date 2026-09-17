@@ -7,8 +7,9 @@ import (
 	"time"
 )
 
-// SessionOptions configures the full lifecycle of running a session inside a sandbox VM.
+// SessionOptions configures the full lifecycle of running a session inside a sandbox target.
 type SessionOptions struct {
+	Target      *Target
 	VMName      string
 	WorkDir     string
 	User        string
@@ -22,7 +23,7 @@ type SessionOptions struct {
 	Runner      Runner
 }
 
-func checkGuard(ctx context.Context, inst *InstanceState, opts SessionOptions, r Runner) error {
+func checkGuard(ctx context.Context, target *Target, opts SessionOptions, r Runner) error {
 	if opts.SkipGuard {
 		return nil
 	}
@@ -32,11 +33,11 @@ func checkGuard(ctx context.Context, inst *InstanceState, opts SessionOptions, r
 		CheckHarness:    true,
 		Runner:          r,
 	}
-	_, err := PreflightCheck(ctx, inst, guardOpts)
+	_, err := PreflightCheck(ctx, target, guardOpts)
 	return err
 }
 
-func syncBinary(ctx context.Context, inst *InstanceState, opts SessionOptions, r Runner) (string, error) {
+func syncBinary(ctx context.Context, target *Target, opts SessionOptions, r Runner) (string, error) {
 	if opts.NoSync {
 		return "kori", nil
 	}
@@ -45,14 +46,14 @@ func syncBinary(ctx context.Context, inst *InstanceState, opts SessionOptions, r
 		Force:  opts.Sync,
 		Runner: r,
 	}
-	bin, err := EnsureKoriBinary(ctx, inst, syncOpts)
+	bin, err := EnsureKoriBinary(ctx, target, syncOpts)
 	if err != nil {
 		return "", fmt.Errorf("syncing binary: %w", err)
 	}
 	return bin, nil
 }
 
-func execSSH(ctx context.Context, inst *InstanceState, opts SessionOptions, remoteBin string, r Runner) error {
+func execSSH(ctx context.Context, target *Target, opts SessionOptions, remoteBin string, r Runner) error {
 	execOpts := DefaultExecOptions()
 	if opts.User != "" {
 		execOpts.User = opts.User
@@ -68,11 +69,11 @@ func execSSH(ctx context.Context, inst *InstanceState, opts SessionOptions, remo
 		execOpts.Args = append(execOpts.Args, "--print", opts.PrintPrompt)
 	}
 	execOpts.Runner = r
-	return RunSSH(ctx, inst, execOpts)
+	return RunSSH(ctx, target, execOpts)
 }
 
-func takePostSnapshot(ctx context.Context, opts SessionOptions, r Runner) error {
-	if !opts.Snapshot {
+func takePostSnapshot(ctx context.Context, target *Target, opts SessionOptions, r Runner) error {
+	if !opts.Snapshot || target.Backend != "boite" {
 		return nil
 	}
 	tag := opts.SnapshotTag
@@ -80,34 +81,38 @@ func takePostSnapshot(ctx context.Context, opts SessionOptions, r Runner) error 
 		tag = fmt.Sprintf("session-%d", time.Now().Unix())
 	}
 	snapOpts := SnapshotOptions{Runner: r}
-	if err := TakeSnapshot(ctx, opts.VMName, tag, snapOpts); err != nil {
+	if err := TakeSnapshot(ctx, target.Name, tag, snapOpts); err != nil {
 		return fmt.Errorf("snapshot error: %w", err)
 	}
 	return nil
 }
 
-// RunSession launches a complete sandboxed session in the named boite VM.
+// RunSession launches a complete sandboxed session in the target VM or remote SSH host.
 func RunSession(ctx context.Context, opts SessionOptions) error {
-	if opts.VMName == "" {
-		return errors.New("vm name is required")
-	}
-	inst, err := LoadInstance(opts.VMName)
-	if err != nil {
-		return fmt.Errorf("loading sandbox instance %s: %w", opts.VMName, err)
+	target := opts.Target
+	if target == nil {
+		if opts.VMName == "" {
+			return errors.New("sandbox target is required")
+		}
+		inst, err := LoadInstance(opts.VMName)
+		if err != nil {
+			return fmt.Errorf("loading sandbox instance %s: %w", opts.VMName, err)
+		}
+		target = TargetFromInstance(inst)
 	}
 	runner := opts.Runner
 	if runner == nil {
 		runner = NewDefaultRunner()
 	}
-	if err := checkGuard(ctx, inst, opts, runner); err != nil {
+	if err := checkGuard(ctx, target, opts, runner); err != nil {
 		return err
 	}
-	remoteBin, err := syncBinary(ctx, inst, opts, runner)
+	remoteBin, err := syncBinary(ctx, target, opts, runner)
 	if err != nil {
 		return err
 	}
-	execErr := execSSH(ctx, inst, opts, remoteBin, runner)
-	if err := takePostSnapshot(ctx, opts, runner); err != nil {
+	execErr := execSSH(ctx, target, opts, remoteBin, runner)
+	if err := takePostSnapshot(ctx, target, opts, runner); err != nil {
 		return err
 	}
 	return execErr

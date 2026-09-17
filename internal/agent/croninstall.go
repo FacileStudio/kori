@@ -33,15 +33,21 @@ func listCronJobs() error {
 		fmt.Println("no cron jobs in " + settings.JobsDir())
 		return nil
 	}
+	crontabContent, _ := readCrontab()
 	for _, f := range files {
 		trusted, err := settings.IsTrusted(f.Path, f.Raw)
 		if err != nil {
 			return err
 		}
 		job := f.Job
-		fmt.Printf(cronNameStyle.Render("%s"), job.Name)
-		fmt.Printf("\nwhen=%s\nenabled=%t\ncommands=%t\ntrusted=%t\nworkdir=%s\ndelivery=%s\n\n",
-			job.When, job.IsEnabled(), job.Commands != nil && *job.Commands, trusted, job.Workdir, job.Delivery)
+		installed := isJobInstalled(crontabContent, job.Name)
+		statusStr := "disabled"
+		if job.IsEnabled() {
+			statusStr = "enabled"
+		}
+		fmt.Printf("%s [%s]\n", cronNameStyle.Render(job.Name), statusStr)
+		fmt.Printf("when=%s\nenabled=%t\ninstalled=%t\ncommands=%t\ntrusted=%t\nworkdir=%s\ndelivery=%s\n\n",
+			job.When, job.IsEnabled(), installed, job.Commands != nil && *job.Commands, trusted, job.Workdir, job.Delivery)
 	}
 	fmt.Println("(You can update your job files in the ~/.kori/jobs/ folder)")
 	return nil

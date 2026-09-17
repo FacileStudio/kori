@@ -52,7 +52,7 @@ func TestSandboxListCmd(t *testing.T) {
 func TestSandboxRunCmd(t *testing.T) {
 	f := sandboxFlags{}
 	cmd := newSandboxRunCmd(&f)
-	if cmd.Use != "run <vm-name> [prompt]" {
+	if cmd.Use != "run <target> [prompt]" {
 		t.Fatalf("unexpected Use: %s", cmd.Use)
 	}
 }
@@ -100,7 +100,7 @@ func TestBuildSandboxOptions_DefaultsFromConfig(t *testing.T) {
 	autoSnap := false
 	cfg := settings.Config{
 		Sandbox: settings.Sandbox{
-			VMName:       "pingu",
+			VMName:       "custom-vm",
 			Root:         "/home/yann/project",
 			AutoSync:     &autoSync,
 			AutoSnapshot: &autoSnap,
@@ -110,8 +110,8 @@ func TestBuildSandboxOptions_DefaultsFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if opts.VMName != "pingu" {
-		t.Fatalf("expected default VMName pingu, got %s", opts.VMName)
+	if opts.VMName != "custom-vm" {
+		t.Fatalf("expected default VMName custom-vm, got %s", opts.VMName)
 	}
 	if opts.WorkDir != "/home/yann/project" {
 		t.Fatalf("expected default workdir, got %s", opts.WorkDir)
@@ -121,17 +121,50 @@ func TestBuildSandboxOptions_DefaultsFromConfig(t *testing.T) {
 	}
 }
 
+func createTestNamedTargetConfig() settings.Config {
+	targets := map[string]settings.SandboxTarget{
+		"staging": {
+			Backend: "ssh",
+			Host:    "staging.internal",
+			Port:    2222,
+			User:    "deploy",
+			Workdir: "/var/app",
+		},
+	}
+	return settings.Config{
+		Sandbox: settings.Sandbox{
+			Targets: targets,
+		},
+	}
+}
+
+func TestBuildSandboxOptions_NamedTarget(t *testing.T) {
+	cmd := newSandboxCmd()
+	f := sandboxFlags{}
+	cfg := createTestNamedTargetConfig()
+	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"staging", "test prompt"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opts.Target.Backend != "ssh" || opts.Target.Host != "staging.internal" || opts.Target.Port != 2222 {
+		t.Fatalf("unexpected target in options: %+v", opts.Target)
+	}
+	if opts.User != "deploy" || opts.WorkDir != "/var/app" || opts.PrintPrompt != "test prompt" {
+		t.Fatalf("unexpected options fields: %+v", opts)
+	}
+}
+
 func TestBuildSandboxOptions_NoSyncOverrides(t *testing.T) {
 	cmd := newSandboxCmd()
 	f := sandboxFlags{noSync: true, user: "boite"}
 	autoSync := true
 	cfg := settings.Config{
 		Sandbox: settings.Sandbox{
-			VMName:   "pingu",
+			VMName:   "custom-vm",
 			AutoSync: &autoSync,
 		},
 	}
-	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"pingu"})
+	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"custom-vm"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,11 +187,19 @@ func TestBuildSandboxOptions_ExplicitPrint(t *testing.T) {
 	cmd := newSandboxCmd()
 	f := sandboxFlags{printPrompt: "run tests", user: "boite"}
 	cfg := settings.Defaults("test")
-	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"pingu", "ignored", "positional"})
+	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"custom-vm", "ignored", "positional"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if opts.PrintPrompt != "run tests" {
 		t.Fatalf("expected explicit print flag, got %s", opts.PrintPrompt)
+	}
+}
+
+func TestRunSandbox_NoArgsShowsHelp(t *testing.T) {
+	cmd := newSandboxCmd()
+	f := sandboxFlags{}
+	if err := runSandbox(cmd, &f, nil); err != nil {
+		t.Fatalf("expected nil when showing help for no args, got %v", err)
 	}
 }

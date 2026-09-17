@@ -40,7 +40,7 @@ func TestOpenEditorCreatesMarkdownFileWithPromptContent(t *testing.T) {
 	}
 }
 
-func TestKeyCtrlOAndAltETriggersEditor(t *testing.T) {
+func TestKeyCtrlGTriggersEditor(t *testing.T) {
 	t.Setenv("EDITOR", "cat")
 	m := sized()
 	m.prompt.SetValue("draft")
@@ -49,10 +49,8 @@ func TestKeyCtrlOAndAltETriggersEditor(t *testing.T) {
 		name string
 		msg  tea.KeyPressMsg
 	}{
-		{name: "ctrl+o key", msg: tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}},
-		{name: "ctrl+O key", msg: tea.KeyPressMsg{Code: 'O', Mod: tea.ModCtrl}},
-		{name: "ctrl+o text", msg: tea.KeyPressMsg{Text: "ctrl+o"}},
-		{name: "alt+e text", msg: tea.KeyPressMsg{Text: "alt+e"}},
+		{name: "ctrl+g key", msg: tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}},
+		{name: "ctrl+g text", msg: tea.KeyPressMsg{Text: "ctrl+g"}},
 	}
 
 	for _, tc := range testCases {
@@ -71,12 +69,12 @@ func TestKeyCtrlOAndAltETriggersEditor(t *testing.T) {
 func TestCustomPromptEditKeyTriggersEditor(t *testing.T) {
 	t.Setenv("EDITOR", "cat")
 	m := sized()
-	m.run.promptEditKey = "ctrl+g"
+	m.run.promptEditKey = "ctrl+k"
 	m.prompt.SetValue("draft")
 
-	handled, cmd := m.key(tea.KeyPressMsg{Text: "ctrl+g"})
+	handled, cmd := m.key(tea.KeyPressMsg{Text: "ctrl+k"})
 	if !handled || cmd == nil {
-		t.Errorf("custom promptEditKey ctrl+g was not handled")
+		t.Errorf("custom promptEditKey ctrl+k was not handled")
 	}
 }
 
