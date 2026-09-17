@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.67.0] - 2026-09-18
+
+### Added
+- feat(tui): `/model` command for dynamic profile and model switching mid-session
+- feat(settings): `~/.kori/profiles/` directory for reusable provider and reasoning configs
+- feat(cmd): `--profile` flag and `KORI_PROFILE` env var for profile selection
+- feat(sessions): resume last session by default and generate short 8-char hex session IDs
+
+### Fixed
+- fix(tui): preserve slash command autocomplete menu when model picker opens
+- fix(provider): add provider catalog inspection and backend construction
+
 ## [0.66.0] - 2026-09-17
 
 ### Added
