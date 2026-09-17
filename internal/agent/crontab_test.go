@@ -66,3 +66,14 @@ func TestStripLegacyUntaggedLine(t *testing.T) {
 		t.Errorf("expected other entry preserved, got %q", got)
 	}
 }
+
+func TestStripLegacyUntaggedLineDoesNotMatchPrefix(t *testing.T) {
+	initial := "0 0 * * * /home/user/.local/bin/kori cron run news-alerts\n0 1 * * * /bin/other\n"
+	got, removed := stripCrontabBlock(initial, "news")
+	if removed {
+		t.Errorf("expected removed = false for news-alerts when stripping news")
+	}
+	if !strings.Contains(got, "cron run news-alerts") {
+		t.Errorf("expected news-alerts preserved, got %q", got)
+	}
+}

@@ -154,7 +154,7 @@ func formatCronBlock(name, schedule, bin, logsDir string) string {
 
 func checkCronInstallable(job settings.CronJob) error {
 	if !cronNameRe.MatchString(job.Name) {
-		return fmt.Errorf("invalid cron job name %q: unit file names only allow letters, digits, and . _ -", job.Name)
+		return fmt.Errorf("invalid cron job name %q: cron job names only allow letters, digits, and . _ -", job.Name)
 	}
 	if job.Enabled == nil || !*job.Enabled {
 		return fmt.Errorf("job %q is disabled: run `kori cron run %s`, confirm the output, then set enabled: true",

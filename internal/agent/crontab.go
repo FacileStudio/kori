@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/FacileStudio/kori/internal/settings"
@@ -54,10 +52,17 @@ func applyCrontabBlock(current, name, newBlock string) string {
 	return trimmed + "\n\n" + newBlock + "\n"
 }
 
+func matchesLegacyCron(line, name string) bool {
+	_, after, ok := strings.Cut(line, "cron run "+name)
+	if !ok {
+		return false
+	}
+	return len(after) == 0 || after[0] == ' ' || after[0] == '\t' || after[0] == '>' || after[0] == ';'
+}
+
 func stripCrontabBlock(current, name string) (string, bool) {
 	beginMarker := "# BEGIN KORI JOB " + name
 	endMarker := "# END KORI JOB " + name
-	legacyMatch := "cron run " + name
 	lines := strings.Split(current, "\n")
 	var result []string
 	inBlock := false
@@ -75,7 +80,7 @@ func stripCrontabBlock(current, name string) (string, bool) {
 			}
 			continue
 		}
-		if strings.Contains(line, legacyMatch) {
+		if matchesLegacyCron(line, name) {
 			removed = true
 			continue
 		}
@@ -125,15 +130,4 @@ func ensureTrusted(f settings.JobFile) error {
 		return nil
 	}
 	return fmt.Errorf("job %q is not trusted: review %s, then run `kori cron trust %s`", f.Job.Name, f.Path, f.Job.Name)
-}
-
-func expandHome(path string) string {
-	if !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	return filepath.Join(home, path[2:])
 }

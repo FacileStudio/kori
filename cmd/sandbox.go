@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
-	"errors"
-	"strings"
+	"encoding/json"
+	"fmt"
+	"os"
 
+	"charm.land/lipgloss/v2"
 	"github.com/FacileStudio/kori/internal/sandbox"
 	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/spf13/cobra"
@@ -22,22 +24,91 @@ type sandboxFlags struct {
 func newSandboxCmd() *cobra.Command {
 	var f sandboxFlags
 	cmd := &cobra.Command{
-		Use:   "sandbox <vm-name> [prompt]",
-		Short: "Start kori inside a boite VM sandbox",
-		Long: "Start a kori agent session inside an isolated boite QEMU VM sandbox over SSH.\n" +
-			"The session runs inside the guest VM with its filesystem strictly isolated.",
+		Use:   "sandbox [command]",
+		Short: "Start kori inside an isolated boite VM sandbox",
+		Long: `Manage and start kori agent sessions inside isolated boite QEMU VM sandboxes over SSH.
+
+The agent session executes strictly inside the guest VM's filesystem and process tree.
+Use 'kori sandbox list' to discover available instances, or 'kori sandbox <vm-name> [prompt]'
+to launch a session.`,
+		Example: `  # List available sandbox VMs
+  kori sandbox list
+
+  # Start an interactive session in the 'pingu' VM
+  kori sandbox pingu
+
+  # Run a prompt headlessly in the sandbox and stream output
+  kori sandbox pingu "run tests and fix any failing cases"
+
+  # Sync the kori binary before starting and snapshot on completion
+  kori sandbox pingu --sync --snapshot`,
 		RunE: func(c *cobra.Command, args []string) error {
 			return runSandbox(c, &f, args)
 		},
 	}
 	bindSandboxFlags(cmd, &f)
+	cmd.AddCommand(newSandboxListCmd())
+	cmd.AddCommand(newSandboxRunCmd(&f))
 	return cmd
+}
+
+func newSandboxListCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List available boite sandbox VMs",
+		Long:    "Discover and list all registered boite VM sandbox instances, their runtime status, SSH ports, and paths.",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runSandboxList(jsonOutput)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output instance list in JSON format")
+	return cmd
+}
+
+func newSandboxRunCmd(f *sandboxFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run <vm-name> [prompt]",
+		Short: "Run an agent session inside a sandbox VM",
+		Long:  "Start a kori agent session inside the specified boite QEMU VM sandbox over SSH.",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return runSandbox(c, f, args)
+		},
+	}
+	bindSandboxFlags(cmd, f)
+	return cmd
+}
+
+func runSandboxList(jsonOutput bool) error {
+	instances, err := sandbox.ListInstances()
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(instances)
+	}
+	if len(instances) == 0 {
+		dir, _ := sandbox.InstancesDir()
+		fmt.Printf("no boite sandbox instances found in %s\n", dir)
+		return nil
+	}
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Green)
+	for _, inst := range instances {
+		fmt.Println(nameStyle.Render(inst.Name))
+		fmt.Printf("status=%s\nport=%d\nworkspace=%s\nkey=%s\n\n",
+			inst.Status, inst.SSHPort, inst.Workspace, inst.KeyPath)
+	}
+	return nil
 }
 
 func bindSandboxFlags(cmd *cobra.Command, f *sandboxFlags) {
 	fl := cmd.Flags()
-	fl.BoolVar(&f.sync, "sync", false, "Sync host workspace into the VM before starting")
-	fl.BoolVar(&f.noSync, "no-sync", false, "Disable workspace synchronization")
+	fl.BoolVar(&f.sync, "sync", false, "Sync kori binary into the VM before starting")
+	fl.BoolVar(&f.noSync, "no-sync", false, "Disable binary synchronization")
 	fl.BoolVar(&f.snapshot, "snapshot", false, "Create a snapshot of the VM overlay disk on exit")
 	fl.StringVarP(&f.workdir, "workdir", "w", "", "Working directory inside the VM")
 	fl.StringVarP(&f.user, "user", "u", "boite", "SSH user for connecting to the VM")
@@ -49,76 +120,12 @@ func runSandbox(cmd *cobra.Command, f *sandboxFlags, args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(args) == 0 && cfg.Sandbox.VMName == "" {
+		return cmd.Help()
+	}
 	opts, err := buildSandboxOptions(cmd, f, cfg, args)
 	if err != nil {
 		return err
 	}
 	return sandbox.RunSession(context.Background(), opts)
-}
-
-func resolveSandboxVM(cfg settings.Config, args []string) (string, []string, error) {
-	if len(args) > 0 {
-		return args[0], args[1:], nil
-	}
-	if cfg.Sandbox.VMName != "" {
-		return cfg.Sandbox.VMName, nil, nil
-	}
-	return "", nil, errors.New("vm name is required: pass <vm-name> argument or set sandbox.vm_name in settings")
-}
-
-func resolveSandboxWorkdir(flagWorkdir string, cfg settings.Config) string {
-	if flagWorkdir != "" {
-		return flagWorkdir
-	}
-	if cfg.Sandbox.Workdir != "" {
-		return cfg.Sandbox.Workdir
-	}
-	if cfg.Sandbox.Root != "" {
-		return cfg.Sandbox.Root
-	}
-	return "/workspace"
-}
-
-func resolveSandboxSync(cmd *cobra.Command, f *sandboxFlags, cfg settings.Config) bool {
-	if f.noSync {
-		return false
-	}
-	if cmd.Flags().Changed("sync") {
-		return f.sync
-	}
-	if cfg.Sandbox.AutoSync != nil {
-		return *cfg.Sandbox.AutoSync
-	}
-	return false
-}
-
-func buildSandboxOptions(cmd *cobra.Command, f *sandboxFlags, cfg settings.Config, args []string) (sandbox.SessionOptions, error) {
-	vmName, promptArgs, err := resolveSandboxVM(cfg, args)
-	if err != nil {
-		return sandbox.SessionOptions{}, err
-	}
-
-	workdir := resolveSandboxWorkdir(f.workdir, cfg)
-	sync := resolveSandboxSync(cmd, f, cfg)
-
-	snapshot := f.snapshot
-	if !cmd.Flags().Changed("snapshot") && cfg.Sandbox.AutoSnapshot != nil {
-		snapshot = *cfg.Sandbox.AutoSnapshot
-	}
-
-	prompt := f.printPrompt
-	if prompt == "" && len(promptArgs) > 0 {
-		prompt = strings.Join(promptArgs, " ")
-	}
-
-	return sandbox.SessionOptions{
-		VMName:      vmName,
-		WorkDir:     workdir,
-		User:        f.user,
-		Sync:        sync,
-		NoSync:      f.noSync,
-		Snapshot:    snapshot,
-		PrintPrompt: prompt,
-		Args:        promptArgs,
-	}, nil
 }

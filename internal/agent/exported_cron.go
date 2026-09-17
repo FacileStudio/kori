@@ -2,6 +2,9 @@ package agent
 
 import (
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // ListCronJobs lists all scheduled jobs.
@@ -37,4 +40,15 @@ func UninstallCronJob(name string) error {
 // EnsureUserPath augments PATH with common user binary directories.
 func EnsureUserPath() {
 	ensureUserPath()
+}
+
+func expandHome(path string) string {
+	if !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[2:])
 }

@@ -128,23 +128,31 @@ get_boite_config() {
     local state_file="$home/.boite/state.json"
 
     if [[ -f "$instance_state" ]] && command -v jq >/dev/null 2>&1; then
-        local port key
+        local port key user workspace
         port=$(jq -r '.ssh_port // empty' "$instance_state" 2>/dev/null || true)
         key=$(jq -r '.key_path // empty' "$instance_state" 2>/dev/null || true)
+        user=$(jq -r '.user // empty' "$instance_state" 2>/dev/null || true)
+        workspace=$(jq -r '.workspace // empty' "$instance_state" 2>/dev/null || true)
         if [[ -n "$port" && "$port" != "null" ]]; then
             echo "$port"
             echo "${key:-~/.ssh/id_ed25519}"
+            echo "${user:-boite}"
+            echo "${workspace:-/workspace}"
             return 0
         fi
     fi
 
     if [[ -f "$state_file" ]] && command -v jq >/dev/null 2>&1; then
-        local port key
+        local port key user workspace
         port=$(jq -r ".VMs.${VM_NAME}.ssh_port // empty" "$state_file" 2>/dev/null || true)
         key=$(jq -r ".VMs.${VM_NAME}.ssh_key_path // empty" "$state_file" 2>/dev/null || true)
+        user=$(jq -r ".VMs.${VM_NAME}.user // empty" "$state_file" 2>/dev/null || true)
+        workspace=$(jq -r ".VMs.${VM_NAME}.workspace // empty" "$state_file" 2>/dev/null || true)
         if [[ -n "$port" && "$port" != "null" ]]; then
             echo "$port"
             echo "${key:-~/.ssh/id_ed25519}"
+            echo "${user:-boite}"
+            echo "${workspace:-/workspace}"
             return 0
         fi
     fi
@@ -153,12 +161,16 @@ get_boite_config() {
         local output
         output=$(boite list --json 2>/dev/null || true)
         if [[ -n "$output" ]]; then
-            local port key
+            local port key user workspace
             port=$(echo "$output" | jq -r ".VMs.${VM_NAME}.ssh_port // empty" 2>/dev/null || true)
             key=$(echo "$output" | jq -r ".VMs.${VM_NAME}.ssh_key_path // empty" 2>/dev/null || true)
+            user=$(echo "$output" | jq -r ".VMs.${VM_NAME}.user // empty" 2>/dev/null || true)
+            workspace=$(echo "$output" | jq -r ".VMs.${VM_NAME}.workspace // empty" 2>/dev/null || true)
             if [[ -n "$port" && "$port" != "null" ]]; then
                 echo "$port"
                 echo "${key:-~/.ssh/id_ed25519}"
+                echo "${user:-boite}"
+                echo "${workspace:-/workspace}"
                 return 0
             fi
         fi
@@ -166,11 +178,15 @@ get_boite_config() {
 
     echo "2226"
     echo "~/.ssh/id_ed25519"
+    echo "boite"
+    echo "/workspace"
 }
 
-read -r PORT_DEFAULT KEY_PATH <<< "$(get_boite_config)"
+read -r PORT_DEFAULT KEY_PATH_DEFAULT USER_DEFAULT WORKSPACE_DEFAULT <<< "$(get_boite_config)"
 PORT=${PORT:-$PORT_DEFAULT}
-SSH_KEY_PATH=${SSH_KEY_PATH:-$KEY_PATH}
+SSH_KEY_PATH=${SSH_KEY_PATH:-$KEY_PATH_DEFAULT}
+SSH_USER="${SSH_USER:-$USER_DEFAULT}"
+REMOTE_PATH="${REMOTE_PATH:-$WORKSPACE_DEFAULT}"
 
 home_dir="${HOME:-$(eval echo ~"$USER")}"
 instance_state_file="$home_dir/.boite/instances/${VM_NAME}/state.json"
@@ -190,11 +206,10 @@ if [[ ! -f "$SSH_KEY_PATH" ]]; then
 fi
 
 LOCAL_DIR="$(pwd)/"
-REMOTE_PATH="/home/yann/project/"
 
 log_info "Syncing project to VM '$VM_NAME'"
 log_info "  Local:  $LOCAL_DIR"
-log_info "  Remote: localhost:$PORT:$REMOTE_PATH"
+log_info "  Remote: $SSH_USER@127.0.0.1:$PORT:$REMOTE_PATH"
 log_info "  Port:   $PORT"
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -220,7 +235,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
 fi
 
 RSYNC_OPTS+=("$LOCAL_DIR")
-RSYNC_OPTS+=("${VM_NAME}@localhost:$REMOTE_PATH")
+RSYNC_OPTS+=("${SSH_USER}@127.0.0.1:$REMOTE_PATH")
 
 if ! rsync "${RSYNC_OPTS[@]}"; then
     log_error "rsync failed"

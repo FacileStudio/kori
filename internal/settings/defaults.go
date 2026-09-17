@@ -35,7 +35,7 @@ func Defaults(system string) Config {
 			TrustHooks:     &trustHooks,
 		},
 		UI:      UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput},
-		Editor:  Editor{Editor: "", PromptEditKey: "ctrl+shift+u"},
-		Sandbox: Sandbox{VMName: "pingu", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", Root: "/home/yann/project", AutoSync: &autoSync, AutoSnapshot: &autoSnapshot},
+		Editor:  Editor{Editor: "", PromptEditKey: "ctrl+o"},
+		Sandbox: Sandbox{VMName: "pingu", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", Root: "/workspace", AutoSync: &autoSync, AutoSnapshot: &autoSnapshot},
 	}
 }

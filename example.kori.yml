@@ -83,6 +83,6 @@ sandbox:
   vm_name: pingu
   port: 2226
   ssh_key_path: ~/.ssh/id_ed25519
-  root: /home/yann/project
+  root: /workspace
   auto_sync: true
   auto_snapshot: false

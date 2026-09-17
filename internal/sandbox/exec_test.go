@@ -27,6 +27,10 @@ func TestFormatRemoteCommand(t *testing.T) {
 	if cmd3 != "kori \"hello world\"" {
 		t.Fatalf("unexpected quoted output: %s", cmd3)
 	}
+	cmd4 := FormatRemoteCommand("kori", "/path with spaces", []string{"-bash"})
+	if cmd4 != "kori -root \"/path with spaces\" -bash" {
+		t.Fatalf("unexpected quoted workdir output: %s", cmd4)
+	}
 }
 
 func TestBuildSSHArgs(t *testing.T) {

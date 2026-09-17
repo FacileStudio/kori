@@ -36,27 +36,32 @@ func checkGuard(ctx context.Context, inst *InstanceState, opts SessionOptions, r
 	return err
 }
 
-func syncBinary(ctx context.Context, inst *InstanceState, opts SessionOptions, r Runner) error {
-	if !opts.Sync || opts.NoSync {
-		return nil
+func syncBinary(ctx context.Context, inst *InstanceState, opts SessionOptions, r Runner) (string, error) {
+	if opts.NoSync {
+		return "kori", nil
 	}
 	syncOpts := SyncOptions{
 		User:   opts.User,
+		Force:  opts.Sync,
 		Runner: r,
 	}
-	if _, err := EnsureKoriBinary(ctx, inst, syncOpts); err != nil {
-		return fmt.Errorf("syncing binary: %w", err)
+	bin, err := EnsureKoriBinary(ctx, inst, syncOpts)
+	if err != nil {
+		return "", fmt.Errorf("syncing binary: %w", err)
 	}
-	return nil
+	return bin, nil
 }
 
-func execSSH(ctx context.Context, inst *InstanceState, opts SessionOptions, r Runner) error {
+func execSSH(ctx context.Context, inst *InstanceState, opts SessionOptions, remoteBin string, r Runner) error {
 	execOpts := DefaultExecOptions()
 	if opts.User != "" {
 		execOpts.User = opts.User
 	}
 	if opts.WorkDir != "" {
 		execOpts.WorkDir = opts.WorkDir
+	}
+	if remoteBin != "" {
+		execOpts.RemoteBinary = remoteBin
 	}
 	execOpts.Args = opts.Args
 	if opts.PrintPrompt != "" {
@@ -97,10 +102,11 @@ func RunSession(ctx context.Context, opts SessionOptions) error {
 	if err := checkGuard(ctx, inst, opts, runner); err != nil {
 		return err
 	}
-	if err := syncBinary(ctx, inst, opts, runner); err != nil {
+	remoteBin, err := syncBinary(ctx, inst, opts, runner)
+	if err != nil {
 		return err
 	}
-	execErr := execSSH(ctx, inst, opts, runner)
+	execErr := execSSH(ctx, inst, opts, remoteBin, runner)
 	if err := takePostSnapshot(ctx, opts, runner); err != nil {
 		return err
 	}

@@ -36,7 +36,7 @@ func DefaultGuardOptions() GuardOptions {
 func BuildGuardProbeCommand(workdir string) string {
 	cmd := "whoami; pwd; echo VM_HARNESS=$(date +%s)"
 	if workdir != "" {
-		cmd += fmt.Sprintf("; if [ -d %q ]; then echo WORKDIR_OK; else echo WORKDIR_MISSING; fi", workdir)
+		cmd += fmt.Sprintf("; mkdir -p %q 2>/dev/null; if [ -d %q ]; then echo WORKDIR_OK; else echo WORKDIR_MISSING; fi", workdir, workdir)
 	}
 	return cmd
 }

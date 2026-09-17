@@ -59,7 +59,7 @@ func FormatRemoteCommand(remoteBin string, workDir string, args []string) string
 	}
 	parts := []string{bin}
 	if workDir != "" && !hasRootArg(args) {
-		parts = append(parts, "-root", workDir)
+		parts = append(parts, "-root", quoteShellArg(workDir))
 	}
 	for _, arg := range args {
 		parts = append(parts, quoteShellArg(arg))

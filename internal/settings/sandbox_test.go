@@ -14,8 +14,8 @@ func TestSandboxDefaults(t *testing.T) {
 	if cfg.Sandbox.Port != 2226 {
 		t.Fatalf("expected Port 2226, got %d", cfg.Sandbox.Port)
 	}
-	if cfg.Sandbox.Root != "/home/yann/project" {
-		t.Fatalf("expected Root /home/yann/project, got %s", cfg.Sandbox.Root)
+	if cfg.Sandbox.Root != "/workspace" {
+		t.Fatalf("expected Root /workspace, got %s", cfg.Sandbox.Root)
 	}
 	if cfg.Sandbox.AutoSync == nil || !*cfg.Sandbox.AutoSync {
 		t.Fatal("expected AutoSync true")

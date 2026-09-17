@@ -78,10 +78,14 @@ func (m *Model) key(press tea.KeyPressMsg) (bool, tea.Cmd) {
 // once nothing above claims the press. Anything it does not bind falls through
 // to history navigation.
 func (m *Model) promptKey(press tea.KeyPressMsg) (bool, tea.Cmd) {
-	switch press.String() {
+	keyStr := press.String()
+	if m.run.promptEditKey != "" && (keyStr == m.run.promptEditKey || strings.EqualFold(keyStr, m.run.promptEditKey)) {
+		return true, m.openEditor()
+	}
+	switch keyStr {
 	case "ctrl+t":
 		return m.reveal()
-	case "ctrl+shift+u", "ctrl+U":
+	case "ctrl+o", "ctrl+O", "alt+e", "alt+E":
 		return true, m.openEditor()
 	case "esc":
 		return m.escaped()

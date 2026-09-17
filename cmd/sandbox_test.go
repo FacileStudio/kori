@@ -8,11 +8,52 @@ import (
 
 func TestNewSandboxCmd(t *testing.T) {
 	cmd := newSandboxCmd()
-	if cmd.Use != "sandbox <vm-name> [prompt]" {
+	if cmd.Use != "sandbox [command]" {
 		t.Fatalf("unexpected Use: %s", cmd.Use)
 	}
-	if cmd.Short == "" || cmd.Long == "" {
-		t.Fatal("expected non-empty Short and Long descriptions")
+	if cmd.Short == "" || cmd.Long == "" || cmd.Example == "" {
+		t.Fatal("expected non-empty Short, Long, and Example descriptions")
+	}
+	subcommands := cmd.Commands()
+	if len(subcommands) < 2 {
+		t.Fatalf("expected at least 2 subcommands, got %d", len(subcommands))
+	}
+	foundList := false
+	foundRun := false
+	for _, sub := range subcommands {
+		if sub.Name() == "list" {
+			foundList = true
+		}
+		if sub.Name() == "run" {
+			foundRun = true
+		}
+	}
+	if !foundList || !foundRun {
+		t.Fatalf("expected list and run subcommands, foundList=%t, foundRun=%t", foundList, foundRun)
+	}
+}
+
+func TestSandboxListCmd(t *testing.T) {
+	cmd := newSandboxListCmd()
+	if cmd.Use != "list" {
+		t.Fatalf("unexpected Use: %s", cmd.Use)
+	}
+	if len(cmd.Aliases) == 0 || cmd.Aliases[0] != "ls" {
+		t.Fatalf("expected alias 'ls', got %v", cmd.Aliases)
+	}
+	if err := runSandboxList(false); err != nil {
+		t.Fatalf("runSandboxList error: %v", err)
+	}
+	if err := runSandboxList(true); err != nil {
+		t.Fatalf("runSandboxList json error: %v", err)
+	}
+}
+
+func TestSandboxRunCmd(t *testing.T) {
+	f := sandboxFlags{}
+	cmd := newSandboxRunCmd(&f)
+	if cmd.Use != "run <vm-name> [prompt]" {
+		t.Fatalf("unexpected Use: %s", cmd.Use)
 	}
 }
 

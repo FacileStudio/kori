@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.8] - 2026-09-17
+
+### Fixed
+- fix(editor): use ctrl+o and alt+e for opening external editor
+- fix(sandbox): add list subcommand and styled cobra/fang help for boite VMs
+- fix(sandbox): fix guest workdir resolution, shell quoting, and auto binary sync
+- fix(cron): improve legacy crontab job line stripping with boundary checks
+
 ## [0.65.7] - 2026-09-17
 
 ### Fixed
