@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -93,7 +92,7 @@ func (s *shellSession) spawn() error {
 	cmd := exec.Command(s.binary, "--noprofile", "--norc", "-c", shellLoop)
 	cmd.Dir = s.dir
 	cmd.Env = s.env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = shellSetpgidAttr()
 
 	stdinW, stdoutR, err := launchShellPipes(cmd)
 	if err != nil {
@@ -136,7 +135,7 @@ func (s *shellSession) reap(killFirst bool) error {
 		return nil
 	}
 	if killFirst && s.alive {
-		shellKillGroup(s.cmd, syscall.SIGTERM)
+		shellTerminateGroup(s.cmd)
 	}
 	select {
 	case err := <-s.waitCh:
@@ -145,7 +144,7 @@ func (s *shellSession) reap(killFirst bool) error {
 		return err
 	case <-time.After(shellGrace):
 	}
-	shellKillGroup(s.cmd, syscall.SIGKILL)
+	shellForceKillGroup(s.cmd)
 	select {
 	case err := <-s.waitCh:
 		s.waitCh = nil

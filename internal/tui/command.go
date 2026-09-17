@@ -18,13 +18,16 @@ import (
 type command func(m *Model) tea.Cmd
 
 var commands = map[string]command{
-	"clear":   (*Model).clear,
-	"compact": (*Model).compactCmd,
+	"background": (*Model).detachCmd,
+	"bg":         (*Model).detachCmd,
+	"clear":      (*Model).clear,
+	"compact":    (*Model).compactCmd,
 	"cost": func(m *Model) tea.Cmd {
 		total := m.spent.Add(m.run.usage)
 		m.say(fromClient, cost.Summary(total, m.tools, m.failed, time.Since(m.began)))
 		return nil
 	},
+	"detach":   (*Model).detachCmd,
 	"help":     (*Model).help,
 	"quit":     func(_ *Model) tea.Cmd { return tea.Quit },
 	"resume":   (*Model).resumeCmd,
@@ -89,6 +92,7 @@ func (m *Model) help() tea.Cmd {
 		"/clear — start a new session, same client",
 		"/compact — summarize older turns now to free context (auto-compacts on its own over the threshold)",
 		"/cost — what this session has spent so far",
+		"/detach — detach session to background (also /bg, /background)",
 		"/help — show this message",
 		"/quit — quit",
 		"/resume — resume the most recent session for this project",
@@ -99,6 +103,7 @@ func (m *Model) help() tea.Cmd {
 		"/parallel cancel [batch] — stop a live parallel fan-out (or every one, with no batch)",
 		"",
 		"Esc stops a run and nothing else. Ctrl+C stops one too, or quits when idle; ctrl+\\ force-quits.",
+		"Ctrl+D detaches the session to run in the background.",
 		"Ctrl+T expands the reasoning collapsed to a single line, and keeps showing it in full until pressed again.",
 		"Ctrl+G opens the external editor to edit the prompt.",
 		"Enter during a run queues the line and sends it once the run finishes; stopping the run drops whatever is queued.",

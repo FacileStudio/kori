@@ -8,14 +8,14 @@ require (
 	charm.land/fang/v2 v2.0.1
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.5
-	github.com/FacileStudio/nacelle v0.27.0
+	github.com/FacileStudio/nacelle v0.28.0
+	github.com/adhocore/gronx v1.20.3
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/spf13/cobra v1.10.2
 	go.yaml.in/yaml/v4 v4.0.0-rc.2
 )
 
 require (
-	github.com/adhocore/gronx v1.20.3 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.63.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect

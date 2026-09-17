@@ -76,3 +76,28 @@ func TestNormalizeParallelInput(t *testing.T) {
 		t.Errorf("got %v, want tasks stripped of title wrapper", out.Tasks)
 	}
 }
+
+func TestResolveConcurrency(t *testing.T) {
+	c16, c8, c4, c0 := 16, 8, 4, 0
+	if got := resolveConcurrency(nil, nil); got != 16 {
+		t.Errorf("got %d, want 16", got)
+	}
+	if got := resolveConcurrency(&c16, nil); got != 16 {
+		t.Errorf("got %d, want 16", got)
+	}
+	if got := resolveConcurrency(&c8, nil); got != 8 {
+		t.Errorf("got %d, want 8", got)
+	}
+	if got := resolveConcurrency(nil, &c4); got != 4 {
+		t.Errorf("got %d, want 4", got)
+	}
+	if got := resolveConcurrency(&c16, &c4); got != 4 {
+		t.Errorf("got %d, want 4", got)
+	}
+	if got := resolveConcurrency(&c8, &c4); got != 8 {
+		t.Errorf("got %d, want 8", got)
+	}
+	if got := resolveConcurrency(&c0, &c0); got != 16 {
+		t.Errorf("got %d, want 16", got)
+	}
+}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -173,7 +174,7 @@ type benchRun struct {
 func runBenchOnce(number int, prompt string, config settings.Config) benchRun {
 	run := benchRun{Run: number}
 	started := time.Now()
-	_, stats, err := runHeadlessConfigTo(io.Discard, prompt, config, nil)
+	_, stats, err := runHeadlessConfigToContext(context.Background(), io.Discard, prompt, config, nil)
 	run.Duration = time.Since(started)
 	run.Stats = stats
 	run.Err = err

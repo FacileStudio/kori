@@ -22,7 +22,14 @@ func boot(m *Model, c UISession) {
 	m.transparent = c.TransparentBlocks
 	m.diagLoop = c.Startup.Diagnostics
 	m.sink = usage.NewSink(c.Root, c.Model)
-	m.session = sessions.OpenSession(c.Backend, c.Model, c.Root)
+	if c.Resume != "" || c.AutoResume {
+		if res := sessions.RestoreAtLaunch(c.Resume, c.Root, c.AutoResume); res.Path != "" {
+			m.session = sessions.OpenResumeSession(res.Path, c.Backend, c.Model, c.Root)
+		}
+	}
+	if m.session == nil {
+		m.session = sessions.OpenSession(c.Backend, c.Model, c.Root)
+	}
 	herdr.SetSession(m.herdrClient, m.session.Path())
 }
 

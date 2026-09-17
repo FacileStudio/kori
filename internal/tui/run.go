@@ -54,6 +54,7 @@ type SessionConfig struct {
 	GroupTools        *bool
 	ShowThinking      bool
 	CompactAt         int64
+	MaxConcurrency    int
 	AutoResume        bool
 	Resume            string
 	PromptPlaceholder string
@@ -97,13 +98,7 @@ func Launch(c UISession) error {
 		c.Gate.Wire(program.Send)
 	}
 	final, err := program.Run()
-
-	if done, ok := final.(*Model); ok {
-		herdr.Release(done.herdrClient)
-		if recap := done.recap(); recap != "" {
-			fmt.Println(recap)
-		}
-	}
+	finalizeLaunch(final)
 	return err
 }
 

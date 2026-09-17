@@ -12,6 +12,7 @@ import (
 	"github.com/FacileStudio/nacelle"
 
 	"github.com/FacileStudio/kori/internal/approval"
+	"github.com/FacileStudio/kori/internal/sessions"
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
@@ -38,12 +39,17 @@ func runHeadlessConfig(prompt string, config settings.Config, extra map[nacelle.
 	return runHeadlessConfigToContext(context.Background(), os.Stdout, prompt, config, extra)
 }
 
-func runHeadlessConfigTo(w io.Writer, prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
-	return runHeadlessConfigToContext(context.Background(), w, prompt, config, extra)
+type streamTarget struct {
+	w     io.Writer
+	stats *runStats
+	log   *sessions.SessionLog
 }
 
 func runHeadlessConfigToContext(parent context.Context, w io.Writer, prompt string, config settings.Config, extra map[nacelle.HookPoint][]nacelle.Hook) (string, runStats, error) {
 	var stats runStats
+	log := sessions.OpenSession(config.Backend, config.Model, config.Root)
+	log.Line(sessions.FromReader, prompt)
+
 	agent, cleanup, err := buildHeadlessAgent(config, mergeHooks(stats.compactHook(), extra))
 	if err != nil {
 		return "", stats, err
@@ -53,31 +59,37 @@ func runHeadlessConfigToContext(parent context.Context, w io.Writer, prompt stri
 	ctx, cancel := signal.NotifyContext(parent, os.Interrupt)
 	defer cancel()
 
-	var out strings.Builder
 	conv := []nacelle.Message{nacelle.UserText(prompt)}
+	out, err := consumeHeadlessEvents(ctx, agent, conv, streamTarget{w: w, stats: &stats, log: log})
+	return out, stats, err
+}
+
+func consumeHeadlessEvents(ctx context.Context, agent *nacelle.Agent, conv []nacelle.Message, target streamTarget) (string, error) {
+	var out strings.Builder
 	for event, err := range agent.Stream(ctx, conv) {
 		if err != nil {
-			return "", stats, err
+			return "", err
 		}
 		switch event.Kind {
 		case nacelle.KindText:
-			if _, err := fmt.Fprint(w, event.Text); err != nil {
-				return "", stats, err
+			if _, err := fmt.Fprint(target.w, event.Text); err != nil {
+				return "", err
 			}
 			out.WriteString(event.Text)
 		case nacelle.KindToolCall:
-			stats.ToolCalls++
+			target.stats.ToolCalls++
 		case nacelle.KindTurn:
-			stats.FinalContextTokens = event.Usage.InputTokens + event.Usage.CacheReadTokens + event.Usage.CacheCreationTokens
+			target.stats.FinalContextTokens = event.Usage.InputTokens + event.Usage.CacheReadTokens + event.Usage.CacheCreationTokens
 		case nacelle.KindDone:
-			stats.Usage = event.Usage
+			target.stats.Usage = event.Usage
+			target.log.Line(sessions.FromModel, out.String())
 		}
 	}
-	if _, err := fmt.Fprintln(w); err != nil {
-		return "", stats, err
+	if _, err := fmt.Fprintln(target.w); err != nil {
+		return "", err
 	}
 	out.WriteString("\n")
-	return out.String(), stats, nil
+	return out.String(), nil
 }
 
 // buildHeadlessAgent assembles the agent the same way the TUI does,

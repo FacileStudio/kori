@@ -19,6 +19,7 @@ func withParallelAgents(config settings.Config, backend nacelle.Backend, local [
 	if !*config.ParallelAgents {
 		return local, nil
 	}
+	concurrency := resolveConcurrency(config.MaxConcurrency, config.MaxParallelAgents)
 	parallel, err := nacelle.NewParallelSubAgentTool(nacelle.Config{
 		Backend:       backend,
 		System:        config.System,
@@ -31,13 +32,14 @@ func withParallelAgents(config settings.Config, backend nacelle.Backend, local [
 			"hands you the completed results to synthesize when they finish. Do not keep planning or " +
 			"issuing further tool calls after the fan-out has started. Provide a short 4-7 word title " +
 			"describing each session for the status line alongside the task instructions.",
-		Approve:   delegateApprovals(approve),
-		Usage:     tui.DelegateUsage,
-		Detach:    true,
-		Results:   tui.PostDetached,
-		Tool:      tui.ReportSubagentTool,
-		ToolDone:  tui.ReportSubagentDone,
-		LiveUsage: tui.ReportSubagentUsage,
+		Approve:        delegateApprovals(approve),
+		Usage:          tui.DelegateUsage,
+		Detach:         true,
+		Results:        tui.PostDetached,
+		Tool:           tui.ReportSubagentTool,
+		ToolDone:       tui.ReportSubagentDone,
+		LiveUsage:      tui.ReportSubagentUsage,
+		MaxConcurrency: concurrency,
 	})
 	if err != nil {
 		return nil, err
@@ -126,4 +128,17 @@ func delegateApprovals(approve nacelle.Approve) nacelle.Approve {
 		return approve
 	}
 	return func(context.Context, string, json.RawMessage) bool { return true }
+}
+
+func resolveConcurrency(concurrency, parallelAgents *int) int {
+	if concurrency != nil && *concurrency > 0 && *concurrency != 16 {
+		return *concurrency
+	}
+	if parallelAgents != nil && *parallelAgents > 0 {
+		return *parallelAgents
+	}
+	if concurrency != nil && *concurrency > 0 {
+		return *concurrency
+	}
+	return 16
 }

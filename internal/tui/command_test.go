@@ -146,18 +146,18 @@ func TestViewMenuRendering(t *testing.T) {
 	m.refreshMenu()
 
 	first, _, _ := strings.Cut(visible(m.viewMenu()), "\n")
-	if !strings.HasPrefix(first, "→ /clear") {
+	if !strings.HasPrefix(first, "→ /background") {
 		t.Errorf("first row = %q, want selected marker", first)
 	}
 
 	m.navigateMenu(tea.KeyPressMsg{Code: tea.KeyDown})
 	lines := strings.Split(visible(m.viewMenu()), "\n")
-	if !strings.HasPrefix(lines[0], "  /clear") || !strings.HasPrefix(lines[1], "→ /compact") {
+	if !strings.HasPrefix(lines[0], "  /background") || !strings.HasPrefix(lines[1], "→ /bg") {
 		t.Errorf("selection move failed: lines[0]=%q lines[1]=%q", lines[0], lines[1])
 	}
 
 	got := m.viewMenu()
-	for _, want := range []string{"/clear", "/help", "/quit", "/status"} {
+	for _, want := range []string{"/background", "/bg", "/clear", "/compact"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("viewMenu() missing %q", want)
 		}

@@ -29,6 +29,8 @@ type Limits struct {
 	GrindCost          *float64 `yaml:"grind_min_cost"`
 	GrindTokens        *int64   `yaml:"grind_min_tokens"`
 	GrindContinuations *int     `yaml:"grind_continuations"`
+	MaxConcurrency     *int     `yaml:"max_concurrency"`
+	MaxParallelAgents  *int     `yaml:"max_parallel_agents"`
 }
 
 // Provider is the backend in use plus the endpoint and key that reach it.
@@ -49,6 +51,7 @@ type Session struct {
 	System   string  `yaml:"system_prompt"`
 	Continue *bool   `yaml:"continue"`
 	Resume   *string `yaml:"-"`
+	Detach   *bool   `yaml:"-"`
 }
 
 // Config is one layer of settings. Every field is a pointer or an empty-able string so a layer

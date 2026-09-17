@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 var shellElevationCommands = map[string]struct{}{
@@ -120,6 +119,5 @@ func shellSetuidRoot(cmd string) bool {
 	if err != nil {
 		return false
 	}
-	sys, ok := info.Sys().(*syscall.Stat_t)
-	return ok && info.Mode()&os.ModeSetuid != 0 && sys.Uid == 0
+	return isSetuidRoot(info)
 }

@@ -115,31 +115,56 @@ func TestRestoreAtLaunch(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	convo, name, err := RestoreAtLaunch("", "/repo", false)
-	if convo != nil || name != "" || err != "" {
-		t.Errorf("no-op restore = %v/%q/%q, want nil/empty/empty", convo, name, err)
+	res := RestoreAtLaunch("", "/repo", false)
+	if res.Conversation != nil || res.Name != "" || res.Path != "" || res.Error != "" {
+		t.Errorf("no-op restore = %+v, want empty struct", res)
 	}
 
-	convo, name, err = RestoreAtLaunch("no-such-session", "/repo", false)
-	if convo != nil || name != "" || err == "" {
-		t.Errorf("missing resume = %v/%q/%q, want nil and an error", convo, name, err)
+	res = RestoreAtLaunch("no-such-session", "/repo", false)
+	if res.Conversation != nil || res.Name != "" || res.Path != "" || res.Error == "" {
+		t.Errorf("missing resume = %+v, want error", res)
 	}
 
 	log := newSessionLog("anthropic", "claude-opus-5", "/repo")
 	log.Line(fromReader, "hi")
 
-	convo, name, err = RestoreAtLaunch(filepath.Base(log.Path()), "/repo", false)
-	if convo == nil || len(convo) != 1 || name == "" || err != "" {
-		t.Errorf("explicit resume = %v/%q/%q, want one message and no error", convo, name, err)
+	res = RestoreAtLaunch(filepath.Base(log.Path()), "/repo", false)
+	if res.Conversation == nil || len(res.Conversation) != 1 || res.Name == "" || res.Path != log.Path() || res.Error != "" {
+		t.Errorf("explicit resume = %+v, want one message and no error", res)
 	}
 
-	convo, name, err = RestoreAtLaunch(log.Path(), "/repo", false)
-	if convo == nil || len(convo) != 1 || name == "" || err != "" {
-		t.Errorf("absolute-path resume = %v/%q/%q, want one message and no error", convo, name, err)
+	res = RestoreAtLaunch(log.Path(), "/repo", false)
+	if res.Conversation == nil || len(res.Conversation) != 1 || res.Name == "" || res.Path != log.Path() || res.Error != "" {
+		t.Errorf("absolute-path resume = %+v, want one message and no error", res)
 	}
 
-	convo, name, err = RestoreAtLaunch("", "/repo", true)
-	if convo == nil || len(convo) != 1 || name == "" || err != "" {
-		t.Errorf("auto resume = %v/%q/%q, want the newest session and no error", convo, name, err)
+	res = RestoreAtLaunch("", "/repo", true)
+	if res.Conversation == nil || len(res.Conversation) != 1 || res.Name == "" || res.Path != log.Path() || res.Error != "" {
+		t.Errorf("auto resume = %+v, want the newest session and no error", res)
+	}
+}
+
+func TestOpenResumeSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if log := OpenResumeSession("", "anthropic", "claude", "/repo"); log != nil {
+		t.Errorf("expected nil log for empty path, got %v", log)
+	}
+
+	orig := newSessionLog("anthropic", "claude-opus-5", "/repo")
+	orig.Line(fromReader, "first question")
+	orig.Line(fromModel, "first answer")
+
+	resumed := OpenResumeSession(orig.Path(), "anthropic", "claude-opus-5", "/repo")
+	if resumed == nil {
+		t.Fatal("expected non-nil resumed log")
+	}
+	resumed.Line(fromReader, "second question")
+	resumed.Line(fromModel, "second answer")
+
+	msgs := LoadSession(orig.Path())
+	if len(msgs) != 4 {
+		t.Fatalf("expected 4 messages in resumed session log, got %d", len(msgs))
 	}
 }

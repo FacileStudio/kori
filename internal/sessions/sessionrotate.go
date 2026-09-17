@@ -10,19 +10,24 @@ import (
 	"github.com/FacileStudio/nacelle"
 )
 
+// RestoredSession is the outcome of a session restore check at launch.
+type RestoredSession struct {
+	Conversation []nacelle.Message
+	Name         string
+	Path         string
+	Error        string
+}
+
 // RestoreAtLaunch returns the conversation to restore when the client starts:
 // the session named by resume (an id or a file path) when one is given, else
-// the newest session for root when auto is on. It returns the conversation,
-// the display name of the session it came from, and a message to show when an
-// explicit resume names nothing. A missing resume target surfaces as (nil, nil,
-// message); a present-but-unloadable session returns as (nil, name, "").
-func RestoreAtLaunch(resume, root string, auto bool) ([]nacelle.Message, string, string) {
+// the newest session for root when auto is on.
+func RestoreAtLaunch(resume, root string, auto bool) RestoredSession {
 	if resume != "" {
 		path := ResolveSession(resume)
 		if path == "" {
-			return nil, "", "no session found for \"" + resume + "\""
+			return RestoredSession{Error: "no session found for \"" + resume + "\""}
 		}
-		return LoadSession(path), filepath.Base(path), ""
+		return RestoredSession{Conversation: LoadSession(path), Name: filepath.Base(path), Path: path}
 	}
 	if auto {
 		if root == "" {
@@ -30,10 +35,10 @@ func RestoreAtLaunch(resume, root string, auto bool) ([]nacelle.Message, string,
 		}
 		files := ListSessionFiles(root)
 		if len(files) > 0 {
-			return LoadSession(files[0]), filepath.Base(files[0]), ""
+			return RestoredSession{Conversation: LoadSession(files[0]), Name: filepath.Base(files[0]), Path: files[0]}
 		}
 	}
-	return nil, "", ""
+	return RestoredSession{}
 }
 
 func cleanup(f *os.File, path string) {
@@ -91,5 +96,6 @@ func (l *SessionLog) rotate() {
 		Backend: l.backend,
 		Model:   l.model,
 		Root:    l.root,
+		PID:     os.Getpid(),
 	})
 }

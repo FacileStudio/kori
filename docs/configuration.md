@@ -92,10 +92,10 @@ could tell apart.
 
 | Layer | Source | Notes |
 |---|---|---|
-| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
-| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
+| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
+| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
 | File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
-| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: inline`, `ui.group_tools: true`, `ui.show_thinking: true` |
+| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: inline`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
 there is nothing to find — no `AGENTS.md`/`CLAUDE.md` anywhere above `root`, no
@@ -129,6 +129,8 @@ reasoning:
 limits:
   compact_at: 75000
   max_iterations: 5
+  max_concurrency: 16
+  max_parallel_agents: 16
 session:
   root: .
   system_prompt: You are a terminal coding assistant.
@@ -192,7 +194,7 @@ Old flat key → new home, for migrating a pre-0.44 file:
 | Old key | New location |
 |---|---|
 | `backend`, `model`, `base_url`, `api_key` | `provider:` |
-| `max_iterations`, `compact_at` | `limits:` |
+| `max_iterations`, `compact_at`, `max_concurrency`, `max_parallel_agents` | `limits:` |
 | `bash` | `tools.run_command` |
 | `subagents` | `tools.parallel_subagent` |
 | `fetch` | `tools.web_fetch` |

@@ -47,6 +47,12 @@ func (c *Config) mergeLimits(over Config) {
 	if over.GrindContinuations != nil {
 		c.GrindContinuations = over.GrindContinuations
 	}
+	if over.MaxConcurrency != nil {
+		c.MaxConcurrency = over.MaxConcurrency
+	}
+	if over.MaxParallelAgents != nil {
+		c.MaxParallelAgents = over.MaxParallelAgents
+	}
 }
 
 // mergeStrings overwrites every string setting over actually mentions. A

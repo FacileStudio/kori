@@ -24,7 +24,9 @@ type declared struct {
 	iterations *int
 	// compactAt is a token count, not a turn count, so it shares the width of
 	// budget rather than iterations.
-	compactAt *int64
+	compactAt         *int64
+	maxConcurrency    *int
+	maxParallelAgents *int
 	uiFlags
 	sourceFlags
 	discoveryFlags
@@ -90,9 +92,11 @@ func declareFlags(fallback Config) declared {
 			thinking: flag.Bool("thinking", *fallback.Thinking, "stream the model's reasoning"),
 			budget:   flag.Int64("reasoning-budget", *fallback.Budget, "tokens one turn may spend on reasoning; 0 sets no ceiling"),
 		},
-		togglesFlags: declareToggles(fallback),
-		iterations:   flag.Int("max-iterations", *fallback.MaxIterations, "how many times the model may be asked"),
-		compactAt:    flag.Int64("compact-at", *fallback.CompactAt, "transcript size in tokens at which the session compacts; 0 turns compaction off"),
+		togglesFlags:      declareToggles(fallback),
+		iterations:        flag.Int("max-iterations", *fallback.MaxIterations, "how many times the model may be asked"),
+		compactAt:         flag.Int64("compact-at", *fallback.CompactAt, "transcript size in tokens at which the session compacts; 0 turns compaction off"),
+		maxConcurrency:    flag.Int("max-concurrency", 16, "maximum concurrent workers"),
+		maxParallelAgents: flag.Int("max-parallel-agents", 16, "maximum parallel agents"),
 		discoveryFlags: discoveryFlags{
 			projectContext: flag.Bool("project-context", *fallback.ProjectContext, "read CLAUDE.md and AGENTS.md from root upward into the system prompt"),
 			skills:         flag.Bool("skills", *fallback.Skills, "tell the model about skills found in ~/.agents/skills and trusted .agents/skills directories"),

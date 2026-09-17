@@ -79,3 +79,13 @@ func TestRootSearchFlags(t *testing.T) {
 		t.Error("find-files flag missing from root command")
 	}
 }
+
+func TestRootConcurrencyFlags(t *testing.T) {
+	cmd := newRootCmd("v0.57.0")
+	if cmd.Flags().Lookup("max-concurrency") == nil {
+		t.Error("max-concurrency flag missing from root command")
+	}
+	if cmd.Flags().Lookup("max-parallel-agents") == nil {
+		t.Error("max-parallel-agents flag missing from root command")
+	}
+}

@@ -95,13 +95,14 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 // snapshot, so the two cannot disagree about what was loaded.
 func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.SessionConfig {
 	return tui.SessionConfig{
-		Root:         p.config.Root,
-		Model:        p.config.Model,
-		Backend:      p.config.Backend,
-		Diffs:        *p.config.Diffs,
-		GroupTools:   p.config.GroupTools,
-		ShowThinking: *p.config.ShowThinking,
-		CompactAt:    resolveCompactAt(*p.config.CompactAt, backend),
+		Root:           p.config.Root,
+		Model:          p.config.Model,
+		Backend:        p.config.Backend,
+		Diffs:          *p.config.Diffs,
+		GroupTools:     p.config.GroupTools,
+		ShowThinking:   *p.config.ShowThinking,
+		CompactAt:      resolveCompactAt(*p.config.CompactAt, backend),
+		MaxConcurrency: resolveConcurrency(p.config.MaxConcurrency, p.config.MaxParallelAgents),
 		Grind: tui.GrindConfig{
 			Cost:          *p.config.GrindCost,
 			Tokens:        *p.config.GrindTokens,

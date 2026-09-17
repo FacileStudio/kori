@@ -50,6 +50,10 @@ func (m *Model) launchDetached(tasks []string, titles ...[]string) tea.Cmd {
 	tick := m.registerParallel(id, tasks, titles...)
 
 	cfg := m.delegate
+	concurrency := m.maxConcurrency
+	if concurrency <= 0 {
+		concurrency = 16
+	}
 	go func() {
 		results, err := nacelle.DelegateParallel(context.Background(), cfg, tasks, nacelle.ParallelSubAgentOptions{
 			Approve: delegateApprove(cfg),
@@ -62,6 +66,7 @@ func (m *Model) launchDetached(tasks []string, titles ...[]string) tea.Cmd {
 			ToolDone: func(batch string, idx int, tool string, err error) {
 				ReportSubagentDone(id, idx, tool, err)
 			},
+			MaxConcurrency: concurrency,
 		})
 		if err != nil {
 			detached <- detachedResult{batch: id, idx: -1, err: err.Error()}

@@ -45,25 +45,15 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 	base := theme.Themed(true)
 
 	m := &Model{
-		core:       core{agent: agent, banner: banner, autoResume: c.AutoResume, resumePath: c.Resume, herdrClient: herdr.NewFromEnv()},
-		transcript: transcript{compactAt: c.CompactAt},
-		composer:   composer{prompt: newPrompt(c.PromptPlaceholder, base.Border), hist: history.New()},
-		look: look{
-			theme:          base,
-			spin:           status.NewSpinner(),
-			showHooks:      c.Hooks.Show,
-			showHookOutput: c.Hooks.ShowOutput,
-		},
-		account: account{
-			began: time.Now(),
-			grind: grindBudget{cost: c.Grind.Cost, tokens: c.Grind.Tokens, cap: c.Grind.Continuations},
-		},
-		screen: screen{width: 80, liveRows: 1},
-		commandState: commandState{
-			skills: byName,
-			menu:   *menu.New(menuItems(byName)),
-		},
-		run: initialInflight(c),
+		core:          core{agent: agent, banner: banner, autoResume: c.AutoResume, resumePath: c.Resume, herdrClient: herdr.NewFromEnv()},
+		transcript:    transcript{compactAt: c.CompactAt},
+		composer:      composer{prompt: newPrompt(c.PromptPlaceholder, base.Border), hist: history.New()},
+		look:          look{theme: base, spin: status.NewSpinner(), showHooks: c.Hooks.Show, showHookOutput: c.Hooks.ShowOutput},
+		account:       account{began: time.Now(), grind: grindBudget{cost: c.Grind.Cost, tokens: c.Grind.Tokens, cap: c.Grind.Continuations}},
+		screen:        screen{width: 80, liveRows: 1},
+		commandState:  commandState{skills: byName, menu: *menu.New(menuItems(byName))},
+		parallelState: parallelState{maxConcurrency: c.MaxConcurrency},
+		run:           initialInflight(c),
 	}
 	m.pretty = theme.Prettier(m.theme.Markdown, max(m.width-2, 1))
 	m.promptStyles = m.prompt.Styles()
@@ -92,11 +82,23 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 // terminal's, positioned by View, and a blink tick for a cursor nobody renders
 // is a timer that wakes the program up to change nothing.
 func (m *Model) Init() tea.Cmd {
-	if convo, name, err := restoreAtLaunch(m.resumePath, m.run.root, m.autoResume); convo != nil {
-		m.conversation = convo
-		m.say(fromClient, fmt.Sprintf("resumed session from %s (%d messages)", name, len(convo)))
-	} else if err != "" {
-		m.say(fromClient, err)
+	if res := restoreAtLaunch(m.resumePath, m.run.root, m.autoResume); res.Conversation != nil {
+		m.conversation = res.Conversation
+		savedSession := m.session
+		m.session = nil
+		for _, msg := range res.Conversation {
+			text := messageText(msg)
+			switch msg.Role {
+			case nacelle.RoleUser:
+				m.say(fromReader, text)
+			case nacelle.RoleAssistant:
+				m.say(fromModel, text)
+			}
+		}
+		m.session = savedSession
+		m.say(fromClient, fmt.Sprintf("resumed session %s (%d messages)", res.Name, len(res.Conversation)))
+	} else if res.Error != "" {
+		m.say(fromClient, res.Error)
 	}
 	return tea.Batch(tea.RequestBackgroundColor, watchDelegations(), watchTasks(), watchTitles(), watchDetached(), watchUpdates(), watchHooks(), m.startupDiagnostics())
 }

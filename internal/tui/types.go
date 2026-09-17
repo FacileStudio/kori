@@ -65,6 +65,8 @@ type core struct {
 	delegate    nacelle.Config
 	herdrClient *herdr.Client
 	diagLoop    bool
+	detached    bool
+	detachedMsg string
 }
 
 type heldEntry struct {
@@ -148,10 +150,11 @@ type parallelTaskInfo struct {
 // path keys by nacelle's tool ID, and a model-incrementing counter keeps the
 // detached keys apart from them.
 type parallelState struct {
-	parallelTasks map[string][]parallelTaskInfo
-	detachedSeq   int
-	pending       map[string][]string
-	pendingTitles map[string][]string
+	parallelTasks  map[string][]parallelTaskInfo
+	detachedSeq    int
+	maxConcurrency int
+	pending        map[string][]string
+	pendingTitles  map[string][]string
 }
 
 // composer groups the prompt's own textarea and its recall history, so model

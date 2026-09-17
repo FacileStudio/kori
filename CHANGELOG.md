@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.66.0] - 2026-09-17
+
+### Added
+- feat(sessions): background session management with `kori sessions` (alias `kori list`), attach/resume, and kill
+- feat(sessions): detached execution via `--detach` (`-d`) flag, `/detach` TUI command, and `ctrl+d`
+- feat(settings): configurable `limits.max_concurrency` and `limits.max_parallel_agents` in `~/.kori.yml` (default 16)
+
+### Fixed
+- fix(parallel): upgrade default subagent concurrency limit to 16 concurrent workers
+
 ## [0.65.9] - 2026-09-17
 
 ### Added

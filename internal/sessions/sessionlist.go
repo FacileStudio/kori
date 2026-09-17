@@ -129,9 +129,11 @@ func ResolveSession(value string) string {
 	if info, err := os.Stat(value); err == nil && !info.IsDir() {
 		return value
 	}
-	value = strings.TrimSuffix(value, ".jsonl")
+	trimmed := strings.TrimSuffix(value, ".jsonl")
 	for _, p := range ListSessionFiles("") {
-		if filepath.Base(p) == value || filepath.Base(p) == value+".jsonl" {
+		name := filepath.Base(p)
+		base := strings.TrimSuffix(name, ".jsonl")
+		if name == value || name == trimmed || name == trimmed+".jsonl" || base == trimmed || strings.HasSuffix(base, "-"+trimmed) {
 			return p
 		}
 	}

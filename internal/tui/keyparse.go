@@ -51,10 +51,14 @@ import (
 // purpose — esc closes the dropdown before it stops anything, because a
 // dropdown standing open is the nearer thing to back out of, and it is what
 // esc already meant there. See escaped for what it does with no run to stop.
-func (m *Model) key(press tea.KeyPressMsg) (bool, tea.Cmd) {
+func (m *Model) controlKey(press tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch press.String() {
 	case "ctrl+\\":
 		return true, tea.Quit
+	case "ctrl+d":
+		if m.run.busy || m.prompt.Value() == "" {
+			return true, m.detachCmd()
+		}
 	case "ctrl+c":
 		if !m.run.busy || time.Since(m.run.interrupted) < forceQuit {
 			return true, tea.Quit
@@ -62,14 +66,19 @@ func (m *Model) key(press tea.KeyPressMsg) (bool, tea.Cmd) {
 		m.abandon()
 		return true, nil
 	}
+	return false, nil
+}
+
+func (m *Model) key(press tea.KeyPressMsg) (bool, tea.Cmd) {
+	if handled, cmd := m.controlKey(press); handled {
+		return true, cmd
+	}
 	if m.run.pending != nil {
 		m.decide(press)
 		return true, nil
 	}
-	if m.menu.Open() {
-		if m.navigateMenu(press) {
-			return true, nil
-		}
+	if m.menu.Open() && m.navigateMenu(press) {
+		return true, nil
 	}
 	return m.promptKey(press)
 }
@@ -192,8 +201,4 @@ func (m *Model) historyKey(press tea.KeyPressMsg) (bool, tea.Cmd) {
 		}
 	}
 	return false, nil
-}
-
-func (m *Model) viewMenu() string {
-	return menu.View(&m.menu, max(m.width, 1), m.theme.Plain, m.theme.Menu, m.theme.Command)
 }

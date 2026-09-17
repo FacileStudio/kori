@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -71,17 +70,6 @@ func shellTruncate(text string, limit int) string {
 		kept = kept[:cut]
 	}
 	return kept + fmt.Sprintf("\n\n[truncated: %d of %d bytes shown]", len(kept), len(text))
-}
-
-// shellKillGroup signals the shell and everything it started, reporting
-// whether there was still a group there to receive it. The negative pid is
-// the whole point: kill(-pgid) reaches the group, where kill(pid) reaches
-// only the shell that spawned the work.
-func shellKillGroup(cmd *exec.Cmd, signal syscall.Signal) bool {
-	if cmd == nil || cmd.Process == nil {
-		return false
-	}
-	return syscall.Kill(-cmd.Process.Pid, signal) == nil
 }
 
 // shellExitCode reports the exit status an ExitError carries, and -1 for

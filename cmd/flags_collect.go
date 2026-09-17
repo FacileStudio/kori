@@ -11,6 +11,7 @@ func collectFlags(cmd *cobra.Command, f *cliFlags) settings.Config {
 	collectSessionFlags(cmd, &f.sessionFlags, &cfg)
 	collectToolFlags(cmd, &f.toolFlags, &cfg)
 	collectDiscoveryFlags(cmd, &f.discoveryFlags, &cfg)
+	collectLimitFlags(cmd, &f.discoveryFlags, &cfg)
 	return cfg
 }
 
@@ -61,6 +62,9 @@ func collectSessionFlags(cmd *cobra.Command, f *sessionFlags, cfg *settings.Conf
 	}
 	if fl.Changed("show-hook-output") {
 		cfg.ShowHookOutput = &f.showHookOutput
+	}
+	if fl.Changed("detach") {
+		cfg.Detach = &f.detach
 	}
 }
 
@@ -118,11 +122,21 @@ func collectDiscoveryFlags(cmd *cobra.Command, f *discoveryFlags, cfg *settings.
 	if fl.Changed("gates-file") {
 		cfg.GatesFile = f.gatesFile
 	}
+}
+
+func collectLimitFlags(cmd *cobra.Command, f *discoveryFlags, cfg *settings.Config) {
+	fl := cmd.Flags()
 	if fl.Changed("max-iterations") {
 		cfg.MaxIterations = &f.iterations
 	}
 	if fl.Changed("compact-at") {
 		cfg.CompactAt = &f.compactAt
+	}
+	if fl.Changed("max-concurrency") {
+		cfg.MaxConcurrency = &f.maxConcurrency
+	}
+	if fl.Changed("max-parallel-agents") {
+		cfg.MaxParallelAgents = &f.maxParallelAgents
 	}
 	if fl.Changed("json") {
 		cfg.JSON = &f.json

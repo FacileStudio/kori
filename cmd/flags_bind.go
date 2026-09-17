@@ -21,6 +21,7 @@ type sessionFlags struct {
 	printPrompt    string
 	showHooks      bool
 	showHookOutput bool
+	detach         bool
 }
 
 type toolFlags struct {
@@ -37,15 +38,17 @@ type toolFlags struct {
 }
 
 type discoveryFlags struct {
-	projectContext bool
-	skills         bool
-	skillDirs      []string
-	trustSkills    bool
-	trustHooks     bool
-	gatesFile      string
-	iterations     int
-	compactAt      int64
-	json           bool
+	projectContext    bool
+	skills            bool
+	skillDirs         []string
+	trustSkills       bool
+	trustHooks        bool
+	gatesFile         string
+	iterations        int
+	compactAt         int64
+	json              bool
+	maxConcurrency    int
+	maxParallelAgents int
 }
 
 type cliFlags struct {
@@ -83,6 +86,7 @@ func bindSessionFlags(cmd *cobra.Command, f *sessionFlags) {
 	fl.StringVar(&f.printPrompt, "print", "", "Run prompt in headless mode and stream response to stdout")
 	fl.BoolVar(&f.showHooks, "show-hooks", true, "Show hook execution in conversation")
 	fl.BoolVar(&f.showHookOutput, "show-hook-output", true, "Show hook output preview in conversation")
+	fl.BoolVarP(&f.detach, "detach", "d", false, "Launch prompt headlessly in background")
 }
 
 func bindToolFlags(cmd *cobra.Command, f *toolFlags) {
@@ -109,5 +113,7 @@ func bindDiscoveryFlags(cmd *cobra.Command, f *discoveryFlags) {
 	fl.StringVar(&f.gatesFile, "gates-file", "", "YAML file of gate checks the session must pass")
 	fl.IntVar(&f.iterations, "max-iterations", 5, "Maximum model turns before asking the user")
 	fl.Int64Var(&f.compactAt, "compact-at", 75000, "Transcript token threshold for compaction (0 disables)")
+	fl.IntVar(&f.maxConcurrency, "max-concurrency", 16, "Maximum concurrent workers for parallel delegation")
+	fl.IntVar(&f.maxParallelAgents, "max-parallel-agents", 16, "Maximum parallel agents running concurrently")
 	fl.BoolVar(&f.json, "json", false, "Emit output as JSON document where supported")
 }

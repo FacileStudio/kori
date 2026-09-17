@@ -47,3 +47,49 @@ func TestParallelAgentsTrueInTheFileTurnsTheMountOn(t *testing.T) {
 		t.Error("parallel_agents: true in the file left the mount off")
 	}
 }
+
+func TestMaxConcurrencyDefaultsTo16(t *testing.T) {
+	written(t, "")
+
+	config, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if config.MaxConcurrency == nil || *config.MaxConcurrency != 16 {
+		t.Errorf("max_concurrency got %v, want 16", config.MaxConcurrency)
+	}
+}
+
+func TestMaxConcurrencyFollowsPrecedenceChain(t *testing.T) {
+	written(t, "limits:\n  max_concurrency: 8")
+	t.Setenv("KORI_MAX_CONCURRENCY", "32")
+
+	config, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if config.MaxConcurrency == nil || *config.MaxConcurrency != 32 {
+		t.Errorf("max_concurrency got %v, want 32", config.MaxConcurrency)
+	}
+}
+
+func TestMaxParallelAgentsFromEnvAndFile(t *testing.T) {
+	written(t, "limits:\n  max_parallel_agents: 4")
+
+	config, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if config.MaxParallelAgents == nil || *config.MaxParallelAgents != 4 {
+		t.Errorf("max_parallel_agents got %v, want 4", config.MaxParallelAgents)
+	}
+
+	t.Setenv("KORI_MAX_PARALLEL_AGENTS", "24")
+	config, err = settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if config.MaxParallelAgents == nil || *config.MaxParallelAgents != 24 {
+		t.Errorf("max_parallel_agents got %v, want 24", config.MaxParallelAgents)
+	}
+}

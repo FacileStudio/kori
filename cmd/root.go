@@ -40,6 +40,9 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newCronCmd())
 	cmd.AddCommand(newBenchCmd())
 	cmd.AddCommand(newSandboxCmd())
+	cmd.AddCommand(newSessionsCmd(version))
+	cmd.AddCommand(newResumeCmd(version))
+	cmd.AddCommand(newListCmd())
 	return cmd
 }
 
@@ -48,6 +51,9 @@ func runRoot(c *cobra.Command, f *cliFlags, version string, args []string) error
 	prompt, isHeadless, err := resolvePrompt(c, f, args)
 	if err != nil {
 		return err
+	}
+	if f.detach {
+		return runDetached(prompt)
 	}
 	if isHeadless {
 		return agent.RunHeadlessWithFlags(prompt, cfg)

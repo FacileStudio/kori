@@ -95,18 +95,16 @@ type sessionHeader struct {
 	Backend string `json:"backend"`
 	Model   string `json:"model"`
 	Root    string `json:"root"`
+	PID     int    `json:"pid,omitempty"`
 }
 
-// sessionEntry is one recorded line. Text and the tool pair are exclusive —
-// a question or an answer carries text, a finished tool carries a name and a
-// duration — and both halves are omitempty so a tool entry has no empty
-// "text" key inviting a reader to look for content that was never collected.
 type sessionEntry struct {
-	At   string `json:"t"`
-	Who  string `json:"who"`
-	Text string `json:"text,omitempty"`
-	Name string `json:"name,omitempty"`
-	Ms   int64  `json:"ms,omitempty"`
+	At     string `json:"t"`
+	Who    string `json:"who"`
+	Text   string `json:"text,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Ms     int64  `json:"ms,omitempty"`
+	Status string `json:"status,omitempty"`
 }
 
 // newSessionLog opens this run's transcript, or returns nil if it cannot.
@@ -156,6 +154,7 @@ func newSessionLog(backend, model, root string) *sessionLog {
 		Backend: backend,
 		Model:   model,
 		Root:    root,
+		PID:     os.Getpid(),
 	}) {
 		return nil
 	}
