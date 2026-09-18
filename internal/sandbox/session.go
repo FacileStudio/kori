@@ -30,27 +30,10 @@ func checkGuard(ctx context.Context, target *Target, opts SessionOptions, r Runn
 	guardOpts := GuardOptions{
 		ExpectedUser:    opts.User,
 		ExpectedWorkdir: opts.WorkDir,
-		CheckHarness:    true,
 		Runner:          r,
 	}
 	_, err := PreflightCheck(ctx, target, guardOpts)
 	return err
-}
-
-func syncBinary(ctx context.Context, target *Target, opts SessionOptions, r Runner) (string, error) {
-	if opts.NoSync {
-		return "kori", nil
-	}
-	syncOpts := SyncOptions{
-		User:   opts.User,
-		Force:  opts.Sync,
-		Runner: r,
-	}
-	bin, err := EnsureKoriBinary(ctx, target, syncOpts)
-	if err != nil {
-		return "", fmt.Errorf("syncing binary: %w", err)
-	}
-	return bin, nil
 }
 
 func execSSH(ctx context.Context, target *Target, opts SessionOptions, remoteBin string, r Runner) error {
@@ -107,11 +90,7 @@ func RunSession(ctx context.Context, opts SessionOptions) error {
 	if err := checkGuard(ctx, target, opts, runner); err != nil {
 		return err
 	}
-	remoteBin, err := syncBinary(ctx, target, opts, runner)
-	if err != nil {
-		return err
-	}
-	execErr := execSSH(ctx, target, opts, remoteBin, runner)
+	execErr := execSSH(ctx, target, opts, "", runner)
 	if err := takePostSnapshot(ctx, target, opts, runner); err != nil {
 		return err
 	}

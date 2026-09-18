@@ -9,7 +9,7 @@ import (
 
 func TestBuildGuardProbeCommand(t *testing.T) {
 	cmd1 := BuildGuardProbeCommand("")
-	if !strings.Contains(cmd1, "whoami") || !strings.Contains(cmd1, "VM_HARNESS=") {
+	if !strings.Contains(cmd1, "whoami") || !strings.Contains(cmd1, "pwd") {
 		t.Fatalf("unexpected probe command: %s", cmd1)
 	}
 	cmd2 := BuildGuardProbeCommand("/workspace")
@@ -19,12 +19,12 @@ func TestBuildGuardProbeCommand(t *testing.T) {
 }
 
 func TestParseGuardOutput(t *testing.T) {
-	output := "boite\n/home/boite\nVM_HARNESS=1726000000\nWORKDIR_OK\n"
+	output := "boite\n/home/boite\nWORKDIR_OK\n"
 	res, err := ParseGuardOutput(output)
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	if res.User != "boite" || res.Workdir != "/home/boite" || res.Harness != "1726000000" {
+	if res.User != "boite" || res.Workdir != "/home/boite" {
 		t.Fatalf("unexpected guard result: %+v", res)
 	}
 	if _, err := ParseGuardOutput("single_line"); err == nil {
@@ -33,8 +33,8 @@ func TestParseGuardOutput(t *testing.T) {
 }
 
 func TestVerifyIsolation(t *testing.T) {
-	opts := GuardOptions{ExpectedUser: "boite", CheckHarness: true, ExpectedWorkdir: "/workspace"}
-	res := &GuardResult{User: "root", Workdir: "/root", Harness: "123"}
+	opts := GuardOptions{ExpectedUser: "boite", ExpectedWorkdir: "/workspace"}
+	res := &GuardResult{User: "root", Workdir: "/root"}
 	if err := VerifyIsolation(res, "WORKDIR_OK", opts); err == nil {
 		t.Fatal("expected error for root user")
 	}
@@ -43,11 +43,6 @@ func TestVerifyIsolation(t *testing.T) {
 		t.Fatal("expected error for user mismatch")
 	}
 	res.User = "boite"
-	res.Harness = ""
-	if err := VerifyIsolation(res, "WORKDIR_OK", opts); err == nil {
-		t.Fatal("expected error for missing harness")
-	}
-	res.Harness = "123"
 	if err := VerifyIsolation(res, "WORKDIR_MISSING", opts); err == nil {
 		t.Fatal("expected error for missing workdir")
 	}
@@ -65,7 +60,7 @@ func TestPreflightCheck(t *testing.T) {
 	target.Status = "running"
 	opts.Runner = &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
-			return []byte("boite\n/home/boite\nVM_HARNESS=12345\n"), nil
+			return []byte("boite\n/home/boite\n"), nil
 		},
 	}
 	res, err := PreflightCheck(context.Background(), target, opts)

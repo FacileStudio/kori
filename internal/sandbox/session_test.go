@@ -102,21 +102,20 @@ func TestRunSessionWithSnapshot(t *testing.T) {
 	}
 }
 
-func TestRunSessionSyncError(t *testing.T) {
+func TestRunSessionExecError(t *testing.T) {
 	setupTestInstance(t, "pingu", "running")
 	runner := &mockRunner{
-		runFunc: func(_ context.Context, name string, _ ...string) ([]byte, error) {
-			return nil, errors.New("sync failed")
+		execFunc: func(_ context.Context, _ *exec.Cmd) error {
+			return errors.New("ssh failed")
 		},
 	}
 	opts := SessionOptions{
 		VMName:    "pingu",
-		Sync:      true,
 		SkipGuard: true,
 		Runner:    runner,
 	}
 	err := RunSession(context.Background(), opts)
-	if err == nil || !strings.Contains(err.Error(), "syncing binary") {
-		t.Fatalf("expected sync error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "ssh failed") {
+		t.Fatalf("expected exec error, got %v", err)
 	}
 }

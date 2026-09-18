@@ -3,45 +3,32 @@ package sandbox
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestDefaultSyncOptions(t *testing.T) {
 	opts := DefaultSyncOptions()
-	if opts.RemotePath != "/tmp/kori" || opts.User != "boite" {
-		t.Fatalf("unexpected defaults: %+v", opts)
+	if opts.User != "boite" {
+		t.Fatalf("unexpected default user: %s", opts.User)
 	}
 }
 
-func TestFindLocalBinary(t *testing.T) {
-	bin, err := FindLocalBinary()
-	if err != nil {
-		t.Logf("no local binary found: %v", err)
-	} else if bin == "" {
-		t.Fatal("expected non-empty binary path")
+func TestBuildSCPArgs(t *testing.T) {
+	target := &Target{Name: "pingu", Host: "10.0.0.1", Port: 2226, KeyPath: "/key", User: "boite"}
+	args := buildSCPArgs(target, "", "/local/file", "/remote/file")
+	if len(args) < 5 {
+		t.Fatalf("unexpected scp args: %v", args)
+	}
+	last := args[len(args)-1]
+	if last != "boite@10.0.0.1:/remote/file" {
+		t.Fatalf("unexpected dest in scp args: %s", last)
 	}
 }
 
-func TestCheckRemoteBinary(t *testing.T) {
-	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
-	runner := &mockRunner{
-		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
-			return []byte("/usr/local/bin/kori\n"), nil
-		},
+func TestCopyFileToVM(t *testing.T) {
+	if err := CopyFileToVM(context.Background(), nil, DefaultSyncOptions(), "a", "b"); err == nil {
+		t.Fatal("expected error for nil target")
 	}
-	opts := SyncOptions{User: "boite", Runner: runner}
-	path, err := CheckRemoteBinary(context.Background(), target, opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if path != "/usr/local/bin/kori" {
-		t.Fatalf("expected /usr/local/bin/kori, got %s", path)
-	}
-}
-
-func TestCopyBinaryToVM(t *testing.T) {
 	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
 	var commands []string
 	runner := &mockRunner{
@@ -50,56 +37,20 @@ func TestCopyBinaryToVM(t *testing.T) {
 			return []byte("ok"), nil
 		},
 	}
-	opts := SyncOptions{User: "boite", RemotePath: "/tmp/kori", Runner: runner}
-	err := CopyBinaryToVM(context.Background(), target, opts, "/tmp/kori")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(commands) != 2 || commands[0] != "scp" || commands[1] != "ssh" {
-		t.Fatalf("expected scp and ssh, got: %v", commands)
-	}
-}
-
-func TestEnsureKoriBinary(t *testing.T) {
-	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
-	runner := &mockRunner{
-		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
-			return []byte("/usr/local/bin/kori\n"), nil
-		},
-	}
 	opts := SyncOptions{User: "boite", Runner: runner}
-	res, err := EnsureKoriBinary(context.Background(), target, opts)
-	if err != nil {
+	if err := CopyFileToVM(context.Background(), target, opts, "/local/path", "/remote/path"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res != "/usr/local/bin/kori" {
-		t.Fatalf("expected existing binary, got: %s", res)
+	if len(commands) != 1 || commands[0] != "scp" {
+		t.Fatalf("expected scp command, got %v", commands)
 	}
-}
-
-func TestEnsureKoriBinaryCopy(t *testing.T) {
-	tmpDir := t.TempDir()
-	dummyBin := filepath.Join(tmpDir, "kori")
-	if err := os.WriteFile(dummyBin, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatalf("failed to create dummy binary: %v", err)
-	}
-	target := &Target{Name: "pingu", Backend: "boite", Port: 2226, KeyPath: "/key"}
-	callCount := 0
-	runner := &mockRunner{
+	runnerErr := &mockRunner{
 		runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
-			callCount++
-			if callCount == 1 {
-				return nil, errors.New("not found")
-			}
-			return []byte("ok"), nil
+			return []byte("fail"), errors.New("exit 1")
 		},
 	}
-	opts := SyncOptions{LocalPath: dummyBin, RemotePath: "/tmp/kori", Runner: runner}
-	res, err := EnsureKoriBinary(context.Background(), target, opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res != "/tmp/kori" {
-		t.Fatalf("expected /tmp/kori, got %s", res)
+	opts.Runner = runnerErr
+	if err := CopyFileToVM(context.Background(), target, opts, "/local/path", "/remote/path"); err == nil {
+		t.Fatal("expected error when scp fails")
 	}
 }

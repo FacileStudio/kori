@@ -12,7 +12,6 @@ import (
 type GuardOptions struct {
 	ExpectedUser    string
 	ExpectedWorkdir string
-	CheckHarness    bool
 	Runner          Runner
 }
 
@@ -20,21 +19,19 @@ type GuardOptions struct {
 type GuardResult struct {
 	User    string
 	Workdir string
-	Harness string
 }
 
 // DefaultGuardOptions returns default isolation verification options.
 func DefaultGuardOptions() GuardOptions {
 	return GuardOptions{
 		ExpectedUser: "boite",
-		CheckHarness: true,
 		Runner:       NewDefaultRunner(),
 	}
 }
 
 // BuildGuardProbeCommand generates the shell probe command executed in the target.
 func BuildGuardProbeCommand(workdir string) string {
-	cmd := "whoami; pwd; echo VM_HARNESS=$(date +%s)"
+	cmd := "whoami; pwd"
 	if workdir != "" {
 		cmd += fmt.Sprintf("; mkdir -p %q 2>/dev/null; if [ -d %q ]; then echo WORKDIR_OK; else echo WORKDIR_MISSING; fi", workdir, workdir)
 	}
@@ -51,16 +48,10 @@ func ParseGuardOutput(output string) (*GuardResult, error) {
 		User:    strings.TrimSpace(lines[0]),
 		Workdir: strings.TrimSpace(lines[1]),
 	}
-	for _, line := range lines[2:] {
-		trimmed := strings.TrimSpace(line)
-		if h, ok := strings.CutPrefix(trimmed, "VM_HARNESS="); ok {
-			res.Harness = h
-		}
-	}
 	return res, nil
 }
 
-// VerifyIsolation ensures that user identity, harness sentinel, and directory match expectations.
+// VerifyIsolation ensures that user identity and directory match expectations.
 func VerifyIsolation(res *GuardResult, rawOut string, opts GuardOptions) error {
 	if res == nil {
 		return errors.New("guard result is nil")
@@ -70,9 +61,6 @@ func VerifyIsolation(res *GuardResult, rawOut string, opts GuardOptions) error {
 	}
 	if opts.ExpectedUser != "" && res.User != opts.ExpectedUser {
 		return fmt.Errorf("isolation guard failed: VM user %q does not match expected %q", res.User, opts.ExpectedUser)
-	}
-	if opts.CheckHarness && res.Harness == "" {
-		return errors.New("isolation guard failed: VM harness check failed")
 	}
 	if opts.ExpectedWorkdir != "" && !strings.Contains(rawOut, "WORKDIR_OK") {
 		return fmt.Errorf("isolation guard failed: project directory %q does not exist in VM", opts.ExpectedWorkdir)
@@ -92,6 +80,8 @@ func runProbe(ctx context.Context, target *Target, user string, cmd string, runn
 		port = 2226
 	}
 	args := []string{
+		"-o", "BatchMode=yes",
+		"-o", "ForwardAgent=no",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",

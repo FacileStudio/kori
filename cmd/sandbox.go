@@ -3,9 +3,12 @@ package cmd
 import (
 	"context"
 
+	"github.com/FacileStudio/nacelle"
+	"github.com/spf13/cobra"
+
+	"github.com/FacileStudio/kori/internal/agent"
 	"github.com/FacileStudio/kori/internal/sandbox"
 	"github.com/FacileStudio/kori/internal/settings"
-	"github.com/spf13/cobra"
 )
 
 type sandboxFlags struct {
@@ -36,8 +39,8 @@ to launch a session.`,
   # Run a prompt headlessly in the sandbox and stream output
   kori sandbox <target> "run tests and fix any failing cases"
 
-  # Sync the kori binary before starting and snapshot on completion
-  kori sandbox <target> --sync --snapshot`,
+  # Start a session in the sandbox and snapshot on completion
+  kori sandbox <target> --snapshot`,
 		RunE: func(c *cobra.Command, args []string) error {
 			return runSandbox(c, &f, args)
 		},
@@ -77,6 +80,13 @@ func newSandboxRunCmd(f *sandboxFlags) *cobra.Command {
 	return cmd
 }
 
+func rootVersion(c *cobra.Command) string {
+	if c == nil {
+		return ""
+	}
+	return c.Root().Version
+}
+
 func runSandbox(cmd *cobra.Command, f *sandboxFlags, args []string) error {
 	if len(args) == 0 {
 		return cmd.Help()
@@ -89,5 +99,35 @@ func runSandbox(cmd *cobra.Command, f *sandboxFlags, args []string) error {
 	if err != nil {
 		return err
 	}
-	return sandbox.RunSession(context.Background(), opts)
+	return runSandboxSession(cmd.Context(), rootVersion(cmd), cfg, opts)
+}
+
+func runSandboxSession(ctx context.Context, version string, cfg settings.Config, opts sandbox.SessionOptions) error {
+	if err := checkPreflight(ctx, opts.Target, opts); err != nil {
+		return err
+	}
+	if opts.WorkDir != "" {
+		cfg.Root = opts.WorkDir
+	}
+	tools, closer, err := sandbox.RemoteTools(sandbox.ToolsOptions{
+		Target:  opts.Target,
+		WorkDir: opts.WorkDir,
+		Runner:  opts.Runner,
+	})
+	if err != nil {
+		return err
+	}
+	execErr := executeSandboxAgent(version, cfg, opts, tools, func() { closeRemoteTools(closer) })
+	snapErr := triggerSnapshotIfRequested(ctx, opts.Target, opts)
+	if execErr != nil {
+		return execErr
+	}
+	return snapErr
+}
+
+func executeSandboxAgent(version string, cfg settings.Config, opts sandbox.SessionOptions, tools []nacelle.Tool, cleanup func()) error {
+	if opts.PrintPrompt != "" {
+		return agent.RunHeadlessWithTools(opts.PrintPrompt, cfg, tools, cleanup)
+	}
+	return agent.RunSessionWithTools(version, cfg, tools, cleanup)
 }

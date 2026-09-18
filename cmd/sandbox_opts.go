@@ -2,7 +2,12 @@ package cmd
 
 import (
 	"cmp"
+	"context"
+	"fmt"
+	"io"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/FacileStudio/kori/internal/sandbox"
 	"github.com/FacileStudio/kori/internal/settings"
@@ -47,8 +52,8 @@ func resolveSandboxSnapshot(cmd *cobra.Command, f *sandboxFlags, target *sandbox
 
 func bindSandboxFlags(cmd *cobra.Command, f *sandboxFlags) {
 	fl := cmd.Flags()
-	fl.BoolVar(&f.sync, "sync", false, "Sync kori binary into the target before starting")
-	fl.BoolVar(&f.noSync, "no-sync", false, "Disable binary synchronization")
+	fl.BoolVar(&f.sync, "sync", false, "Legacy no-op flag retained for backwards compatibility")
+	fl.BoolVar(&f.noSync, "no-sync", false, "Legacy no-op flag retained for backwards compatibility")
 	fl.BoolVar(&f.snapshot, "snapshot", false, "Create a snapshot of the VM overlay disk on exit (boite only)")
 	fl.StringVarP(&f.workdir, "workdir", "w", "", "Working directory inside the target")
 	fl.StringVarP(&f.user, "user", "u", "", "SSH user for connecting to the target")
@@ -82,4 +87,41 @@ func buildSandboxOptions(cmd *cobra.Command, f *sandboxFlags, cfg settings.Confi
 		PrintPrompt: prompt,
 		Args:        promptArgs,
 	}, nil
+}
+
+func checkPreflight(ctx context.Context, target *sandbox.Target, opts sandbox.SessionOptions) error {
+	if opts.SkipGuard {
+		return nil
+	}
+	guardOpts := sandbox.GuardOptions{
+		ExpectedUser:    opts.User,
+		ExpectedWorkdir: opts.WorkDir,
+		Runner:          opts.Runner,
+	}
+	_, err := sandbox.PreflightCheck(ctx, target, guardOpts)
+	return err
+}
+
+func closeRemoteTools(closer io.Closer) {
+	if closer == nil {
+		return
+	}
+	if err := closer.Close(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+}
+
+func triggerSnapshotIfRequested(ctx context.Context, target *sandbox.Target, opts sandbox.SessionOptions) error {
+	if !opts.Snapshot || target == nil || target.Backend != "boite" {
+		return nil
+	}
+	tag := opts.SnapshotTag
+	if tag == "" {
+		tag = fmt.Sprintf("session-%d", time.Now().Unix())
+	}
+	snapOpts := sandbox.SnapshotOptions{Runner: opts.Runner}
+	if err := sandbox.TakeSnapshot(ctx, target.Name, tag, snapOpts); err != nil {
+		return fmt.Errorf("snapshot error: %w", err)
+	}
+	return nil
 }
