@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.68.0] - 2026-09-18
+
+### Added
+- feat(sandbox): host-side agent execution with remote SSH tool remoting for microVM sandboxes
+- feat(sandbox): remote implementations of `run_command`, `read_file`, `write_file`, `edit_file`, `list_directory`, `find_files`, and `search_content`
+- feat(agent): `RunSessionWithTools` and `RunHeadlessWithTools` for custom tool set mounting
+
+### Changed
+- refactor(sandbox): remove guest binary synchronization; guest VMs require zero Kori binaries and zero API keys
+- refactor(sandbox): update preflight check to verify SSH connectivity and workspace readiness without requiring guest binaries
+
 ## [0.67.1] - 2026-09-18
 
 ### Fixed
