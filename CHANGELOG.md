@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.69.0] - 2026-09-18
+
+### Added
+- feat(settings): `session.additional_prompt` (`KORI_ADDITIONAL_PROMPT`, `-additional-prompt`), appended after the base prompt and skills catalog so a specialist persona layers on without replacing the harness guidance
+- feat(settings): profiles carry `limits` and `additional_prompt`, keeping identity and model-aware tuning together while tools and security stay in `~/.kori.yml`
+
+### Fixed
+- fix(settings): a profile's identity now beats `~/.kori.yml` however the profile is selected — before, the file's own `profile:` key lost to the file's other keys while `-profile` and `KORI_PROFILE` won, so one profile meant two different things and a scaffolded config could name a profile and never see its backend
+- fix(docs): `example.kori.yml` is byte-identical to the first-boot scaffold again, and a test now fails when they drift; the documented `ui.rendering_mode` and `ui.transparent_blocks` defaults follow the code (`tui`, `true`)
+
 ## [0.68.0] - 2026-09-18
 
 ### Added
@@ -81,11 +91,3 @@
 - fix: cron install command installs to crontab
 
 ## [Unreleased]
-
-### Added
-- feat(settings): `session.additional_prompt` (`KORI_ADDITIONAL_PROMPT`, `-additional-prompt`), appended after the base prompt and skills catalog so a specialist persona layers on without replacing the harness guidance
-- feat(settings): profiles carry `limits` and `additional_prompt`, keeping identity and model-aware tuning together while tools and security stay in `~/.kori.yml`
-
-### Fixed
-- fix(settings): a profile's identity now beats `~/.kori.yml` however the profile is selected — before, the file's own `profile:` key lost to the file's other keys while `-profile` and `KORI_PROFILE` won, so one profile meant two different things and a scaffolded config could name a profile and never see its backend
-- fix(docs): `example.kori.yml` is byte-identical to the first-boot scaffold again, and a test now fails when they drift; the documented `ui.rendering_mode` and `ui.transparent_blocks` defaults follow the code (`tui`, `true`)
