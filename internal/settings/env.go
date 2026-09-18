@@ -31,7 +31,7 @@ func FromEnv() Config {
 	return Config{
 		Profile:  envGet("PROFILE"),
 		Provider: providerEnv(),
-		Session:  Session{Root: envGet("ROOT"), System: envGet("SYSTEM_PROMPT")},
+		Session:  Session{Root: envGet("ROOT"), System: envGet("SYSTEM_PROMPT"), Additional: envGet("ADDITIONAL_PROMPT")},
 		Limits: Limits{
 			MaxIterations: envInt(EnvPrefix + "MAX_ITERATIONS"), CompactAt: envInt64(EnvPrefix + "COMPACT_AT"),
 			GrindCost: envFloat(EnvPrefix + "GRIND_MIN_COST"), GrindTokens: envInt64(EnvPrefix + "GRIND_MIN_TOKENS"),

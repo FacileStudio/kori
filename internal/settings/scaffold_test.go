@@ -63,3 +63,17 @@ func TestTemplateScaffoldsEditorFields(t *testing.T) {
 		t.Error("the template does not scaffold prompt_edit_key:")
 	}
 }
+
+// The README says example.kori.yml is the file the first boot writes, so the
+// two have to be one text and not two. It drifted before — rendering_mode,
+// transparent_blocks, the sandbox targets — which is why the promise is a test
+// rather than a comment above the constant.
+func TestExampleConfigIsTheScaffoldTemplate(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "example.kori.yml"))
+	if err != nil {
+		t.Fatalf("reading example.kori.yml: %v", err)
+	}
+	if string(raw) != Template {
+		t.Error("example.kori.yml has drifted from settings.Template: regenerate the file from internal/settings/scaffold.go")
+	}
+}

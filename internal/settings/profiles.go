@@ -13,11 +13,17 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-// Profile defines a reusable provider and reasoning configuration.
+// Profile defines a reusable identity: the provider and reasoning that reach a
+// backend, the limits that tune a run to that model, and the persona text the
+// session layers on top of the base prompt. Behaviour — tools, security,
+// sources, gates — stays in ~/.kori.yml, so one profile works in every
+// checkout without carrying that checkout's environment along.
 type Profile struct {
-	Name      string    `yaml:"name"`
-	Provider  Provider  `yaml:"provider"`
-	Reasoning Reasoning `yaml:"reasoning"`
+	Name             string    `yaml:"name"`
+	Provider         Provider  `yaml:"provider"`
+	Reasoning        Reasoning `yaml:"reasoning"`
+	Limits           Limits    `yaml:"limits"`
+	AdditionalPrompt string    `yaml:"additional_prompt"`
 }
 
 // ProfilesDir returns the path to ~/.kori/profiles.
@@ -88,7 +94,11 @@ func FindProfile(profiles []Profile, name string) (Profile, bool) {
 	return Profile{}, false
 }
 
-// ApplyProfile overrides provider and reasoning fields from the profile.
+// ApplyProfile overwrites the provider, reasoning and limit fields the profile
+// actually sets, and layers its persona text on top of the prompt. A profile is
+// a layer of its own, above ~/.kori.yml: it moves the identity it names even
+// when the file names one too, and only the environment and the flags, merged
+// after it, can still win a field back.
 func ApplyProfile(c *Config, p Profile) {
 	if p.Provider.Backend != "" {
 		c.Backend = p.Provider.Backend
@@ -111,16 +121,25 @@ func ApplyProfile(c *Config, p Profile) {
 	if p.Reasoning.Budget != nil {
 		c.Budget = p.Reasoning.Budget
 	}
+	c.mergeLimits(Config{Limits: p.Limits})
+	if p.AdditionalPrompt != "" {
+		c.Additional = p.AdditionalPrompt
+	}
 }
 
-func applyLayer(dst *Config, layer Config) error {
-	if layer.Profile != "" {
-		if err := ResolveProfile(dst, layer.Profile); err != nil {
-			return err
+// selectedProfile is the profile the layers name: the flag beats the
+// environment beats the file, the same order every other setting follows.
+// Reading the name out before any layer is merged is what lets the profile be
+// applied as a layer of its own rather than at whichever layer named it — see
+// resolveLayers, and the asymmetry that used to make the same profile mean two
+// different things depending on how it was selected.
+func selectedProfile(file, env, flags Config) string {
+	for _, layer := range []Config{flags, env, file} {
+		if layer.Profile != "" {
+			return layer.Profile
 		}
 	}
-	dst.merge(layer)
-	return nil
+	return ""
 }
 
 // ResolveProfile loads and applies the named profile onto the Config.
@@ -143,14 +162,4 @@ func ResolveProfile(c *Config, name string) error {
 	ApplyProfile(c, p)
 	c.Profile = name
 	return nil
-}
-
-func settingsNoConfig(system string, flags, env Config) (Config, error) {
-	resolved := Defaults(system)
-	for _, layer := range []Config{env, flags} {
-		if err := applyLayer(&resolved, layer); err != nil {
-			return Config{}, err
-		}
-	}
-	return resolveGates(resolved, flags.GatesFile)
 }

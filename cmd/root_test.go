@@ -80,6 +80,29 @@ func TestRootSearchFlags(t *testing.T) {
 	}
 }
 
+// The prompt settings are the pair that must not drift apart: system_prompt
+// replaces the base prompt, additional_prompt is appended on top of whatever
+// is active. Both have to reach the command line.
+func TestRootAdditionalPromptFlag(t *testing.T) {
+	cmd := newRootCmd("v0.68.0")
+	if cmd.Flags().Lookup("additional-prompt") == nil {
+		t.Fatal("additional-prompt flag missing from root command")
+	}
+	if cmd.Flags().Lookup("system-prompt") == nil {
+		t.Fatal("system-prompt flag missing from root command")
+	}
+	if err := cmd.ParseFlags([]string{"--additional-prompt", "stay in character"}); err != nil {
+		t.Fatalf("parsing --additional-prompt: %v", err)
+	}
+	got, err := cmd.Flags().GetString("additional-prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "stay in character" {
+		t.Errorf("additional-prompt = %q, want the typed value", got)
+	}
+}
+
 func TestRootConcurrencyFlags(t *testing.T) {
 	cmd := newRootCmd("v0.57.0")
 	if cmd.Flags().Lookup("max-concurrency") == nil {

@@ -18,7 +18,7 @@ func (p *pathList) Set(v string) error { *p = append(*p, v); return nil }
 
 // declared holds every flag pointer returned by declareFlags.
 type declared struct {
-	backend, model, root, system, profile *string
+	backend, model, root, system, additional, profile *string
 	reasoningFlags
 	togglesFlags
 	iterations *int
@@ -78,6 +78,7 @@ func declareFlags(fallback Config) declared {
 		profile:     flag.String("profile", fallback.Profile, "profile name from ~/.kori/profiles/"),
 		root:        flag.String("root", fallback.Root, "directory the file tools may reach"),
 		system:      flag.String("system-prompt", fallback.System, "system prompt"),
+		additional:  flag.String("additional-prompt", fallback.Additional, "text appended after the base system prompt"),
 		uiFlags: uiFlags{
 			cont:           flag.Bool("continue", *fallback.Continue, "auto-resume newest session"),
 			resume:         flag.String("resume", *fallback.Resume, "resume a specific session by id or file path"),

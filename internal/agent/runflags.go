@@ -175,14 +175,24 @@ func augmentSystem(config *settings.Config, mcp connected) loaded {
 		found.contextPaths = paths
 		found.contextChars = len(text)
 	}
-	if !*config.Skills {
-		found.systemChars = len(config.System)
-		return found
+	if *config.Skills {
+		res := skills.LoadSkills(config.Root, *config.TrustSkills, config.SkillDirs)
+		config.System += res.System
+		found.notice = res.Notice
+		found.skills = res.Skills
 	}
-	res := skills.LoadSkills(config.Root, *config.TrustSkills, config.SkillDirs)
-	config.System += res.System
-	found.notice = res.Notice
-	found.skills = res.Skills
+	config.System += additionalPrompt(config.Additional)
 	found.systemChars = len(config.System)
 	return found
+}
+
+// additionalPrompt is the session's own steering text, appended last so it
+// sits closest to the turn and carries the most weight over the harness
+// guidance it layers on. A base prompt replaced via system_prompt is appended
+// to just the same: the two settings compose rather than compete.
+func additionalPrompt(text string) string {
+	if text == "" {
+		return ""
+	}
+	return "\n\n" + text
 }

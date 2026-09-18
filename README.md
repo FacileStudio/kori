@@ -103,7 +103,8 @@ The example file with all defaults, and the full reference with the
 precedence order and the traps in each setting:
 [docs/configuration.md](docs/configuration.md).
 
-`example.kori.yml` in this repo is the same file the first boot writes:
+`example.kori.yml` in this repo is the same file the first boot writes — the whole
+surface, abridged here:
 
 ```yaml
 provider:
@@ -115,6 +116,7 @@ provider:
 session:
   root: .
   system_prompt: ""
+  additional_prompt: ""
   continue: false
 
 limits:
@@ -145,12 +147,11 @@ discovery:
   trust_hooks: false
 
 ui:
-  rendering_mode: inline
+  rendering_mode: tui
   group_tools: true
   show_thinking: true
   prompt_placeholder: "Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\\ forces it."
-  start_message: ""
-  transparent_blocks: false
+  transparent_blocks: true
   cron_list_json: false
 
 sources:

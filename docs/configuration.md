@@ -92,10 +92,10 @@ could tell apart.
 
 | Layer | Source | Notes |
 |---|---|---|
-| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
-| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
+| Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-additional-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
+| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
 | File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
-| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: inline`, `ui.group_tools: true`, `ui.show_thinking: true` |
+| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
 there is nothing to find — no `AGENTS.md`/`CLAUDE.md` anywhere above `root`, no
@@ -134,6 +134,9 @@ limits:
 session:
   root: .
   system_prompt: You are a terminal coding assistant.
+  # appended after the base prompt and everything layered onto it; leave it out
+  # to keep the harness prompt alone, or set it to layer a persona on top.
+  additional_prompt: Keep answers under 200 words; always name the file you changed.
   continue: false
 tools:
   run_command: true
@@ -154,11 +157,11 @@ discovery:
   trust_hooks: false
 ui:
   prompt_placeholder: 'Ask something. Esc stops a run, ctrl+c stops or quits, ctrl+\ forces it.'
-  rendering_mode: inline
+  rendering_mode: tui
   group_tools: true
   show_thinking: true
   diffs: true
-  transparent_blocks: false
+  transparent_blocks: true
   show_hooks: true
   show_hook_output: true
   # cron_list_json: false
@@ -277,7 +280,13 @@ gateway is the overwhelmingly common case, and it is the case that works.
 
 ### Profiles and /model command
 
-Profiles define reusable model and provider configurations in `~/.kori/profiles/<name>.yml`. Kori reads any `.yml` file in that folder on startup and during interactive sessions.
+Profiles define reusable identities in `~/.kori/profiles/<name>.yml`. Kori reads any `.yml` file in that folder on startup and during interactive sessions.
+
+A profile carries **identity and model-aware settings**: which backend and model to reach, how
+hard that model should think, the limits that suit it, and the persona layered on top of the
+prompt. **Behaviour** — tools, security, sources, gates — stays in `~/.kori.yml`. That split is
+the point: one profile then works in every checkout without carrying that checkout's environment
+along, and a single edit to `~/.kori.yml` moves every profile at once.
 
 ```yaml
 # ~/.kori/profiles/fast.yml
@@ -289,6 +298,13 @@ reasoning:
   effort: low
   thinking: true
   budget: 2048
+# limits tune a run to the model that is running it: a fast model can take more
+# turns, a large one may want to compact later.
+limits:
+  max_iterations: 8
+  compact_at: 100000
+# the persona, appended after the base prompt exactly like session.additional_prompt
+additional_prompt: Answer in short paragraphs and name every file you change.
 ```
 
 You can select a profile in `~/.kori.yml` using the top-level `profile` key:
@@ -297,11 +313,21 @@ You can select a profile in `~/.kori.yml` using the top-level `profile` key:
 profile: fast
 ```
 
-Or pass `-profile <name>` on the command line, or set `KORI_PROFILE=<name>` in the environment. Precedence order follows:
+Or pass `-profile <name>` on the command line, or set `KORI_PROFILE=<name>` in the environment. Whichever layer names a profile, it applies in the same place. Precedence order follows:
 
 ```
-defaults < profile < ~/.kori.yml < environment < flags
+defaults < ~/.kori.yml < profile < environment < flags
 ```
+
+A profile is a layer of its own, and it sits **above `~/.kori.yml`**: the identity it names wins
+over the file, so `profile: fast` moves the backend even when the file names one too, and one
+profile then works in every checkout. It is not a complete override — the environment and the
+flags still win over it, field by field, so a `KORI_MAX_ITERATIONS` or `-max-iterations` beats the
+limit a profile sets, and what is specific to *this* machine survives a profile the whole suite
+shares. Exactly one `additional_prompt` reaches the prompt: a profile's persona replaces the
+file's rather than stacking with it. And a profile's limits and persona take effect at launch
+only: a mid-session `/model` swap changes the provider and the reasoning, and nothing else. The
+system prompt and the run's limits stay as they were when the session started.
 
 During an interactive session, the `/model` command switches models on the fly:
 
@@ -312,7 +338,7 @@ The conversation history remains intact when switching models mid-session.
 
 ## Context and skills
 
-Four things the TUI adds beyond flags and the model's own tools, all client-side, none of them
+Five things the TUI adds beyond flags and the model's own tools, all client-side, none of them
 in the core `nacelle` package — the same "the library must never read configuration from disk"
 rule above applies to these too, not only to settings.
 
@@ -334,6 +360,15 @@ for the models post-trained on it, 24&nbsp;KB for general GPT-5 — so prompt si
 how much the model was *not* trained on your harness, and Claude is well inside the trained case
 for this shape of tool. What it carries is only what a terminal changes about answering: brevity,
 paths rather than pasted source, and not claiming something works unchecked.
+
+**Your own steering text** (`-additional-prompt`, `session.additional_prompt`) is appended last
+of all, after the skills catalog. It is the one prompt setting that composes rather than replaces:
+in a transformer prompt later text carries more weight, so a directive placed at the end exerts
+the most influence over the guidance it sits on — and it mirrors how `CLAUDE.md` and `AGENTS.md`
+already work, appended at the end as user instructions layered over the base. Use it for a persona
+that must steer every turn, which a skill cannot do: skills use progressive disclosure, so only
+their name and description reach the prompt and the body is read on demand. Leaving it empty is
+the ordinary case.
 
 **Project and global context** (`-project-context`, `context.go`). Every `CLAUDE.md` and
 `AGENTS.md` found walking up from `-root` to the filesystem root, plus `~/.agents/AGENTS.md` —

@@ -45,12 +45,15 @@ type Provider struct {
 // Session is the launch settings that are not display choices — where the
 // session starts, what its base prompt says, whether it resumes. They live
 // under the session: group in the file, except resume: which is flag-only.
+// Additional is not a second base prompt: it is text appended after everything
+// else, so steering a specialist persona in never costs the harness guidance.
 type Session struct {
-	Root     string  `yaml:"root"`
-	System   string  `yaml:"system_prompt"`
-	Continue *bool   `yaml:"continue"`
-	Resume   *string `yaml:"-"`
-	Detach   *bool   `yaml:"-"`
+	Root       string  `yaml:"root"`
+	System     string  `yaml:"system_prompt"`
+	Additional string  `yaml:"additional_prompt"`
+	Continue   *bool   `yaml:"continue"`
+	Resume     *string `yaml:"-"`
+	Detach     *bool   `yaml:"-"`
 }
 
 // Config is one layer of settings. Every field is a pointer or an empty-able string so a layer
@@ -231,11 +234,9 @@ func Settings(system string, flags Config) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	resolved := Defaults(system)
-	for _, layer := range []Config{file, env, flags} {
-		if err := applyLayer(&resolved, layer); err != nil {
-			return Config{}, err
-		}
+	resolved, err := resolveLayers(system, file, env, flags)
+	if err != nil {
+		return Config{}, err
 	}
 	return resolveGates(resolved, flags.GatesFile)
 }

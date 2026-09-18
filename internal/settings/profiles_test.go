@@ -86,26 +86,67 @@ func TestApplyProfile(t *testing.T) {
 	}
 }
 
-func setupProfileEnv(t *testing.T) {
+// A profile carries the model-aware limits, because the same iteration ceiling
+// and compaction threshold are wrong for a fast small model and a slow large
+// one — tuning that belongs with the identity, not with the checkout.
+func TestApplyProfileCarriesLimitsAndPersona(t *testing.T) {
+	iterations, compactAt := 12, int64(150_000)
+	p := Profile{
+		Name:             "workstation",
+		Limits:           Limits{MaxIterations: &iterations, CompactAt: &compactAt},
+		AdditionalPrompt: "You are a terse C bug hunter.",
+	}
+
+	var c Config
+	ApplyProfile(&c, p)
+
+	if c.MaxIterations == nil || *c.MaxIterations != 12 {
+		t.Errorf("max iterations = %v, want the profile's 12", c.MaxIterations)
+	}
+	if c.CompactAt == nil || *c.CompactAt != 150_000 {
+		t.Errorf("compact at = %v, want the profile's 150000", c.CompactAt)
+	}
+	if c.Additional != "You are a terse C bug hunter." {
+		t.Errorf("additional = %q, want the profile's persona", c.Additional)
+	}
+}
+
+// setupProfileEnvWith writes one profile and one ~/.kori.yml into a home of the
+// test's own, and clears the variables a developer's shell may carry: the suite
+// must answer the same on a machine that exports KORI_PROFILE or
+// KORI_MAX_ITERATIONS as it does in CI.
+func setupProfileEnvWith(t *testing.T, profileFile, profileYml, fileYml string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("KORI_BACKEND", "")
-	t.Setenv("NACELLE_BACKEND", "")
-	t.Setenv("KORI_PROFILE", "")
-	t.Setenv("NACELLE_PROFILE", "")
+	clearEnv(t, "KORI_BACKEND", "NACELLE_BACKEND", "KORI_PROFILE", "NACELLE_PROFILE",
+		"KORI_MAX_ITERATIONS", "NACELLE_MAX_ITERATIONS")
+
 	pDir := filepath.Join(home, ".kori", "profiles")
 	if err := os.MkdirAll(pDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fastYml := "name: fast\nprovider:\n  backend: google\n  model: gemini-2.5-flash\n"
-	if err := os.WriteFile(filepath.Join(pDir, "fast.yml"), []byte(fastYml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pDir, profileFile), []byte(profileYml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fileYml := "provider:\n  backend: anthropic\n"
 	if err := os.WriteFile(filepath.Join(home, ConfigFile), []byte(fileYml), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// clearEnv makes a variable read as unmentioned rather than as empty text.
+func clearEnv(t *testing.T, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		t.Setenv(name, "")
+	}
+}
+
+func setupProfileEnv(t *testing.T) {
+	t.Helper()
+	setupProfileEnvWith(t, "fast.yml",
+		"name: fast\nprovider:\n  backend: google\n  model: gemini-2.5-flash\n",
+		"provider:\n  backend: anthropic\n")
 }
 
 func TestFlagProfileOverridesFileBackend(t *testing.T) {

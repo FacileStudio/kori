@@ -48,6 +48,7 @@ func coreSetters(f declared) map[string]func(*Config) {
 		"effort":              func(c *Config) { c.Effort = *f.effort },
 		"root":                func(c *Config) { c.Root = *f.root },
 		"system-prompt":       func(c *Config) { c.System = *f.system },
+		"additional-prompt":   func(c *Config) { c.Additional = *f.additional },
 		"thinking":            func(c *Config) { c.Thinking = f.thinking },
 		"project-context":     func(c *Config) { c.ProjectContext = f.projectContext },
 		"skills":              func(c *Config) { c.Skills = f.skills },

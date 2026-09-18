@@ -8,6 +8,7 @@ import (
 func collectFlags(cmd *cobra.Command, f *cliFlags) settings.Config {
 	var cfg settings.Config
 	collectModelFlags(cmd, &f.modelFlags, &cfg)
+	collectPromptFlags(cmd, &f.sessionFlags, &cfg)
 	collectSessionFlags(cmd, &f.sessionFlags, &cfg)
 	collectToolFlags(cmd, &f.toolFlags, &cfg)
 	collectDiscoveryFlags(cmd, &f.discoveryFlags, &cfg)
@@ -37,13 +38,24 @@ func collectModelFlags(cmd *cobra.Command, f *modelFlags, cfg *settings.Config) 
 	}
 }
 
+// collectPromptFlags covers the pair that must not drift apart: system_prompt
+// replaces the base prompt outright, additional_prompt is appended on top of
+// whatever is active. Neither is a session or a display choice, so they are
+// gathered here rather than padded into collectSessionFlags' own arm count.
+func collectPromptFlags(cmd *cobra.Command, f *sessionFlags, cfg *settings.Config) {
+	fl := cmd.Flags()
+	if fl.Changed("system-prompt") {
+		cfg.System = f.system
+	}
+	if fl.Changed("additional-prompt") {
+		cfg.Additional = f.additional
+	}
+}
+
 func collectSessionFlags(cmd *cobra.Command, f *sessionFlags, cfg *settings.Config) {
 	fl := cmd.Flags()
 	if fl.Changed("root") {
 		cfg.Root = f.root
-	}
-	if fl.Changed("system-prompt") {
-		cfg.System = f.system
 	}
 	if fl.Changed("continue") {
 		cfg.Continue = &f.cont

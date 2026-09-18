@@ -14,6 +14,7 @@ type modelFlags struct {
 type sessionFlags struct {
 	root           string
 	system         string
+	additional     string
 	cont           bool
 	resume         string
 	mode           string
@@ -80,6 +81,7 @@ func bindSessionFlags(cmd *cobra.Command, f *sessionFlags) {
 	fl := cmd.Flags()
 	fl.StringVar(&f.root, "root", ".", "Directory the file tools may reach")
 	fl.StringVar(&f.system, "system-prompt", "", "Override system prompt to guide agent behavior")
+	fl.StringVar(&f.additional, "additional-prompt", "", "Extra text appended after the base system prompt")
 	fl.BoolVar(&f.cont, "continue", false, "Auto-resume the newest session for this project")
 	fl.StringVar(&f.resume, "resume", "", "Resume a specific session by ID or file path")
 	fl.StringVar(&f.mode, "mode", "tui", "Interface rendering mode: tui or inline")
