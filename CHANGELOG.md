@@ -91,3 +91,13 @@
 - fix: cron install command installs to crontab
 
 ## [Unreleased]
+
+## [0.70.0] - 2026-09-19
+
+### Added
+- feat(sandbox): split sandbox into local boite VMs and kori remote execution backends
+
+### Fixed
+- fix: remove duplicate `session.additional_prompt` definition
+
+## [0.69.0] - 2026-09-18
