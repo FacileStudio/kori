@@ -1,19 +1,12 @@
 package cmd
 
 import (
-	"context"
-
-	"github.com/FacileStudio/nacelle"
 	"github.com/spf13/cobra"
 
-	"github.com/FacileStudio/kori/internal/agent"
-	"github.com/FacileStudio/kori/internal/sandbox"
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
 type sandboxFlags struct {
-	sync        bool
-	noSync      bool
 	snapshot    bool
 	workdir     string
 	user        string
@@ -23,31 +16,32 @@ type sandboxFlags struct {
 func newSandboxCmd() *cobra.Command {
 	var f sandboxFlags
 	cmd := &cobra.Command{
-		Use:   "sandbox [command]",
-		Short: "Start kori inside an isolated sandbox VM or remote SSH host",
-		Long: `Manage and start kori agent sessions inside isolated microVM sandboxes or remote SSH hosts.
+		Use:   "sandbox [vm] [prompt]",
+		Short: "Run a kori session against a local boite microVM",
+		Long: `Run kori on the host with every tool call executing inside a local boite
+microVM over SSH. The model reaches the VM's workspace but never sees the host
+filesystem, and no API key or kori binary is ever shipped into the guest.
 
-The agent session executes strictly inside the guest environment's filesystem and process tree.
-Use 'kori sandbox list' to discover available targets, or 'kori sandbox <target> [prompt]'
-to launch a session.`,
-		Example: `  # List available sandbox targets and VMs
+Use 'kori sandbox list' to discover available VMs, or 'kori sandbox <vm> [prompt]'
+to start a session. SSH hosts that are not boite VMs are handled by 'kori remote'.`,
+		Example: `  # List local boite VMs and configured sandbox targets
   kori sandbox list
 
-  # Start an interactive session in a target
-  kori sandbox <target>
+  # Start an interactive session in a VM
+  kori sandbox pingu
 
-  # Run a prompt headlessly in the sandbox and stream output
-  kori sandbox <target> "run tests and fix any failing cases"
+  # Run a prompt headlessly in the VM and stream output
+  kori sandbox pingu "run the test suite and report failures"
 
-  # Start a session in the sandbox and snapshot on completion
-  kori sandbox <target> --snapshot`,
+  # Snapshot the VM overlay disk when the session ends
+  kori sandbox pingu --snapshot`,
+		Args: cobra.ArbitraryArgs,
 		RunE: func(c *cobra.Command, args []string) error {
 			return runSandbox(c, &f, args)
 		},
 	}
 	bindSandboxFlags(cmd, &f)
 	cmd.AddCommand(newSandboxListCmd())
-	cmd.AddCommand(newSandboxRunCmd(&f))
 	return cmd
 }
 
@@ -56,27 +50,13 @@ func newSandboxListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List available sandbox targets and boite VMs",
-		Long:    "Discover and list all configured sandbox targets and registered boite VM instances.",
+		Short:   "List local boite VMs and configured sandbox targets",
+		Long:    "Discover and list every configured sandbox target and registered boite VM instance.",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runSandboxList(jsonOutput)
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output instance list in JSON format")
-	return cmd
-}
-
-func newSandboxRunCmd(f *sandboxFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "run <target> [prompt]",
-		Short: "Run an agent session inside a sandbox target",
-		Long:  "Start a kori agent session inside the specified sandbox VM or remote SSH host.",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(c *cobra.Command, args []string) error {
-			return runSandbox(c, f, args)
-		},
-	}
-	bindSandboxFlags(cmd, f)
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output the target list as JSON")
 	return cmd
 }
 
@@ -88,46 +68,19 @@ func rootVersion(c *cobra.Command) string {
 }
 
 func runSandbox(cmd *cobra.Command, f *sandboxFlags, args []string) error {
-	if len(args) == 0 {
-		return cmd.Help()
-	}
 	cfg, err := settings.Settings("", settings.Config{})
 	if err != nil {
 		return err
+	}
+	if len(args) == 0 && cfg.Sandbox.Default == "" && cfg.Sandbox.VMName == "" {
+		return cmd.Help()
 	}
 	opts, err := buildSandboxOptions(cmd, f, cfg, args)
 	if err != nil {
 		return err
 	}
-	return runSandboxSession(cmd.Context(), rootVersion(cmd), cfg, opts)
-}
-
-func runSandboxSession(ctx context.Context, version string, cfg settings.Config, opts sandbox.SessionOptions) error {
-	if err := checkPreflight(ctx, opts.Target, opts); err != nil {
+	if err := runTargetSession(cmd.Context(), rootVersion(cmd), cfg, opts); err != nil {
 		return err
 	}
-	if opts.WorkDir != "" {
-		cfg.Root = opts.WorkDir
-	}
-	tools, closer, err := sandbox.RemoteTools(sandbox.ToolsOptions{
-		Target:  opts.Target,
-		WorkDir: opts.WorkDir,
-		Runner:  opts.Runner,
-	})
-	if err != nil {
-		return err
-	}
-	execErr := executeSandboxAgent(version, cfg, opts, tools, func() { closeRemoteTools(closer) })
-	snapErr := triggerSnapshotIfRequested(ctx, opts.Target, opts)
-	if execErr != nil {
-		return execErr
-	}
-	return snapErr
-}
-
-func executeSandboxAgent(version string, cfg settings.Config, opts sandbox.SessionOptions, tools []nacelle.Tool, cleanup func()) error {
-	if opts.PrintPrompt != "" {
-		return agent.RunHeadlessWithTools(opts.PrintPrompt, cfg, tools, cleanup)
-	}
-	return agent.RunSessionWithTools(version, cfg, tools, cleanup)
+	return triggerSnapshotIfRequested(cmd.Context(), opts.Target, opts)
 }

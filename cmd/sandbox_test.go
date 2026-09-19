@@ -1,35 +1,45 @@
 package cmd
 
 import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/FacileStudio/kori/internal/sandbox"
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
+func writeBoiteInstance(t *testing.T, dir, name string, port int) {
+	t.Helper()
+	instDir := filepath.Join(dir, name)
+	if err := os.MkdirAll(instDir, 0o755); err != nil {
+		t.Fatalf("creating instance dir: %v", err)
+	}
+	state := fmt.Sprintf(`{"name":%q,"ssh_port":%d,"key_path":"/key","status":"running","workspace":"/workspace"}`, name, port)
+	if err := os.WriteFile(filepath.Join(instDir, "state.json"), []byte(state), 0o644); err != nil {
+		t.Fatalf("writing state.json: %v", err)
+	}
+}
+
 func TestNewSandboxCmd(t *testing.T) {
 	cmd := newSandboxCmd()
-	if cmd.Use != "sandbox [command]" {
+	if cmd.Use != "sandbox [vm] [prompt]" {
 		t.Fatalf("unexpected Use: %s", cmd.Use)
 	}
 	if cmd.Short == "" || cmd.Long == "" || cmd.Example == "" {
 		t.Fatal("expected non-empty Short, Long, and Example descriptions")
 	}
-	subcommands := cmd.Commands()
-	if len(subcommands) < 2 {
-		t.Fatalf("expected at least 2 subcommands, got %d", len(subcommands))
-	}
 	foundList := false
-	foundRun := false
-	for _, sub := range subcommands {
+	for _, sub := range cmd.Commands() {
 		if sub.Name() == "list" {
 			foundList = true
 		}
-		if sub.Name() == "run" {
-			foundRun = true
-		}
 	}
-	if !foundList || !foundRun {
-		t.Fatalf("expected list and run subcommands, foundList=%t, foundRun=%t", foundList, foundRun)
+	if !foundList {
+		t.Fatal("expected a list subcommand")
 	}
 }
 
@@ -41,153 +51,105 @@ func TestSandboxListCmd(t *testing.T) {
 	if len(cmd.Aliases) == 0 || cmd.Aliases[0] != "ls" {
 		t.Fatalf("expected alias 'ls', got %v", cmd.Aliases)
 	}
-	if err := runSandboxList(false); err != nil {
-		t.Fatalf("runSandboxList error: %v", err)
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	if err := printSandboxList(settings.Config{}, false); err != nil {
+		t.Fatalf("printSandboxList error: %v", err)
 	}
-	if err := runSandboxList(true); err != nil {
-		t.Fatalf("runSandboxList json error: %v", err)
+	if err := printSandboxList(settings.Config{}, true); err != nil {
+		t.Fatalf("printSandboxList json error: %v", err)
 	}
 }
 
-func TestSandboxRunCmd(t *testing.T) {
-	f := sandboxFlags{}
-	cmd := newSandboxRunCmd(&f)
-	if cmd.Use != "run <target> [prompt]" {
-		t.Fatalf("unexpected Use: %s", cmd.Use)
+func TestCollectConfigTargetEntries(t *testing.T) {
+	cfg := settings.Config{Sandbox: settings.Sandbox{
+		Root: "/workspace",
+		Targets: map[string]settings.SandboxTarget{
+			"dev-vm": {VMName: "dev-box", Port: 2230, User: "dev"},
+		},
+	}}
+	entries := collectConfigTargetEntries(cfg, nil)
+	if len(entries) != 1 {
+		t.Fatalf("expected one entry, got %d", len(entries))
+	}
+	if entries[0].Name != "dev-vm" || entries[0].VM != "dev-box" || entries[0].Port != 2230 || entries[0].Backend != "boite" {
+		t.Fatalf("unexpected entry: %+v", entries[0])
+	}
+}
+
+func TestCollectConfigTargetEntries_TakesInstanceValues(t *testing.T) {
+	cfg := settings.Config{Sandbox: settings.Sandbox{
+		Root:    "/group-root",
+		Targets: map[string]settings.SandboxTarget{"dev-vm": {VMName: "dev-box"}},
+	}}
+	instances := map[string]*sandbox.InstanceState{
+		"dev-box": {Name: "dev-box", SSHPort: 2240, KeyPath: "/inst/key", Workspace: "/inst/ws", Status: "running"},
+	}
+	entries := collectConfigTargetEntries(cfg, instances)
+	if len(entries) != 1 {
+		t.Fatalf("expected one entry, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.Port != 2240 || entry.Key != "/inst/key" || entry.Workspace != "/inst/ws" || entry.Status != "running" {
+		t.Fatalf("expected the instance's own values, got %+v", entry)
 	}
 }
 
 func TestBuildSandboxOptions_WithArgs(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BOITE_INSTANCES_DIR", dir)
+	writeBoiteInstance(t, dir, "testvm", 2226)
 	cmd := newSandboxCmd()
-	f := sandboxFlags{
-		sync:     true,
-		snapshot: true,
-		workdir:  "/custom/dir",
-		user:     "customuser",
-	}
-	if err := cmd.Flags().Set("sync", "true"); err != nil {
-		t.Fatalf("setting sync flag: %v", err)
-	}
-	if err := cmd.Flags().Set("snapshot", "true"); err != nil {
-		t.Fatalf("setting snapshot flag: %v", err)
-	}
+	f := sandboxFlags{workdir: "/custom/dir", user: "customuser"}
 	cfg := settings.Defaults("test")
 	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"testvm", "hello", "world"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if opts.VMName != "testvm" {
-		t.Fatalf("expected VMName testvm, got %s", opts.VMName)
+	if opts.Target.Name != "testvm" || opts.Target.Backend != "boite" {
+		t.Fatalf("unexpected target: %+v", opts.Target)
 	}
-	if opts.WorkDir != "/custom/dir" {
-		t.Fatalf("expected WorkDir /custom/dir, got %s", opts.WorkDir)
-	}
-	if opts.User != "customuser" {
-		t.Fatalf("expected User customuser, got %s", opts.User)
-	}
-	if !opts.Sync || !opts.Snapshot {
-		t.Fatal("expected Sync and Snapshot to be true")
+	if opts.WorkDir != "/custom/dir" || opts.User != "customuser" {
+		t.Fatalf("unexpected overrides: %+v", opts)
 	}
 	if opts.PrintPrompt != "hello world" {
 		t.Fatalf("expected prompt 'hello world', got %s", opts.PrintPrompt)
 	}
 }
 
-func TestBuildSandboxOptions_DefaultsFromConfig(t *testing.T) {
+func TestBuildSandboxOptions_SnapshotFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BOITE_INSTANCES_DIR", dir)
+	writeBoiteInstance(t, dir, "custom-vm", 2226)
+	snapTrue := true
+	cfg := settings.Defaults("test")
+	cfg.Sandbox.Default = "custom-vm"
+	cfg.Sandbox.AutoSnapshot = &snapTrue
 	cmd := newSandboxCmd()
-	f := sandboxFlags{user: "boite"}
-	autoSync := true
-	autoSnap := false
-	cfg := settings.Config{
-		Sandbox: settings.Sandbox{
-			VMName:       "custom-vm",
-			Root:         "/home/yann/project",
-			AutoSync:     &autoSync,
-			AutoSnapshot: &autoSnap,
-		},
-	}
-	opts, err := buildSandboxOptions(cmd, &f, cfg, nil)
+	opts, err := buildSandboxOptions(cmd, &sandboxFlags{}, cfg, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if opts.VMName != "custom-vm" {
-		t.Fatalf("expected default VMName custom-vm, got %s", opts.VMName)
-	}
-	if opts.WorkDir != "/home/yann/project" {
-		t.Fatalf("expected default workdir, got %s", opts.WorkDir)
-	}
-	if !opts.Sync || opts.Snapshot {
-		t.Fatal("expected Sync true and Snapshot false from config")
-	}
-}
-
-func createTestNamedTargetConfig() settings.Config {
-	targets := map[string]settings.SandboxTarget{
-		"staging": {
-			Backend: "ssh",
-			Host:    "staging.internal",
-			Port:    2222,
-			User:    "deploy",
-			Workdir: "/var/app",
-		},
-	}
-	return settings.Config{
-		Sandbox: settings.Sandbox{
-			Targets: targets,
-		},
-	}
-}
-
-func TestBuildSandboxOptions_NamedTarget(t *testing.T) {
-	cmd := newSandboxCmd()
-	f := sandboxFlags{}
-	cfg := createTestNamedTargetConfig()
-	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"staging", "test prompt"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if opts.Target.Backend != "ssh" || opts.Target.Host != "staging.internal" || opts.Target.Port != 2222 {
-		t.Fatalf("unexpected target in options: %+v", opts.Target)
-	}
-	if opts.User != "deploy" || opts.WorkDir != "/var/app" || opts.PrintPrompt != "test prompt" {
-		t.Fatalf("unexpected options fields: %+v", opts)
-	}
-}
-
-func TestBuildSandboxOptions_NoSyncOverrides(t *testing.T) {
-	cmd := newSandboxCmd()
-	f := sandboxFlags{noSync: true, user: "boite"}
-	autoSync := true
-	cfg := settings.Config{
-		Sandbox: settings.Sandbox{
-			VMName:   "custom-vm",
-			AutoSync: &autoSync,
-		},
-	}
-	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"custom-vm"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if opts.Sync {
-		t.Fatal("expected Sync false when --no-sync is set")
+	if !opts.Snapshot {
+		t.Fatal("expected Snapshot true from sandbox.auto_snapshot")
 	}
 }
 
 func TestBuildSandboxOptions_MissingVM(t *testing.T) {
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
 	cmd := newSandboxCmd()
-	f := sandboxFlags{user: "boite"}
-	cfg := settings.Config{}
-	_, err := buildSandboxOptions(cmd, &f, cfg, nil)
-	if err == nil {
-		t.Fatal("expected error when no VM name provided in args or config")
+	f := sandboxFlags{}
+	if _, err := buildSandboxOptions(cmd, &f, settings.Config{}, nil); err == nil {
+		t.Fatal("expected error when no VM name is provided in args or config")
 	}
 }
 
 func TestBuildSandboxOptions_ExplicitPrint(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("BOITE_INSTANCES_DIR", dir)
+	writeBoiteInstance(t, dir, "custom-vm", 2226)
 	cmd := newSandboxCmd()
-	f := sandboxFlags{printPrompt: "run tests", user: "boite"}
-	cfg := settings.Defaults("test")
-	opts, err := buildSandboxOptions(cmd, &f, cfg, []string{"custom-vm", "ignored", "positional"})
+	f := sandboxFlags{printPrompt: "run tests"}
+	opts, err := buildSandboxOptions(cmd, &f, settings.Defaults("test"), []string{"custom-vm", "ignored", "positional"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -197,9 +159,26 @@ func TestBuildSandboxOptions_ExplicitPrint(t *testing.T) {
 }
 
 func TestRunSandbox_NoArgsShowsHelp(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	cmd := newSandboxCmd()
-	f := sandboxFlags{}
-	if err := runSandbox(cmd, &f, nil); err != nil {
+	cmd.SetOut(io.Discard)
+	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("expected nil when showing help for no args, got %v", err)
+	}
+}
+
+func TestRunSandbox_UsesDefaultTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	cfgPath := filepath.Join(home, ".kori.yml")
+	if err := os.WriteFile(cfgPath, []byte("sandbox:\n  default: ghost-vm\n"), 0o644); err != nil {
+		t.Fatalf("writing config: %v", err)
+	}
+	cmd := newSandboxCmd()
+	cmd.SetOut(io.Discard)
+	err := cmd.RunE(cmd, nil)
+	if err == nil || !strings.Contains(err.Error(), "no boite sandbox") {
+		t.Fatalf("expected sandbox.default to be resolved, got %v", err)
 	}
 }

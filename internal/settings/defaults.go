@@ -21,7 +21,7 @@ func Defaults(system string) Config {
 		"██▄█▀ ██▀██ ██▄█▄ ██ ",
 		"██ ██ ▀███▀ ██ ██ ██ ",
 	}, "\n")
-	autoSync, autoSnapshot := true, false
+	autoSnapshot := false
 	return Config{
 		Provider:  Provider{Backend: "anthropic"},
 		Session:   Session{Root: ".", System: system, Continue: &cont, Resume: &resume},
@@ -37,6 +37,7 @@ func Defaults(system string) Config {
 		},
 		UI:      UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput},
 		Editor:  Editor{Editor: "", PromptEditKey: "ctrl+g"},
-		Sandbox: Sandbox{VMName: "", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", Root: "/workspace", AutoSync: &autoSync, AutoSnapshot: &autoSnapshot},
+		Sandbox: Sandbox{VMName: "", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", AutoSnapshot: &autoSnapshot},
+		Remote:  Remote{Port: 22},
 	}
 }

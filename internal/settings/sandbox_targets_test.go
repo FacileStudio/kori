@@ -1,48 +1,41 @@
 package settings
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func testBaseMergeConfig() Config {
-	syncTrue := true
+	snapFalse := false
 	local := SandboxTarget{
-		Backend:  "boite",
-		VMName:   "pingu",
-		Port:     2226,
-		Root:     "/workspace",
-		AutoSync: &syncTrue,
+		VMName:       "pingu",
+		Port:         2226,
+		Root:         "/workspace",
+		AutoSnapshot: &snapFalse,
 	}
-	old := SandboxTarget{Backend: "ssh", Host: "old.host"}
 	return Config{
 		Sandbox: Sandbox{
 			Default: "local",
-			Targets: map[string]SandboxTarget{
-				"local": local,
-				"old":   old,
-			},
+			Targets: map[string]SandboxTarget{"local": local},
 		},
 	}
 }
 
 func testOverMergeConfig() Config {
-	syncFalse := false
 	snapTrue := true
 	local := SandboxTarget{
 		Port:         2228,
-		AutoSync:     &syncFalse,
 		AutoSnapshot: &snapTrue,
-		Workdir:      "/workspace/app",
+		Root:         "/workspace/app",
 	}
 	cloud := SandboxTarget{
-		Backend:    "ssh",
-		Host:       "192.168.1.50",
+		VMName:     "cloud-box",
 		Port:       22,
 		User:       "ubuntu",
 		SSHKeyPath: "~/.ssh/cloud_key",
-		Workdir:    "/srv/project",
 	}
 	return Config{
 		Sandbox: Sandbox{
@@ -55,51 +48,92 @@ func testOverMergeConfig() Config {
 	}
 }
 
+func TestSandboxRemovedKeysRepointed(t *testing.T) {
+	yamlData := "sandbox:\n  targets:\n    old:\n      backend: ssh\n      host: old.host\n"
+	tmp := filepath.Join(t.TempDir(), ".kori.yml")
+	if err := os.WriteFile(tmp, []byte(yamlData), 0o644); err != nil {
+		t.Fatalf("writing tmp config: %v", err)
+	}
+	_, err := Load(tmp)
+	if _, ok := errors.AsType[*ParseError](err); !ok {
+		t.Fatalf("expected a ParseError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "remote.targets") {
+		t.Fatalf("expected the error to name remote.targets, got %v", err)
+	}
+}
+
 func TestSandboxMergeTargets(t *testing.T) {
 	base := testBaseMergeConfig()
 	base.merge(testOverMergeConfig())
 
-	if base.Sandbox.Default != "cloud" || len(base.Sandbox.Targets) != 3 {
-		t.Fatalf("expected Default cloud and 3 targets: %+v", base.Sandbox)
+	if base.Sandbox.Default != "cloud" || len(base.Sandbox.Targets) != 2 {
+		t.Fatalf("expected Default cloud and 2 targets: %+v", base.Sandbox)
 	}
 	local := base.Sandbox.Targets["local"]
-	if local.Backend != "boite" || local.Port != 2228 || local.Workdir != "/workspace/app" {
+	if local.VMName != "pingu" || local.Port != 2228 || local.Root != "/workspace/app" {
 		t.Fatalf("unexpected local target: %+v", local)
 	}
+	if local.AutoSnapshot == nil || !*local.AutoSnapshot {
+		t.Fatalf("expected merged AutoSnapshot true: %+v", local)
+	}
 	cloud := base.Sandbox.Targets["cloud"]
-	if cloud.Backend != "ssh" || cloud.Host != "192.168.1.50" || cloud.User != "ubuntu" {
+	if cloud.VMName != "cloud-box" || cloud.User != "ubuntu" || cloud.SSHKeyPath != "~/.ssh/cloud_key" {
 		t.Fatalf("unexpected cloud target: %+v", cloud)
 	}
-	old := base.Sandbox.Targets["old"]
-	if old.Backend != "ssh" || old.Host != "old.host" {
-		t.Fatalf("unexpected old target: %+v", old)
+}
+
+func TestRemoteMergeTargets(t *testing.T) {
+	base := Defaults("test")
+	base.Remote.Targets = map[string]RemoteTarget{"prod": {Host: "old.internal", Port: 2200}}
+	over := Config{Remote: Remote{
+		Default: "prod",
+		User:    "admin",
+		Root:    "/srv/app",
+		Targets: map[string]RemoteTarget{"prod": {Host: "new.internal", Root: "/srv/prod"}},
+	}}
+	base.merge(over)
+	if base.Remote.Default != "prod" || base.Remote.User != "admin" || base.Remote.Root != "/srv/app" {
+		t.Fatalf("unexpected remote group: %+v", base.Remote)
+	}
+	prod := base.Remote.Targets["prod"]
+	if prod.Host != "new.internal" || prod.Port != 2200 || prod.Root != "/srv/prod" {
+		t.Fatalf("unexpected merged remote target: %+v", prod)
 	}
 }
 
 func testSandboxTargetYAML() string {
 	return `sandbox:
-  default: remote
+  default: dev-vm
   user: globaluser
   vm_name: fallback-vm
   targets:
     local:
-      backend: boite
       vm_name: local-pingu
       port: 2226
       ssh_key_path: ~/.ssh/id_ed25519
       root: /workspace
-      auto_sync: true
       auto_snapshot: false
-    remote:
-      backend: ssh
-      host: dev.server.internal
-      port: 2222
+    dev-vm:
+      vm_name: dev-box
+      port: 2230
       user: dev
       ssh_key_path: ~/.ssh/custom_id
-      root: /root/dir
-      workdir: /home/dev/work
-      auto_sync: false
+      root: /home/dev/work
       auto_snapshot: true
+remote:
+  default: staging
+  user: deploy
+  port: 22
+  ssh_key_path: ~/.ssh/id_ed25519
+  root: /workspace
+  targets:
+    staging:
+      host: staging.example.com
+      port: 2222
+      user: admin
+      ssh_key_path: ~/.ssh/staging_id
+      root: /srv/app
 `
 }
 
@@ -112,15 +146,22 @@ func TestSandboxLoadYAMLWithTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected load error: %v", err)
 	}
-	if loaded.Sandbox.Default != "remote" || loaded.Sandbox.User != "globaluser" {
-		t.Fatalf("unexpected loaded config: %+v", loaded.Sandbox)
+	if loaded.Sandbox.Default != "dev-vm" || loaded.Sandbox.User != "globaluser" {
+		t.Fatalf("unexpected loaded sandbox config: %+v", loaded.Sandbox)
 	}
 	loc := loaded.Sandbox.Targets["local"]
-	if loc.Backend != "boite" || loc.VMName != "local-pingu" || loc.Port != 2226 {
+	if loc.VMName != "local-pingu" || loc.Port != 2226 {
 		t.Fatalf("unexpected local target fields: %+v", loc)
 	}
-	rem := loaded.Sandbox.Targets["remote"]
-	if rem.Backend != "ssh" || rem.Host != "dev.server.internal" || rem.Port != 2222 {
-		t.Fatalf("unexpected remote target fields: %+v", rem)
+	dev := loaded.Sandbox.Targets["dev-vm"]
+	if dev.VMName != "dev-box" || dev.Port != 2230 || dev.User != "dev" || dev.Root != "/home/dev/work" {
+		t.Fatalf("unexpected dev-vm target fields: %+v", dev)
+	}
+	if loaded.Remote.Default != "staging" || loaded.Remote.User != "deploy" {
+		t.Fatalf("unexpected loaded remote group: %+v", loaded.Remote)
+	}
+	staging := loaded.Remote.Targets["staging"]
+	if staging.Host != "staging.example.com" || staging.Port != 2222 || staging.User != "admin" {
+		t.Fatalf("unexpected staging target fields: %+v", staging)
 	}
 }

@@ -78,6 +78,7 @@ type Config struct {
 	Automation `yaml:",inline"`
 	Editor     `yaml:"editor"`
 	Sandbox    Sandbox `yaml:"sandbox"`
+	Remote     Remote  `yaml:"remote"`
 }
 
 // Toggles is the tool-mount settings: whether the model gets each optional
@@ -211,7 +212,7 @@ func Load(path string) (Config, error) {
 
 	var settings Config
 	if err := decoder.Decode(&settings); err != nil && !errors.Is(err, io.EOF) {
-		return Config{}, &ParseError{Path: path, Err: repointCronKey(err)}
+		return Config{}, &ParseError{Path: path, Err: repointSandboxKeys(repointCronKey(err))}
 	}
 	return settings, nil
 }

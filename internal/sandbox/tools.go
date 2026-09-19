@@ -2,10 +2,12 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +22,10 @@ type ToolsOptions struct {
 	CommandTimeout time.Duration
 	MaxOutputBytes int
 	MaxReadBytes   int
+	// ControlPath is the ssh ControlMaster socket shared by every tool call.
+	// RemoteTools fills it in; a session built by hand without one pays a
+	// handshake per call.
+	ControlPath string
 }
 
 type remoteSession struct {
@@ -37,43 +43,48 @@ func (c *remoteCloser) Close() error {
 	return nil
 }
 
+// quoteArg makes one argument safe for the remote POSIX shell. Single quotes
+// are the one form a shell never looks inside: unlike double quotes, they stop
+// `$` and backticks from expanding, which matters for a path the model chose.
+//
+// A leading `~` is expanded through "$HOME" rather than quoted away, so a
+// home-relative path still means the remote user's home — the reason
+// resolveRemotePath leaves `~` alone in the first place.
 func quoteArg(p string) string {
-	if strings.ContainsAny(p, " \t\n\"'$`\\*?[]()~;&|<>") {
-		return fmt.Sprintf("%q", p)
+	if p == "~" {
+		return `"$HOME"`
 	}
-	return p
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		return `"$HOME"/` + shellQuote(rest)
+	}
+	return shellQuote(p)
 }
 
+// shellQuote single-quotes p when the shell would read anything in it, and
+// leaves it bare otherwise so an ordinary path stays readable in a probe.
+func shellQuote(p string) string {
+	if p == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(p, " \t\n\"'$`\\*?[]()~;&|<>") {
+		return p
+	}
+	return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+}
+
+// resolveRemotePath resolves a tool path against the target workspace. An
+// absolute or home-relative path is left alone; a relative path with no
+// configured workspace stays relative, so the remote shell resolves it against
+// the SSH login directory.
 func resolveRemotePath(workDir, p string) string {
 	trimmed := strings.TrimSpace(p)
 	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "~") {
 		return path.Clean(trimmed)
 	}
-	base := workDir
-	if base == "" {
-		base = "/workspace"
+	if workDir == "" {
+		return path.Clean(trimmed)
 	}
-	return path.Clean(path.Join(base, trimmed))
-}
-
-func buildRemoteSSHArgs(target *Target, user, remoteCmd string) []string {
-	host, port := resolveTargetHostPort(target)
-	args := []string{
-		"-o", "BatchMode=yes",
-		"-o", "ForwardAgent=no",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(port),
-	}
-	if target != nil && target.KeyPath != "" {
-		args = append(args, "-i", target.KeyPath)
-	}
-	args = append(args, resolveSSHUserDestination(target, user, host))
-	if remoteCmd != "" {
-		args = append(args, remoteCmd)
-	}
-	return args
+	return path.Clean(path.Join(workDir, trimmed))
 }
 
 func (s *remoteSession) runSSH(ctx context.Context, remoteCmd string) ([]byte, error) {
@@ -82,15 +93,15 @@ func (s *remoteSession) runSSH(ctx context.Context, remoteCmd string) ([]byte, e
 	if s.opts.Target != nil {
 		user = s.opts.Target.User
 	}
-	args := buildRemoteSSHArgs(s.opts.Target, user, remoteCmd)
+	args := buildRemoteSSHArgs(s.opts.Target, user, remoteCmd, s.opts.ControlPath)
 	return runner.Run(ctx, "ssh", args...)
 }
 
+// newRemoteSession fills in the timeouts and limits a session needs. WorkDir is
+// deliberately left as given: empty means the SSH login directory, which is
+// where a bare ssh lands, rather than a path invented here.
 func newRemoteSession(opts ToolsOptions) *remoteSession {
 	resolved := opts
-	if resolved.WorkDir == "" {
-		resolved.WorkDir = "/workspace"
-	}
 	if resolved.CommandTimeout == 0 {
 		resolved.CommandTimeout = 2 * time.Minute
 	}
@@ -106,37 +117,40 @@ func newRemoteSession(opts ToolsOptions) *remoteSession {
 	return &remoteSession{opts: resolved}
 }
 
-// RemoteTools constructs the set of remote sandbox tools and an associated closer.
+func buildTools(s *remoteSession) ([]nacelle.Tool, error) {
+	builders := []func(*remoteSession) (nacelle.Tool, error){
+		buildCommandTool,
+		buildReadTool,
+		buildWriteTool,
+		buildEditTool,
+		buildListTool,
+		buildFindTool,
+		buildSearchTool,
+	}
+	tools := make([]nacelle.Tool, 0, len(builders))
+	for _, build := range builders {
+		tool, err := build(s)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, tool)
+	}
+	return tools, nil
+}
+
+// RemoteTools constructs the remote tool set and a closer for the ssh
+// ControlMaster socket directory the tools multiplex over. The caller owns the
+// closer and must close it when the session ends.
 func RemoteTools(opts ToolsOptions) ([]nacelle.Tool, io.Closer, error) {
 	s := newRemoteSession(opts)
-	runCmd, err := buildCommandTool(s)
+	socketDir, err := os.MkdirTemp("", "kori-ssh-")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("creating ssh control socket directory: %w", err)
 	}
-	readFile, err := buildReadTool(s)
+	s.opts.ControlPath = filepath.Join(socketDir, "ctrl")
+	tools, err := buildTools(s)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Join(err, os.RemoveAll(socketDir))
 	}
-	writeFile, err := buildWriteTool(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	editFile, err := buildEditTool(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	listDir, err := buildListTool(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	findFiles, err := buildFindTool(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	searchContent, err := buildSearchTool(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	all := []nacelle.Tool{runCmd, readFile, writeFile, editFile, listDir, findFiles, searchContent}
-	return all, &remoteCloser{}, nil
+	return tools, &remoteCloser{cleanup: func() error { return os.RemoveAll(socketDir) }}, nil
 }

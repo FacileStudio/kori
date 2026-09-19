@@ -64,7 +64,7 @@ func runCommand(ctx context.Context, s *remoteSession, in commandInput) (string,
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	remoteCmd := fmt.Sprintf("cd %s && (%s\n)", quoteArg(s.opts.WorkDir), in.Command)
+	remoteCmd := fmt.Sprintf("%s(%s\n)", workdirPrefix(s.opts.WorkDir), in.Command)
 	out, err := s.runSSH(cmdCtx, remoteCmd)
 	if errors.Is(cmdCtx.Err(), context.Canceled) {
 		return reportCommandOutput(string(out), cmdCtx.Err(), s.opts.MaxOutputBytes), cmdCtx.Err()

@@ -40,6 +40,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newCronCmd())
 	cmd.AddCommand(newBenchCmd())
 	cmd.AddCommand(newSandboxCmd())
+	cmd.AddCommand(newRemoteCmd())
 	cmd.AddCommand(newSessionsCmd(version))
 	cmd.AddCommand(newResumeCmd(version))
 	cmd.AddCommand(newListCmd())

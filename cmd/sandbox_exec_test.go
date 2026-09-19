@@ -25,19 +25,16 @@ func TestRootVersion(t *testing.T) {
 
 func TestTriggerSnapshotIfRequested(t *testing.T) {
 	ctx := context.Background()
-	opts := sandbox.SessionOptions{Snapshot: false}
-	if err := triggerSnapshotIfRequested(ctx, nil, opts); err != nil {
+	if err := triggerSnapshotIfRequested(ctx, nil, sandbox.SessionOptions{Snapshot: false}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	target := &sandbox.Target{Name: "pingu", Backend: "ssh"}
-	opts.Snapshot = true
-	if err := triggerSnapshotIfRequested(ctx, target, opts); err != nil {
+	sshTarget := &sandbox.Target{Name: "host", Backend: "ssh"}
+	if err := triggerSnapshotIfRequested(ctx, sshTarget, sandbox.SessionOptions{Snapshot: true}); err != nil {
 		t.Fatalf("unexpected error for non-boite backend: %v", err)
 	}
 }
 
-func TestRunSandboxSession_PreflightFailure(t *testing.T) {
+func TestRunTargetSession_PreflightFailure(t *testing.T) {
 	ctx := context.Background()
 	target := &sandbox.Target{
 		Name:    "pingu",
@@ -50,7 +47,7 @@ func TestRunSandboxSession_PreflightFailure(t *testing.T) {
 		WorkDir: "/workspace",
 		User:    "boite",
 	}
-	err := runSandboxSession(ctx, "0.0.1", cfg, opts)
+	err := runTargetSession(ctx, "0.0.1", cfg, opts)
 	if err == nil || !strings.Contains(err.Error(), "must be running") {
 		t.Fatalf("expected stopped error from preflight, got %v", err)
 	}

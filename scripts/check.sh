@@ -49,8 +49,21 @@ if ! command -v "$GO" >/dev/null 2>&1; then
   exit 1
 fi
 
+# This repository's own Go files: tracked plus untracked-but-not-ignored,
+# minus anything deleted in the working tree but not yet staged. `git
+# ls-files -c` still lists an index entry whose file is gone, and gofmt aborts
+# on the missing path — xargs reports that as a non-zero exit and `set -e`
+# turns it into a failed gate naming a file nobody can open.
+#
+# The filter batches through `sh -c 'for f do ...'` rather than `read -d`,
+# because this script runs under /bin/sh and dash's read has no -d.
+repo_go_files() {
+  git ls-files -co --exclude-standard -z -- '*.go' |
+    xargs -0 -n64 sh -c 'for f do [ -e "$f" ] || continue; printf "%s\0" "$f"; done' _
+}
+
 if [ "$mode" = "format" ]; then
-  git ls-files -co --exclude-standard -z -- '*.go' | xargs -0 "$GOFMT" -w
+  repo_go_files | xargs -0 "$GOFMT" -w
   echo "==> formatted"
   exit 0
 fi
@@ -74,7 +87,7 @@ status=0
 # gofmt on nothing rather than once with stdin attached, which GNU xargs would
 # do where the BSD one on macOS does not.
 echo "==> gofmt"
-unformatted="$(git ls-files -co --exclude-standard -z -- '*.go' | xargs -0 "$GOFMT" -l)"
+unformatted="$(repo_go_files | xargs -0 "$GOFMT" -l)"
 if [ -n "$unformatted" ]; then
   echo "gofmt: the following files are not formatted (run 'sh scripts/check.sh --format'):"
   echo "$unformatted"

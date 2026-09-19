@@ -821,33 +821,72 @@ That used to need a deliberate dump at exit, because the alternate screen hands 
 untouched and quitting un-drew the whole conversation. Inline rendering removed the problem rather
 than the workaround.
 
-## Sandboxes & Remote VMs
+## Sandboxes & remote hosts
 
-The `sandbox:` section in `~/.kori.yml` configures microVM and remote SSH execution targets:
+kori always runs **on the host**, with the session's tools executing in the
+target over SSH. The model reaches the target's workspace, but no provider key,
+session recording or host file ever crosses the boundary — the tools are the
+only thing that does. Two groups configure the two kinds of target:
 
 ```yaml
-sandbox:
-  default: ""                     # default target name when invoked as 'kori sandbox'
+sandbox:                          # local boite microVMs, used by 'kori sandbox'
+  default: ""                     # VM entered when 'kori sandbox' has no argument
   user: boite                     # default SSH user
   port: 2226                      # default port
   ssh_key_path: ~/.ssh/id_ed25519 # default identity file
-  root: /workspace                # default remote workspace
-  auto_sync: true                 # automatically sync kori binary
-  auto_snapshot: false            # snapshot overlay disk on completion (boite only)
+  root: ""                        # empty uses the VM's own workspace
+  auto_snapshot: false            # snapshot the overlay disk on exit
+  targets:
+    dev-vm:
+      vm_name: dev-box            # boite instance behind the key (default: the key)
+      port: 2226
+      user: boite
+      ssh_key_path: ~/.ssh/id_ed25519
+      root: ""
+      auto_snapshot: false
+
+remote:                           # SSH hosts, used by 'kori remote'
+  default: ""                     # host entered when 'kori remote' has no argument
+  user: ""                        # default SSH user (ssh's own config wins when empty)
+  port: 22                        # default port
+  ssh_key_path: ""                # empty lets ssh choose: ssh_config IdentityFile, then the agent
+  root: ""                        # empty starts in the SSH login directory (home)
   targets:
     staging:
-      backend: ssh
       host: staging.example.com
       port: 22
       user: deploy
-      workdir: /srv/app
-    dev-vm:
-      backend: boite
-      vm_name: dev-box
+      ssh_key_path: ""
+      root: /srv/app
 ```
 
+Host-key verification is deliberately not relaxed for `remote`: a host on the
+network checks against your own `known_hosts` and `~/.ssh/config`, exactly as a
+hand-typed `ssh` would, and `BatchMode=yes` refuses an unknown host rather than
+trusting it. Boite microVMs are the exception — their key is generated per
+instance, never in `known_hosts`, and the connection is loopback — so only the
+`sandbox` path turns host-key checking off.
+
 Commands:
-- `kori sandbox list`: lists configured targets and local Boite VMs.
-- `kori sandbox <target> [prompt]`: launches interactive or headless session inside the target.
-- Direct SSH targets (e.g. `kori sandbox user@host:port` or `~/.ssh/config` host alias) are supported directly even when Boite is not installed.
+- `kori sandbox list`: lists configured `sandbox.targets` and local boite VMs.
+- `kori sandbox <vm> [prompt]`: interactive or headless session inside a boite VM.
+- `kori sandbox <vm> --snapshot`: snapshot the VM's overlay disk when the session ends.
+- `kori remote list`: lists the hosts configured under `remote.targets`.
+- `kori remote <host> [prompt]`: interactive or headless session on an SSH host.
+
+`remote` accepts a `remote.targets` key, a direct `user@host:port` address, or
+an `~/.ssh/config` host alias — ssh itself resolves the last two. Everything
+else (port, user, identity, workspace) comes from the `remote` group unless the
+target or a flag overrides it. Overrides common to both commands:
+`--workdir/-w`, `--user/-u`, `--print/-p`; `remote` adds `--port` and `--key`.
+
+`sandbox.targets` is boite-only. An SSH host belongs under `remote.targets`;
+a key there that names a `backend:` or `host:` is refused at load, because a
+strict decoder only accepts the fields each group actually has.
+
+Preflight checks who the target answered as, and refuses a mismatch. It does not
+refuse `root`: `kori remote root@host` works, because connecting as root to a
+machine you own is your call. A boite VM still resolves to `boite` unless you
+override `--user`, so an instance that unexpectedly lands you as root is caught
+by the user check rather than by a name.
 

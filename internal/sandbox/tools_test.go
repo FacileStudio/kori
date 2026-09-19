@@ -49,7 +49,7 @@ func TestRemoteToolsSSHHardeningFlags(t *testing.T) {
 		},
 	}
 	opts := ToolsOptions{
-		Target: &Target{Name: "vm1", Host: "127.0.0.1", Port: 2226, User: "boite"},
+		Target: &Target{Name: "vm1", Backend: "boite", Host: "127.0.0.1", Port: 2226, User: "boite"},
 		Runner: runner,
 	}
 	tools, _, err := RemoteTools(opts)
@@ -143,7 +143,7 @@ func TestReadFileSuccess(t *testing.T) {
 			return []byte("first\nsecond\nthird\nfourth\n"), nil
 		},
 	}
-	tools, _, _ := RemoteTools(ToolsOptions{Runner: runner})
+	tools, _, _ := RemoteTools(ToolsOptions{WorkDir: "/workspace", Runner: runner})
 	readTool := tools[1]
 	out, err := readTool.Run(context.Background(), json.RawMessage(`{"path":"main.go","offset":2,"limit":2}`))
 	if err != nil {
@@ -183,7 +183,7 @@ func TestWriteFileSuccess(t *testing.T) {
 			return nil, nil
 		},
 	}
-	tools, _, _ := RemoteTools(ToolsOptions{Runner: runner})
+	tools, _, _ := RemoteTools(ToolsOptions{WorkDir: "/workspace", Runner: runner})
 	writeTool := tools[2]
 	out, err := writeTool.Run(context.Background(), json.RawMessage(`{"path":"pkg/app.go","content":"package main\n"}`))
 	if err != nil {

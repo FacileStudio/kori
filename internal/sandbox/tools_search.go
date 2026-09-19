@@ -60,7 +60,7 @@ func filterListing(raw string) []string {
 
 func runListDir(ctx context.Context, s *remoteSession, in listInput) (string, error) {
 	targetDir := resolveRemotePath(s.opts.WorkDir, in.Path)
-	remoteCmd := fmt.Sprintf("cd %s && ls -1pa", quoteArg(targetDir))
+	remoteCmd := workdirPrefix(targetDir) + "ls -1pa"
 	out, err := s.runSSH(ctx, remoteCmd)
 	if err != nil {
 		return "", fmt.Errorf("list_directory: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -86,7 +86,7 @@ func runFindFiles(ctx context.Context, s *remoteSession, in globInput) (string, 
 	if pattern == "" {
 		return "", fmt.Errorf("no pattern given")
 	}
-	remoteCmd := fmt.Sprintf("cd %s && find . -name . -o -type d \\( -name '.*' -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name .svelte-kit -o -name .next -o -name __pycache__ -o -name .venv -o -name coverage \\) -prune -o -type f -print", quoteArg(s.opts.WorkDir))
+	remoteCmd := workdirPrefix(s.opts.WorkDir) + "find . -name . -o -type d \\( -name '.*' -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name .svelte-kit -o -name .next -o -name __pycache__ -o -name .venv -o -name coverage \\) -prune -o -type f -print"
 	out, err := s.runSSH(ctx, remoteCmd)
 	if err != nil {
 		return "", fmt.Errorf("find_files: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -138,7 +138,7 @@ func runSearchContent(ctx context.Context, s *remoteSession, in grepInput) (stri
 	if _, err := regexp.Compile(in.Pattern); err != nil {
 		return "", fmt.Errorf("that is not a valid regular expression: %w", err)
 	}
-	remoteCmd := fmt.Sprintf("cd %s && find . -name . -o -type d \\( -name '.*' -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name .svelte-kit -o -name .next -o -name __pycache__ -o -name .venv -o -name coverage \\) -prune -o -type f -exec grep -I -s -n -E %s /dev/null {} +", quoteArg(s.opts.WorkDir), quoteArg(in.Pattern))
+	remoteCmd := workdirPrefix(s.opts.WorkDir) + fmt.Sprintf("find . -name . -o -type d \\( -name '.*' -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target -o -name .svelte-kit -o -name .next -o -name __pycache__ -o -name .venv -o -name coverage \\) -prune -o -type f -exec grep -I -s -n -E %s /dev/null {} +", quoteArg(in.Pattern))
 	out, _ := s.runSSH(ctx, remoteCmd)
 	matches := formatGrepMatches(string(out), strings.TrimSpace(in.Glob))
 	if len(matches) == 0 {

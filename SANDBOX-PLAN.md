@@ -1,28 +1,36 @@
-# Sandbox Isolation Architecture and Plan
+# Sandbox and Remote Execution Architecture
+
+Status: implemented. Revised 2026-09-19 to split the command surface into
+`kori sandbox` (local boite microVMs) and `kori remote` (SSH hosts), both
+configured in `~/.kori.yml`.
 
 ## Goal
 
-Run Kori on the host while confining all agent tool execution to an isolated microVM or SSH target.
+Run kori on the host while confining all agent tool execution to an isolated
+microVM or an SSH host. The model never sees the host filesystem, and provider
+API keys, session recordings and settings never leave the host.
 
 ## Background and Problem
 
-The previous implementation ran the entire Kori binary inside the guest VM over an interactive SSH session (`ssh -tt ... kori`). This had severe design and security flaws:
+The first implementation ran the entire kori binary inside the guest over an
+interactive SSH session (`ssh -tt ... kori`), which had severe design and
+security flaws:
 
-1. **Secret leakage**: Provider API keys, credentials, and host settings had to be passed into or mounted inside the untrusted guest VM.
-2. **Network exposure**: The guest VM required outbound internet connectivity to communicate with LLM provider endpoints (`api.anthropic.com`, `api.openai.com`), making network egress filtering difficult and enabling potential exfiltration.
-3. **Guest dependency bloat**: The guest VM required deploying and maintaining the `kori` binary, Go toolchains, and runtime dependencies.
-4. **Fragile I/O**: Wrapping an interactive TUI inside a nested SSH pseudo-terminal created terminal escape sequence corruptions and session management issues.
+1. **Secret leakage**: provider API keys, credentials, and host settings had to
+   be passed into or mounted inside the untrusted guest.
+2. **Network exposure**: the guest needed outbound internet access to reach the
+   LLM providers, making egress filtering difficult and enabling exfiltration.
+3. **Guest dependency bloat**: the guest required the `kori` binary and its
+   runtime.
+4. **Fragile I/O**: wrapping an interactive TUI inside a nested SSH
+   pseudo-terminal corrupted terminal escape sequences.
 
-## Isolation and Security Best Practices
-
-Based on industry research and security standards for autonomous agent isolation:
-- Hardware-level microVM boundaries (Firecracker, QEMU/Boite) provide strict kernel separation (https://dev.to/zeno/securing-autonomous-ai-agents-best-practices-for-sandboxed-execution-environments-2391, https://nofire.ai/blog/firecracker-microvm-agent-security).
-- Credential isolation requires that API tokens and secrets remain out-of-band on the host, never entering the sandbox (https://bunnyshell.com/blog/securing-ai-agents-sandboxing-runtime-isolation/).
-- Egress filtering is significantly stronger when the guest VM does not need direct access to LLM APIs (https://towardsai.net/p/security/securing-ai-coding-agents-sandbox-architectures-and-isolation-patterns).
-- Structured tool execution via RPC/remoting provides deterministic auditing and boundaries compared to running the entire harness inside the container (https://openai.com/index/introducing-the-model-context-protocol/).
-- SSH transport must disable agent forwarding (`-o ForwardAgent=no`) to ensure a compromised guest cannot access the host SSH agent socket.
-- Tool invocation must use non-interactive pipes (no `-tt`) to avoid ANSI escape injection and stream mangling.
-- Connection multiplexing (`ControlMaster`) eliminates handshake latency across rapid successive tool calls.
+The rebuild keeps the harness on the host and replaces only the file and command
+tools with SSH-backed implementations. One command surface then split in two:
+`kori sandbox` for local boite microVMs, `kori remote` for SSH hosts. They share
+one engine — a resolved `Target` and the remote tool set — but have separate
+settings groups, because a boite VM listens on loopback at 2226 while a remote
+host is reached over the network at 22.
 
 ## Architecture
 
@@ -44,61 +52,95 @@ Based on industry research and security standards for autonomous agent isolation
                                       | SSH (ControlMaster, no agent)
                                       v
 +-------------------------------------------------------------------+
-|                        GUEST VM (SANDBOX)                         |
+|                    GUEST VM / SSH HOST                            |
 |                                                                   |
-|   /workspace (isolated filesystem)                                |
-|   low-privilege user ('boite')                                     |
-|   zero Kori binaries, zero API keys, zero host secrets            |
+|   workspace (isolated filesystem)                                 |
+|   zero kori binaries, zero API keys, zero host secrets            |
 +-------------------------------------------------------------------+
 ```
 
-### 1. Host Responsibilities
-- Bubble Tea TUI rendering and user interaction.
-- Configuration loading (`~/.kori.yml`, profiles, flags).
-- Secret management (reading API keys via `tiroir` or environment on the host).
-- Model provider communication (direct HTTPS calls to Anthropic, OpenAI, etc.).
-- Hook execution, session recording, and diagnostic evaluation.
-- Web tools (`web_fetch`, `web_search`) run from the host.
+### Host responsibilities
 
-### 2. Guest Responsibilities
+- Bubble Tea rendering, configuration loading, secret management.
+- Provider communication (direct HTTPS to Anthropic, OpenAI, etc.).
+- Hooks, session recording, diagnostics, and web tools.
+
+### Guest responsibilities
+
 - Execute untrusted commands generated by the model.
-- Store and mutate files inside `/workspace`.
-- Run build, test, and language toolchains strictly within the guest OS.
+- Store and mutate files inside the target workspace.
+- Run build, test, and language toolchains.
 
-### 3. Remote Tool Implementation
-Replace local `nacelle/tools` file and command implementations with an SSH-backed tool provider:
-- **`run_command`**: Executes commands via SSH inside the target's workspace directory (`cd <workdir> && <command>`). Handles timeouts, stderr/stdout buffering, and exit code capture.
-- **`read_file`**: Reads files and line ranges from the VM via SSH streaming (`head`/`tail` or `cat`).
-- **`write_file`**: Writes file contents to the VM filesystem via SSH stdin (`cat > <path>`).
-- **`edit_file`**: Fetches content from VM, applies exact block replacements, and writes updated content back.
-- **`list_directory`**: Lists guest directory contents via POSIX shell primitives or `find`.
-- **`find_files`**: Finds files in the guest workspace using `find`.
-- **`search_content`**: Searches file contents in the guest workspace using `grep` or `ripgrep`.
+### Remote tool implementation
 
-## Implementation Steps
+`internal/sandbox` mounts `nacelle.Tool` implementations backed by SSH:
+`run_command`, `read_file`, `write_file`, `edit_file`, `list_directory`,
+`find_files`, and `search_content`. Every call shares one hardened ssh
+invocation (`internal/sandbox/ssh.go`):
 
-1. **SSH Tool Provider (`internal/sandbox/tools.go`)**
-   - Implement `nacelle.Tool` instances for `run_command`, `read_file`, `write_file`, `edit_file`, `list_directory`, `find_files`, and `search_content`.
-   - Maintain an SSH client wrapper using `ControlMaster` sockets in a temporary directory to enable fast, multiplexed execution.
-   - Enforce security flags on every SSH call: `-o BatchMode=yes`, `-o ForwardAgent=no`, `-o StrictHostKeyChecking=no`, `-o UserKnownHostsFile=/dev/null`.
+- `-o BatchMode=yes` — never prompt; fail instead.
+- `-o ForwardAgent=no` — a compromised target cannot reach the host agent socket.
+- `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null`, **boite targets
+  only** — the per-VM identity is generated per instance and never in
+  `known_hosts`. A `remote` target verifies against the user's own
+  `known_hosts` and `ssh_config` like any hand-typed ssh; with `BatchMode` on,
+  an unknown host is refused rather than silently trusted.
+- `-o ControlMaster=auto -o ControlPath=<tmp socket> -o ControlPersist=60s` —
+  one handshake per session instead of one per tool call. `RemoteTools` owns the
+  socket directory and removes it through the returned closer.
 
-2. **Remove Binary Synchronization (`internal/sandbox/sync.go`)**
-   - Delete `EnsureKoriBinary`, `CheckRemoteBinary`, and `copyFileSCP` logic.
-   - Kori never syncs its executable into the guest.
+Non-interactive pipes are used throughout; no `-tt` is ever passed, so ANSI
+escape injection and stream mangling are not possible.
 
-3. **Update Guard and Preflight Checks (`internal/sandbox/guard.go`)**
-   - Verify SSH connectivity and target reachability.
-   - Ensure the target workspace directory exists (`mkdir -p <workdir>`).
-   - Confirm user identity inside the guest (must match target user, e.g. `boite`).
-   - Remove checks for `kori` binary existence in the guest.
+## Configuration
 
-4. **Refactor Session Launcher (`cmd/sandbox.go`, `internal/agent/`)**
-   - Update `kori sandbox <target>` to run on the host.
-   - When a sandbox target is resolved, instantiate the SSH remote tool set instead of `nacelle/tools.New`.
-   - Launch the standard host TUI (`agent.RunSessionWithFlags`) or headless runner (`agent.RunHeadlessWithFlags`) using the remote tools.
-   - On session exit, trigger the post-session snapshot if requested.
+| group | command | resolves |
+|---|---|---|
+| `sandbox:` | `kori sandbox` | `sandbox.targets` entry, then a local boite instance of that name |
+| `remote:` | `kori remote` | `remote.targets` entry, then a `user@host:port` address or `~/.ssh/config` alias |
 
-5. **Validation and Quality Gates**
-   - Verify tool operations against an active VM or SSH test harness.
-   - Confirm no API keys or config files exist inside the guest VM.
-   - Run `filet check` across all modified and new packages.
+Both groups carry `default`, `user`, `port`, `ssh_key_path`, `root` and
+`targets`. `sandbox.targets` entries additionally carry `vm_name` and
+`auto_snapshot`; `remote.targets` entries carry `host`. The groups are
+independent: a boite default port of 2226 would be wrong for every SSH host.
+
+`root` defaults to empty, and an empty `root` is meaningful rather than a hole:
+a boite target falls back to the instance's own workspace (where boite mounted
+the project), and a remote target to the SSH login directory (the user's home).
+With no workspace configured, relative tool paths stay relative and the remote
+shell resolves them there; no path is invented on the host.
+
+`sandbox.targets` is boite-only and `remote.targets` is SSH-only. The decoder is
+strict, so an old `sandbox.targets` entry carrying `backend: ssh`/`host:` is
+refused by name rather than silently ignored; move it to `remote.targets`.
+
+## Implementation
+
+1. **Target resolution** — `internal/sandbox/target.go` resolves boite targets
+   (configured `sandbox.targets`, then `~/.boite/instances/<name>/state.json`);
+   `internal/sandbox/remote_target.go` resolves SSH targets (configured
+   `remote.targets`, then an address or ssh_config alias).
+2. **SSH tool provider** — `internal/sandbox/tools*.go` builds the seven remote
+   tools; `ssh.go` owns the shared argument construction used by both the tools
+   and the preflight probe.
+3. **Guard and preflight** — `internal/sandbox/guard.go` verifies connectivity,
+   checks the user the target asked for, and ensures the workspace directory
+   exists. Root is not refused: connecting as root to a host you own is the
+   user's call, and the expected-user check is the floor that actually pins the
+   login. A stopped boite VM is refused with the `boite start` command to run.
+4. **Session launch** — `cmd/session_run.go` is shared: it preflights, mounts the
+   remote tools, and runs the host TUI (`agent.RunSessionWithTools`) or the
+   headless runner (`agent.RunHeadlessWithTools`). `kori sandbox` snapshots the
+   overlay disk afterwards when requested; `kori remote` has no snapshot step.
+5. **Removed** — guest binary synchronization (`sync.go`, `CopyFileToVM`), the
+   interactive guest launcher (`exec.go`, `RunSSH`), and the `--sync`/`--no-sync`
+   flags and `auto_sync` setting. Kori never syncs its executable into a target.
+
+## Verification
+
+- `internal/sandbox/*_test.go` covers target resolution for both kinds, the SSH
+  hardening flags, and the absence of `-tt`.
+- `internal/settings/*_test.go` covers the two groups, their defaults, and the
+  strict decode.
+- `cmd/*_test.go` covers option building, flag overrides, and preflight failure.
+- `sh scripts/check.sh` and `filet check .` clean.

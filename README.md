@@ -165,34 +165,42 @@ sandbox:
   vm_name: ""
   port: 2226
   ssh_key_path: ~/.ssh/id_ed25519
-  root: /workspace
-  auto_sync: true
+  root: ""
   auto_snapshot: false
+  targets: {}
+
+remote:
+  default: ""
+  user: ""
+  port: 22
+  ssh_key_path: ""
+  root: ""
   targets: {}
 ```
 
-## Sandboxes & Remote VMs
+## Sandboxes & remote hosts
 
-`kori sandbox` starts agent sessions inside isolated environments over SSH:
+kori runs on the host and sends every tool call to the target over SSH, so the
+provider keys and the local filesystem never enter the environment the model
+reaches. Two commands cover the two kinds of target:
 
 ```sh
-# Discover configured targets and local Boite VMs
-kori sandbox list
+# Local boite microVMs
+kori sandbox list              # configured sandbox.targets and running boite VMs
+kori sandbox pingu             # interactive session inside a VM
+kori sandbox pingu --snapshot  # snapshot the overlay disk when the session ends
 
-# Launch an interactive session inside a target
-kori sandbox <target>
-
-# Run a prompt headlessly in a remote host or VM
-kori sandbox staging "run test suite and report failures"
-
-# Sync host binary and snapshot overlay disk on completion (Boite only)
-kori sandbox dev-vm --sync --snapshot
+# SSH hosts
+kori remote list               # hosts configured under remote.targets
+kori remote staging            # interactive session on a configured host
+kori remote deploy@build:2222 "run the tests"
 ```
 
-Targets are resolved seamlessly:
-1. Defined entries in `~/.kori.yml` under `sandbox.targets`
-2. Discovered local microVMs via [boite](https://github.com/FacileStudio/boite)
-3. Direct OpenSSH hosts (`user@host:port` or `~/.ssh/config` host aliases) when Boite is not installed.
+`sandbox` targets resolve to local [boite](https://github.com/FacileStudio/boite)
+microVMs: an entry in `sandbox.targets`, then a registered instance of that
+name. `remote` targets resolve to a `remote.targets` entry, a direct
+`user@host:port` address, or an `~/.ssh/config` host alias. Each reads its
+defaults — user, port, identity, workspace — from its own group in `~/.kori.yml`.
 
 Scheduled jobs are not configured here anymore: one YAML file per job under
 `~/.kori/jobs/`, trusted with `kori cron trust <name>` before it runs.

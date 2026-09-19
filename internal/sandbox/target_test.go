@@ -1,8 +1,10 @@
 package sandbox
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/FacileStudio/kori/internal/settings"
@@ -28,61 +30,52 @@ func TestTargetFromInstance(t *testing.T) {
 	}
 }
 
-func TestTargetFromSSH(t *testing.T) {
-	tgt := TargetFromSSH("remote", "192.168.1.100", 2222, "deploy", "/key")
-	if tgt.Name != "remote" || tgt.Backend != "ssh" || tgt.Host != "192.168.1.100" || tgt.Port != 2222 {
-		t.Fatalf("unexpected ssh target: %+v", tgt)
+func writeBoiteInstance(t *testing.T, name string, port int, status, workspace string) {
+	t.Helper()
+	dir, err := InstancesDir()
+	if err != nil {
+		t.Fatalf("instances dir: %v", err)
 	}
-	if tgt.User != "deploy" || tgt.KeyPath != "/key" || tgt.Status != "running" {
-		t.Fatalf("unexpected ssh target details: %+v", tgt)
+	instDir := filepath.Join(dir, name)
+	if err := os.MkdirAll(instDir, 0o755); err != nil {
+		t.Fatalf("creating instance dir: %v", err)
 	}
-}
-
-func createStagingConfig() settings.Config {
-	targets := map[string]settings.SandboxTarget{
-		"staging": {
-			Backend:    "ssh",
-			Host:       "staging.example.com",
-			Port:       2200,
-			User:       "admin",
-			SSHKeyPath: "~/.ssh/custom",
-			Workdir:    "/var/www",
-		},
-	}
-	return settings.Config{
-		Sandbox: settings.Sandbox{
-			Targets: targets,
-		},
+	state := fmt.Sprintf(`{"name":%q,"ssh_port":%d,"key_path":"/key","status":%q,"workspace":%q}`, name, port, status, workspace)
+	if err := os.WriteFile(filepath.Join(instDir, "state.json"), []byte(state), 0o644); err != nil {
+		t.Fatalf("writing state.json: %v", err)
 	}
 }
 
 func TestResolveTarget_FromConfigTargets(t *testing.T) {
-	cfg := createStagingConfig()
-	tgt, err := ResolveTarget("staging", cfg)
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	writeBoiteInstance(t, "dev-box", 2226, "running", "/workspace")
+	devVM := settings.SandboxTarget{
+		VMName:     "dev-box",
+		Port:       2230,
+		User:       "dev",
+		SSHKeyPath: "~/.ssh/custom",
+		Root:       "/home/dev/work",
+	}
+	cfg := settings.Config{Sandbox: settings.Sandbox{Targets: map[string]settings.SandboxTarget{"dev-vm": devVM}}}
+	tgt, err := ResolveTarget("dev-vm", cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tgt.Backend != "ssh" || tgt.Host != "staging.example.com" || tgt.Port != 2200 || tgt.User != "admin" {
+	if tgt.Backend != "boite" || tgt.Port != 2230 || tgt.User != "dev" {
 		t.Fatalf("unexpected resolved target: %+v", tgt)
 	}
-	if tgt.Workdir != "/var/www" || tgt.KeyPath != "~/.ssh/custom" {
+	if tgt.Workdir != "/home/dev/work" || tgt.KeyPath != "~/.ssh/custom" {
 		t.Fatalf("unexpected resolved target paths: %+v", tgt)
 	}
 }
 
+// TestResolveTarget_FromBoiteInstance guards the precedence that matters most
+// in practice: defaults set sandbox.root to /workspace, and the instance's own
+// workspace must still win, or every VM is entered at the wrong directory.
 func TestResolveTarget_FromBoiteInstance(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("BOITE_INSTANCES_DIR", tmp)
-	instDir := filepath.Join(tmp, "local-box")
-	if err := os.MkdirAll(instDir, 0o755); err != nil {
-		t.Fatalf("failed to create instance dir: %v", err)
-	}
-	stateJSON := `{"name":"local-box","ssh_port":2230,"key_path":"/key/path","status":"running","workspace":"/ws"}`
-	if err := os.WriteFile(filepath.Join(instDir, "state.json"), []byte(stateJSON), 0o644); err != nil {
-		t.Fatalf("failed to write state.json: %v", err)
-	}
-	cfg := settings.Config{}
-	tgt, err := ResolveTarget("local-box", cfg)
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	writeBoiteInstance(t, "local-box", 2230, "running", "/ws")
+	tgt, err := ResolveTarget("local-box", settings.Defaults("test"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,46 +84,25 @@ func TestResolveTarget_FromBoiteInstance(t *testing.T) {
 	}
 }
 
-func TestResolveTarget_DirectSSH(t *testing.T) {
-	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
-	cfg := settings.Config{
-		Sandbox: settings.Sandbox{
-			User:       "globaluser",
-			SSHKeyPath: "~/.ssh/id_rsa",
-			Workdir:    "/default/work",
-		},
-	}
-	tgt, err := ResolveTarget("ubuntu@10.0.0.5:2222", cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if tgt.Backend != "ssh" || tgt.Host != "10.0.0.5" || tgt.Port != 2222 || tgt.User != "ubuntu" {
-		t.Fatalf("unexpected parsed ssh target: %+v", tgt)
-	}
-	if tgt.Workdir != "/default/work" || tgt.KeyPath != "~/.ssh/id_rsa" {
-		t.Fatalf("unexpected paths on parsed ssh target: %+v", tgt)
-	}
-}
-
 func TestResolveTarget_Default(t *testing.T) {
-	targets := map[string]settings.SandboxTarget{
-		"cloud": {
-			Backend: "ssh",
-			Host:    "cloud.host",
-			Port:    22,
-		},
-	}
-	cfg := settings.Config{
-		Sandbox: settings.Sandbox{
-			Default: "cloud",
-			Targets: targets,
-		},
-	}
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	writeBoiteInstance(t, "dev-box", 2226, "running", "/workspace")
+	cfg := settings.Config{Sandbox: settings.Sandbox{Default: "dev-box"}}
 	tgt, err := ResolveTarget("", cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tgt.Name != "cloud" || tgt.Host != "cloud.host" {
+	if tgt.Name != "dev-box" || tgt.Backend != "boite" {
 		t.Fatalf("unexpected default target resolved: %+v", tgt)
+	}
+}
+
+func TestResolveTarget_UnknownIsError(t *testing.T) {
+	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
+	if _, err := ResolveTarget("not-a-vm", settings.Config{}); err == nil || !strings.Contains(err.Error(), "no boite sandbox") {
+		t.Fatalf("expected unknown-target error, got %v", err)
+	}
+	if _, err := ResolveTarget("", settings.Config{}); err == nil {
+		t.Fatal("expected error when no target name is available")
 	}
 }

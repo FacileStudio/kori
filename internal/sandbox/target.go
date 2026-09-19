@@ -4,14 +4,14 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
-	"strings"
 
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
-// Target represents an isolated execution target (Boite microVM or SSH host).
+// Target is a resolved SSH execution endpoint: where a session's tools run.
+// A boite target points at a local microVM on loopback; a remote target points
+// at a configured SSH host. Both are reached the same way, which is why one
+// type serves the two commands.
 type Target struct {
 	Name         string `json:"name" yaml:"name"`
 	Backend      string `json:"backend" yaml:"backend"`
@@ -21,7 +21,6 @@ type Target struct {
 	KeyPath      string `json:"key_path" yaml:"key_path"`
 	Workdir      string `json:"workdir" yaml:"workdir"`
 	Status       string `json:"status" yaml:"status"`
-	AutoSync     *bool  `json:"auto_sync,omitempty" yaml:"auto_sync,omitempty"`
 	AutoSnapshot *bool  `json:"auto_snapshot,omitempty" yaml:"auto_snapshot,omitempty"`
 }
 
@@ -46,46 +45,7 @@ func TargetFromInstance(st *InstanceState) *Target {
 	}
 }
 
-// TargetFromSSH creates a Target configured for generic SSH execution.
-func TargetFromSSH(name, host string, port int, user, keyPath string) *Target {
-	p := port
-	if p <= 0 {
-		p = 22
-	}
-	h := host
-	if h == "" {
-		h = "127.0.0.1"
-	}
-	return &Target{
-		Name:    name,
-		Backend: "ssh",
-		Host:    h,
-		Port:    p,
-		User:    user,
-		KeyPath: keyPath,
-		Status:  "running",
-	}
-}
-
-func parseSSHAddress(addr string) (user, host string, port int) {
-	remaining := addr
-	if at := strings.Index(remaining, "@"); at != -1 {
-		user = remaining[:at]
-		remaining = remaining[at+1:]
-	}
-	if h, pStr, err := net.SplitHostPort(remaining); err == nil {
-		host = h
-		if p, err := strconv.Atoi(pStr); err == nil {
-			port = p
-		}
-	} else {
-		host = remaining
-		port = 22
-	}
-	return user, host, port
-}
-
-func resolveConfigBoiteTarget(name string, t settings.SandboxTarget) (*Target, error) {
+func resolveConfigBoiteTarget(name string, t settings.SandboxTarget, cfg settings.Config) (*Target, error) {
 	vmName := cmp.Or(t.VMName, name)
 	inst, err := LoadInstance(vmName)
 	if err != nil {
@@ -98,47 +58,25 @@ func resolveConfigBoiteTarget(name string, t settings.SandboxTarget) (*Target, e
 	if t.Port > 0 {
 		target.Port = t.Port
 	}
-	if t.SSHKeyPath != "" {
-		target.KeyPath = t.SSHKeyPath
-	}
-	if t.Workdir != "" || t.Root != "" {
-		target.Workdir = cmp.Or(t.Workdir, t.Root)
-	}
-	target.AutoSync = t.AutoSync
+	target.KeyPath = cmp.Or(t.SSHKeyPath, target.KeyPath, cfg.Sandbox.SSHKeyPath)
+	target.Workdir = cmp.Or(t.Root, target.Workdir, cfg.Sandbox.Root)
 	target.AutoSnapshot = t.AutoSnapshot
 	return target, nil
 }
 
 func resolveTargetFromConfig(name string, cfg settings.Config) (*Target, bool, error) {
-	if cfg.Sandbox.Targets == nil {
-		return nil, false, nil
-	}
 	t, ok := cfg.Sandbox.Targets[name]
 	if !ok {
 		return nil, false, nil
 	}
-	if t.Backend == "boite" {
-		target, err := resolveConfigBoiteTarget(name, t)
-		return target, true, err
-	}
-	port := t.Port
-	if port <= 0 {
-		port = 22
-	}
-	return &Target{
-		Name:         name,
-		Backend:      "ssh",
-		Host:         cmp.Or(t.Host, name),
-		Port:         port,
-		User:         cmp.Or(t.User, cfg.Sandbox.User),
-		KeyPath:      cmp.Or(t.SSHKeyPath, cfg.Sandbox.SSHKeyPath),
-		Workdir:      cmp.Or(t.Workdir, t.Root, cfg.Sandbox.Workdir, cfg.Sandbox.Root, "/workspace"),
-		Status:       "running",
-		AutoSync:     t.AutoSync,
-		AutoSnapshot: t.AutoSnapshot,
-	}, true, nil
+	target, err := resolveConfigBoiteTarget(name, t, cfg)
+	return target, true, err
 }
 
+// resolveTargetFromInstance builds a target from a local boite instance. The
+// instance's own workspace wins over the group's root, because boite mounted
+// the project there; sandbox.root is only a fallback for an instance that
+// names no workspace, and an unset root leaves the login directory in place.
 func resolveTargetFromInstance(name string, cfg settings.Config) (*Target, bool) {
 	inst, err := LoadInstance(name)
 	if err != nil || inst == nil {
@@ -148,35 +86,23 @@ func resolveTargetFromInstance(name string, cfg settings.Config) (*Target, bool)
 	if cfg.Sandbox.User != "" {
 		target.User = cfg.Sandbox.User
 	}
-	if cfg.Sandbox.Workdir != "" || cfg.Sandbox.Root != "" {
-		target.Workdir = cmp.Or(cfg.Sandbox.Workdir, cfg.Sandbox.Root)
+	if target.KeyPath == "" {
+		target.KeyPath = cfg.Sandbox.SSHKeyPath
 	}
-	target.AutoSync = cfg.Sandbox.AutoSync
-	target.AutoSnapshot = cfg.Sandbox.AutoSnapshot
+	target.Workdir = cmp.Or(target.Workdir, cfg.Sandbox.Root)
+	if cfg.Sandbox.AutoSnapshot != nil {
+		target.AutoSnapshot = cfg.Sandbox.AutoSnapshot
+	}
 	return target, true
 }
 
-func resolveTargetFromAddress(name string, cfg settings.Config) *Target {
-	u, h, p := parseSSHAddress(name)
-	return &Target{
-		Name:         name,
-		Backend:      "ssh",
-		Host:         h,
-		Port:         p,
-		User:         cmp.Or(u, cfg.Sandbox.User),
-		KeyPath:      cfg.Sandbox.SSHKeyPath,
-		Workdir:      cmp.Or(cfg.Sandbox.Workdir, cfg.Sandbox.Root, "/workspace"),
-		Status:       "running",
-		AutoSync:     cfg.Sandbox.AutoSync,
-		AutoSnapshot: cfg.Sandbox.AutoSnapshot,
-	}
-}
-
-// ResolveTarget resolves target parameters from settings, local Boite state, or SSH address.
+// ResolveTarget resolves a boite sandbox by name: an entry in sandbox.targets
+// first, then a local boite instance of that name. A name that matches neither
+// is an error rather than an SSH address — SSH hosts belong to `kori remote`.
 func ResolveTarget(name string, cfg settings.Config) (*Target, error) {
 	targetName := cmp.Or(name, cfg.Sandbox.Default, cfg.Sandbox.VMName)
 	if targetName == "" {
-		return nil, errors.New("sandbox target is required: pass <target> argument or set sandbox.default in settings")
+		return nil, errors.New("sandbox target is required: pass a boite VM name or set sandbox.default in settings")
 	}
 	if target, found, err := resolveTargetFromConfig(targetName, cfg); found {
 		return target, err
@@ -184,5 +110,5 @@ func ResolveTarget(name string, cfg settings.Config) (*Target, error) {
 	if target, found := resolveTargetFromInstance(targetName, cfg); found {
 		return target, nil
 	}
-	return resolveTargetFromAddress(targetName, cfg), nil
+	return nil, fmt.Errorf("no boite sandbox %q: not a sandbox.targets entry or a local boite instance (try: kori sandbox list)", targetName)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -33,7 +32,8 @@ func DefaultGuardOptions() GuardOptions {
 func BuildGuardProbeCommand(workdir string) string {
 	cmd := "whoami; pwd"
 	if workdir != "" {
-		cmd += fmt.Sprintf("; mkdir -p %q 2>/dev/null; if [ -d %q ]; then echo WORKDIR_OK; else echo WORKDIR_MISSING; fi", workdir, workdir)
+		quoted := quoteArg(workdir)
+		cmd += fmt.Sprintf("; mkdir -p %s 2>/dev/null; if [ -d %s ]; then echo WORKDIR_OK; else echo WORKDIR_MISSING; fi", quoted, quoted)
 	}
 	return cmd
 }
@@ -52,54 +52,27 @@ func ParseGuardOutput(output string) (*GuardResult, error) {
 }
 
 // VerifyIsolation ensures that user identity and directory match expectations.
+//
+// Root is not refused. Connecting as root to a host you own is a deliberate
+// choice, and it is the user's to make: kori runs their tools on their machine.
+// The expected-user check is the real floor, because it pins the login to the
+// user the target actually asked for — a boite VM that silently answered as
+// root still fails, since its target names `boite`.
 func VerifyIsolation(res *GuardResult, rawOut string, opts GuardOptions) error {
 	if res == nil {
 		return errors.New("guard result is nil")
 	}
-	if res.User == "root" {
-		return errors.New("isolation guard failed: VM user is root, expected unprivileged user")
-	}
 	if opts.ExpectedUser != "" && res.User != opts.ExpectedUser {
-		return fmt.Errorf("isolation guard failed: VM user %q does not match expected %q", res.User, opts.ExpectedUser)
+		return fmt.Errorf("isolation guard failed: target user %q does not match expected %q", res.User, opts.ExpectedUser)
 	}
 	if opts.ExpectedWorkdir != "" && !strings.Contains(rawOut, "WORKDIR_OK") {
-		return fmt.Errorf("isolation guard failed: project directory %q does not exist in VM", opts.ExpectedWorkdir)
+		return fmt.Errorf("isolation guard failed: project directory %q does not exist in target", opts.ExpectedWorkdir)
 	}
 	return nil
 }
 
 func runProbe(ctx context.Context, target *Target, user string, cmd string, runner Runner) ([]byte, error) {
-	host := "127.0.0.1"
-	if target.Host != "" {
-		host = target.Host
-	}
-	port := 22
-	if target.Port > 0 {
-		port = target.Port
-	} else if target.Backend == "boite" {
-		port = 2226
-	}
-	args := []string{
-		"-o", "BatchMode=yes",
-		"-o", "ForwardAgent=no",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "LogLevel=ERROR",
-		"-p", strconv.Itoa(port),
-	}
-	if target.KeyPath != "" {
-		args = append(args, "-i", target.KeyPath)
-	}
-	u := user
-	if u == "" {
-		u = target.User
-	}
-	if u != "" {
-		args = append(args, fmt.Sprintf("%s@%s", u, host))
-	} else {
-		args = append(args, host)
-	}
-	args = append(args, cmd)
+	args := buildRemoteSSHArgs(target, user, cmd, "")
 	return runner.Run(ctx, "ssh", args...)
 }
 
@@ -125,7 +98,7 @@ func PreflightCheck(ctx context.Context, target *Target, opts GuardOptions) (*Gu
 	probeCmd := BuildGuardProbeCommand(opts.ExpectedWorkdir)
 	out, err := runProbe(ctx, target, user, probeCmd, runner)
 	if err != nil {
-		return nil, fmt.Errorf("preflight isolation probe failed on sandbox %s: %w (%s)", target.Name, err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("preflight isolation probe failed on target %s: %w (%s)", target.Name, err, strings.TrimSpace(string(out)))
 	}
 	res, err := ParseGuardOutput(string(out))
 	if err != nil {

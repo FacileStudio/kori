@@ -84,30 +84,38 @@ hooks: []
 # ~/.kori/jobs/ (e.g. news.yml), trusted with: kori cron trust <name>
 gates: []
 
-# Sandbox: start kori inside an isolated boite VM or remote SSH host (see
-# SANDBOX-PLAN.md). Uncomment targets: to name one.
+# Sandbox: the sandbox command runs kori on the host and sends every tool
+# call into a local boite microVM over SSH. Uncomment targets: to name one.
 sandbox:
   default: ""
   vm_name: ""
   port: 2226
   ssh_key_path: ~/.ssh/id_ed25519
-  root: /workspace
-  auto_sync: true
+  # an empty root uses the VM's own workspace, where boite mounted the project
+  root: ""
   auto_snapshot: false
   # targets:
-  #   local:
-  #     backend: boite
+  #   dev-vm:
   #     vm_name: ""
   #     port: 2226
   #     ssh_key_path: ~/.ssh/id_ed25519
-  #     root: /workspace
-  #     auto_sync: true
+  #     root: ""
   #     auto_snapshot: false
-  #   remote:
-  #     backend: ssh
-  #     host: ""
+
+# Remote: the remote command runs kori on the host and sends every tool call
+# to an SSH host. A bare user@host:port argument works without an entry here.
+remote:
+  default: ""
+  user: ""
+  port: 22
+  # an empty ssh_key_path lets ssh choose: ssh_config's IdentityFile, then the agent
+  ssh_key_path: ""
+  # an empty root starts in the SSH login directory, which is the user's home
+  root: ""
+  # targets:
+  #   staging:
+  #     host: staging.example.com
   #     port: 22
-  #     user: ""
-  #     ssh_key_path: ~/.ssh/id_ed25519
-  #     workdir: /workspace
-  #     auto_sync: false
+  #     user: deploy
+  #     ssh_key_path: ""
+  #     root: /srv/app

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	"charm.land/lipgloss/v2"
 	"github.com/FacileStudio/kori/internal/sandbox"
@@ -13,6 +14,7 @@ import (
 
 type sandboxListEntry struct {
 	Name      string `json:"name"`
+	VM        string `json:"vm,omitempty"`
 	Backend   string `json:"backend"`
 	Host      string `json:"host,omitempty"`
 	Port      int    `json:"port"`
@@ -22,58 +24,51 @@ type sandboxListEntry struct {
 	Status    string `json:"status,omitempty"`
 }
 
-func collectConfigTargetEntries(cfg settings.Config) []sandboxListEntry {
-	var entries []sandboxListEntry
+// collectConfigTargetEntries lists the configured sandbox targets. It mirrors
+// resolveConfigBoiteTarget's precedence — the instance's own port, identity and
+// workspace first, then the target's overrides — so what this prints is what a
+// session would actually connect to, rather than a second opinion built from
+// the group defaults.
+func collectConfigTargetEntries(cfg settings.Config, instances map[string]*sandbox.InstanceState) []sandboxListEntry {
+	entries := make([]sandboxListEntry, 0, len(cfg.Sandbox.Targets))
 	for name, tgt := range cfg.Sandbox.Targets {
-		backend := cmp.Or(tgt.Backend, "ssh")
-		host := tgt.Host
-		if host == "" && backend == "boite" {
-			host = "127.0.0.1"
+		vm := cmp.Or(tgt.VMName, name)
+		entry := sandboxListEntry{Name: name, VM: vm, Backend: "boite", Host: "127.0.0.1", User: "boite", Status: "configured"}
+		if inst, ok := instances[vm]; ok {
+			entry.Port = inst.SSHPort
+			entry.Workspace = inst.Workspace
+			entry.Key = inst.KeyPath
+			entry.Status = inst.Status
 		}
-		port := tgt.Port
-		if port <= 0 {
-			port = 22
-			if backend == "boite" {
-				port = 2226
-			}
-		}
-		entries = append(entries, sandboxListEntry{
-			Name:      name,
-			Backend:   backend,
-			Host:      host,
-			Port:      port,
-			User:      tgt.User,
-			Workspace: cmp.Or(tgt.Workdir, tgt.Root),
-			Key:       tgt.SSHKeyPath,
-			Status:    "configured",
-		})
+		entry.Port = cmp.Or(tgt.Port, entry.Port, 2226)
+		entry.User = cmp.Or(tgt.User, entry.User)
+		entry.Workspace = cmp.Or(tgt.Root, entry.Workspace, cfg.Sandbox.Root)
+		entry.Key = cmp.Or(tgt.SSHKeyPath, entry.Key, cfg.Sandbox.SSHKeyPath)
+		entries = append(entries, entry)
 	}
 	return entries
 }
 
-func hasEntry(entries []sandboxListEntry, name string) bool {
+func hasEntry(entries []sandboxListEntry, vm string) bool {
 	for _, e := range entries {
-		if e.Name == name {
+		if cmp.Or(e.VM, e.Name) == vm {
 			return true
 		}
 	}
 	return false
 }
 
-func collectBoiteInstanceEntries(entries []sandboxListEntry) []sandboxListEntry {
-	instances, err := sandbox.ListInstances()
-	if err != nil {
-		return entries
-	}
+func collectBoiteInstanceEntries(entries []sandboxListEntry, instances []*sandbox.InstanceState) []sandboxListEntry {
 	for _, inst := range instances {
 		if hasEntry(entries, inst.Name) {
 			continue
 		}
 		entries = append(entries, sandboxListEntry{
 			Name:      inst.Name,
+			VM:        inst.Name,
 			Backend:   "boite",
 			Host:      "127.0.0.1",
-			Port:      inst.SSHPort,
+			Port:      cmp.Or(inst.SSHPort, 2226),
 			Workspace: inst.Workspace,
 			Key:       inst.KeyPath,
 			Status:    inst.Status,
@@ -82,16 +77,27 @@ func collectBoiteInstanceEntries(entries []sandboxListEntry) []sandboxListEntry 
 	return entries
 }
 
+// listInstances reads the local boite instances, or nothing when the instance
+// directory is unreadable: a listing that cannot see them still has the
+// configured targets to show.
+func listInstances() []*sandbox.InstanceState {
+	instances, err := sandbox.ListInstances()
+	if err != nil {
+		return nil
+	}
+	return instances
+}
+
 func printSandboxTextList(entries []sandboxListEntry) {
 	if len(entries) == 0 {
-		fmt.Println("no sandbox targets configured or boite instances found")
+		fmt.Println("no sandbox targets configured and no boite instances found")
 		return
 	}
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Green)
 	for _, entry := range entries {
 		fmt.Println(nameStyle.Render(entry.Name))
-		fmt.Printf("backend=%s\nhost=%s\nport=%d\nstatus=%s\nworkspace=%s\nkey=%s\n\n",
-			entry.Backend, entry.Host, entry.Port, entry.Status, entry.Workspace, entry.Key)
+		fmt.Printf("backend=%s\nvm=%s\nhost=%s\nport=%d\nstatus=%s\nworkspace=%s\nkey=%s\n\n",
+			entry.Backend, entry.VM, entry.Host, entry.Port, entry.Status, entry.Workspace, entry.Key)
 	}
 }
 
@@ -100,8 +106,17 @@ func runSandboxList(jsonOutput bool) error {
 	if err != nil {
 		return err
 	}
-	entries := collectConfigTargetEntries(cfg)
-	entries = collectBoiteInstanceEntries(entries)
+	return printSandboxList(cfg, jsonOutput)
+}
+
+func printSandboxList(cfg settings.Config, jsonOutput bool) error {
+	instances := listInstances()
+	byName := make(map[string]*sandbox.InstanceState, len(instances))
+	for _, inst := range instances {
+		byName[inst.Name] = inst
+	}
+	entries := collectBoiteInstanceEntries(collectConfigTargetEntries(cfg, byName), instances)
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")

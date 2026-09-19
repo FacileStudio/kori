@@ -36,7 +36,13 @@ func TestVerifyIsolation(t *testing.T) {
 	opts := GuardOptions{ExpectedUser: "boite", ExpectedWorkdir: "/workspace"}
 	res := &GuardResult{User: "root", Workdir: "/root"}
 	if err := VerifyIsolation(res, "WORKDIR_OK", opts); err == nil {
-		t.Fatal("expected error for root user")
+		t.Fatal("expected error when root does not match the expected user")
+	}
+	if err := VerifyIsolation(res, "WORKDIR_OK", GuardOptions{ExpectedUser: "root"}); err != nil {
+		t.Fatalf("expected root to be allowed when the target asks for it: %v", err)
+	}
+	if err := VerifyIsolation(res, "WORKDIR_OK", GuardOptions{}); err != nil {
+		t.Fatalf("expected root to be allowed with no expectation set: %v", err)
 	}
 	res.User = "other"
 	if err := VerifyIsolation(res, "WORKDIR_OK", opts); err == nil {

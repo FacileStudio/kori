@@ -14,31 +14,38 @@ func TestSandboxDefaults(t *testing.T) {
 	if cfg.Sandbox.Port != 2226 {
 		t.Fatalf("expected Port 2226, got %d", cfg.Sandbox.Port)
 	}
-	if cfg.Sandbox.Root != "/workspace" {
-		t.Fatalf("expected Root /workspace, got %s", cfg.Sandbox.Root)
-	}
-	if cfg.Sandbox.AutoSync == nil || !*cfg.Sandbox.AutoSync {
-		t.Fatal("expected AutoSync true")
+	if cfg.Sandbox.Root != "" {
+		t.Fatalf("expected empty Root, got %s", cfg.Sandbox.Root)
 	}
 	if cfg.Sandbox.AutoSnapshot == nil || *cfg.Sandbox.AutoSnapshot {
 		t.Fatal("expected AutoSnapshot false")
 	}
 }
 
+func TestRemoteDefaults(t *testing.T) {
+	cfg := Defaults("test")
+	if cfg.Remote.Port != 22 {
+		t.Fatalf("expected Port 22, got %d", cfg.Remote.Port)
+	}
+	if cfg.Remote.Root != "" {
+		t.Fatalf("expected empty Root, got %s", cfg.Remote.Root)
+	}
+	if cfg.Remote.SSHKeyPath != "" {
+		t.Fatalf("expected empty identity so ssh chooses, got %s", cfg.Remote.SSHKeyPath)
+	}
+}
+
 func testSandboxMergeObj() (Config, Config) {
 	base := Defaults("test")
-	syncVal := false
 	snapVal := true
 	over := Config{
 		Sandbox: Sandbox{
-			Default:      "remote",
+			Default:      "dev-vm",
 			User:         "deploy",
 			VMName:       "tux",
 			Port:         2230,
 			SSHKeyPath:   "/custom/key",
 			Root:         "/custom/root",
-			Workdir:      "/custom/workdir",
-			AutoSync:     &syncVal,
 			AutoSnapshot: &snapVal,
 		},
 	}
@@ -48,8 +55,8 @@ func testSandboxMergeObj() (Config, Config) {
 
 func TestSandboxMerge(t *testing.T) {
 	base, _ := testSandboxMergeObj()
-	if base.Sandbox.Default != "remote" {
-		t.Fatalf("expected Default remote, got %s", base.Sandbox.Default)
+	if base.Sandbox.Default != "dev-vm" {
+		t.Fatalf("expected Default dev-vm, got %s", base.Sandbox.Default)
 	}
 	if base.Sandbox.User != "deploy" {
 		t.Fatalf("expected User deploy, got %s", base.Sandbox.User)
@@ -60,14 +67,28 @@ func TestSandboxMerge(t *testing.T) {
 	if base.Sandbox.SSHKeyPath != "/custom/key" || base.Sandbox.Root != "/custom/root" {
 		t.Fatalf("expected /custom/key and /custom/root, got %+v", base.Sandbox)
 	}
-	if base.Sandbox.Workdir != "/custom/workdir" {
-		t.Fatalf("expected workdir /custom/workdir, got %s", base.Sandbox.Workdir)
-	}
-	if base.Sandbox.AutoSync == nil || *base.Sandbox.AutoSync {
-		t.Fatal("expected AutoSync false")
-	}
 	if base.Sandbox.AutoSnapshot == nil || !*base.Sandbox.AutoSnapshot {
 		t.Fatal("expected AutoSnapshot true")
+	}
+}
+
+func TestRemoteMerge(t *testing.T) {
+	base := Defaults("test")
+	over := Config{
+		Remote: Remote{
+			Default:    "staging",
+			User:       "deploy",
+			Port:       2222,
+			SSHKeyPath: "/custom/key",
+			Root:       "/srv/app",
+		},
+	}
+	base.merge(over)
+	if base.Remote.Default != "staging" || base.Remote.User != "deploy" {
+		t.Fatalf("unexpected remote defaults: %+v", base.Remote)
+	}
+	if base.Remote.Port != 2222 || base.Remote.SSHKeyPath != "/custom/key" || base.Remote.Root != "/srv/app" {
+		t.Fatalf("unexpected remote settings: %+v", base.Remote)
 	}
 }
 
@@ -77,9 +98,12 @@ func TestSandboxLoadYAML(t *testing.T) {
   port: 2244
   ssh_key_path: /tmp/key
   root: /guest/ws
-  workdir: /guest/custom
-  auto_sync: false
   auto_snapshot: true
+remote:
+  user: deploy
+  port: 2222
+  ssh_key_path: /tmp/remote_key
+  root: /srv/app
 `
 	tmp := filepath.Join(t.TempDir(), ".kori.yml")
 	if err := os.WriteFile(tmp, []byte(yamlData), 0o644); err != nil {
@@ -92,7 +116,10 @@ func TestSandboxLoadYAML(t *testing.T) {
 	if loaded.Sandbox.VMName != "arctic" || loaded.Sandbox.Port != 2244 {
 		t.Fatalf("expected arctic:2244, got %s:%d", loaded.Sandbox.VMName, loaded.Sandbox.Port)
 	}
-	if loaded.Sandbox.AutoSync == nil || *loaded.Sandbox.AutoSync {
-		t.Fatal("expected AutoSync false")
+	if loaded.Sandbox.AutoSnapshot == nil || !*loaded.Sandbox.AutoSnapshot {
+		t.Fatal("expected AutoSnapshot true")
+	}
+	if loaded.Remote.User != "deploy" || loaded.Remote.Port != 2222 || loaded.Remote.Root != "/srv/app" {
+		t.Fatalf("unexpected loaded remote config: %+v", loaded.Remote)
 	}
 }
