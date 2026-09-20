@@ -54,6 +54,22 @@ func TestBannerResolvesRootToAnAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestBannerEchoesATargetRootVerbatim(t *testing.T) {
+	off := false
+	got := testBanner(&answeringStub{}, asSettled(Config{Session: Session{Root: "target:pingu"}, Toggles: Toggles{Bash: &off}}), loaded{}, connected{})
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "target:pingu") {
+		t.Errorf("banner = %q, want the target root echoed as-is", got)
+	}
+	if strings.Contains(got, cwd) {
+		t.Errorf("banner = %q, want no host path: a target root names the remote machine, not %s", got, cwd)
+	}
+}
+
 func TestAugmentSystemCountsContextFilesAndSkills(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()

@@ -10,6 +10,11 @@ import (
 	"github.com/FacileStudio/kori/internal/settings"
 )
 
+// TestTargetFromInstance pins the fix for the 0.70 VM refusal: the workspace
+// field of an instance's state is the host directory boite exports, so the
+// target must carry the guest's own workspace and not that path. Handing the
+// host path on made every sandbox session die in the preflight guard with
+// `project directory "/home/yann" does not exist in target`.
 func TestTargetFromInstance(t *testing.T) {
 	if TargetFromInstance(nil) != nil {
 		t.Fatal("expected nil for nil instance")
@@ -18,15 +23,18 @@ func TestTargetFromInstance(t *testing.T) {
 		Name:      "testvm",
 		SSHPort:   2226,
 		KeyPath:   "/path/to/key",
-		Workspace: "/workspace",
+		Workspace: "/home/yann",
 		Status:    "running",
 	}
 	tgt := TargetFromInstance(st)
 	if tgt.Name != "testvm" || tgt.Backend != "boite" || tgt.Host != "127.0.0.1" || tgt.Port != 2226 {
 		t.Fatalf("unexpected target: %+v", tgt)
 	}
-	if tgt.User != "boite" || tgt.KeyPath != "/path/to/key" || tgt.Workdir != "/workspace" || tgt.Status != "running" {
+	if tgt.User != "boite" || tgt.KeyPath != "/path/to/key" || tgt.Status != "running" {
 		t.Fatalf("unexpected target details: %+v", tgt)
+	}
+	if tgt.Workdir != GuestWorkspace {
+		t.Errorf("Workdir = %q, want %q: a host path is not a directory the guest has", tgt.Workdir, GuestWorkspace)
 	}
 }
 
@@ -69,18 +77,28 @@ func TestResolveTarget_FromConfigTargets(t *testing.T) {
 	}
 }
 
-// TestResolveTarget_FromBoiteInstance guards the precedence that matters most
-// in practice: defaults set sandbox.root to /workspace, and the instance's own
-// workspace must still win, or every VM is entered at the wrong directory.
+// TestResolveTarget_FromBoiteInstance covers the instance route end to end: the
+// guest workspace is where a session starts, and an explicit sandbox.root is
+// the one thing allowed to override it.
 func TestResolveTarget_FromBoiteInstance(t *testing.T) {
 	t.Setenv("BOITE_INSTANCES_DIR", t.TempDir())
-	writeBoiteInstance(t, "local-box", 2230, "running", "/ws")
+	writeBoiteInstance(t, "local-box", 2230, "running", "/home/yann")
 	tgt, err := ResolveTarget("local-box", settings.Defaults("test"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tgt.Backend != "boite" || tgt.Port != 2230 || tgt.Workdir != "/ws" {
+	if tgt.Backend != "boite" || tgt.Port != 2230 || tgt.Workdir != GuestWorkspace {
 		t.Fatalf("unexpected boite target: %+v", tgt)
+	}
+
+	cfg := settings.Defaults("test")
+	cfg.Sandbox.Root = "/srv/app"
+	overridden, err := ResolveTarget("local-box", cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if overridden.Workdir != "/srv/app" {
+		t.Errorf("Workdir = %q, want sandbox.root to win over the guest default", overridden.Workdir)
 	}
 }
 

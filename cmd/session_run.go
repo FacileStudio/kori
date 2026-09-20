@@ -54,15 +54,28 @@ func resolvePromptArg(printPrompt string, promptArgs []string) string {
 	return strings.Join(promptArgs, " ")
 }
 
+// targetSessionRoot is the root a target session records: the workspace on the
+// target when one is configured, and otherwise a label naming the target, since
+// the session then runs in the SSH login directory.
+//
+// It is never the host's working directory. Keeping that is how 0.69 put the
+// launch directory into the banner, the system prompt and the session header of
+// a session whose tools never touched this machine — and grouped its transcript
+// with whatever local project kori happened to be started from.
+func targetSessionRoot(workdir, targetName string) string {
+	if workdir != "" {
+		return workdir
+	}
+	return settings.TargetRoot(targetName)
+}
+
 // runTargetSession boots kori on the host against a resolved target, mounting
 // the SSH-backed tool set in place of the local file and command tools.
 func runTargetSession(ctx context.Context, version string, cfg settings.Config, opts sandbox.SessionOptions) error {
 	if err := checkPreflight(ctx, opts.Target, opts); err != nil {
 		return err
 	}
-	if opts.WorkDir != "" {
-		cfg.Root = opts.WorkDir
-	}
+	cfg.Root = targetSessionRoot(opts.WorkDir, opts.Target.Name)
 	tools, closer, err := sandbox.RemoteTools(sandbox.ToolsOptions{
 		Target:  opts.Target,
 		WorkDir: opts.WorkDir,

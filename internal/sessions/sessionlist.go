@@ -55,6 +55,12 @@ func peekSessionRoot(path string) string {
 	return ""
 }
 
+// matchProjectRoot reports whether a session file belongs to projectRoot.
+// Target-labeled roots ("target:<name>", written by remote and sandbox
+// sessions with no configured workdir) are compared as identity strings on
+// both sides: resolving either would fold them into the host directory kori
+// was launched from, and a target session must match its target, not the
+// launch directory.
 func matchProjectRoot(path, projectRoot string) bool {
 	if projectRoot == "" {
 		return true
@@ -62,6 +68,10 @@ func matchProjectRoot(path, projectRoot string) bool {
 	root := peekSessionRoot(path)
 	if root == "" || root == "." {
 		return false
+	}
+	if settings.IsTargetRoot(root) || settings.IsTargetRoot(projectRoot) {
+		return settings.TargetRootName(root) != "" &&
+			settings.TargetRootName(root) == settings.TargetRootName(projectRoot)
 	}
 	targetAbs, err := filepath.Abs(projectRoot)
 	if err != nil {

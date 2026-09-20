@@ -76,21 +76,26 @@ func TestCollectConfigTargetEntries(t *testing.T) {
 	}
 }
 
+// The instance names the port and key a session dials; the workspace it prints
+// is the one the session's tools run in, which is the guest's own — the
+// instance's recorded workspace is a directory on this host, never the guest's.
 func TestCollectConfigTargetEntries_TakesInstanceValues(t *testing.T) {
 	cfg := settings.Config{Sandbox: settings.Sandbox{
-		Root:    "/group-root",
 		Targets: map[string]settings.SandboxTarget{"dev-vm": {VMName: "dev-box"}},
 	}}
 	instances := map[string]*sandbox.InstanceState{
-		"dev-box": {Name: "dev-box", SSHPort: 2240, KeyPath: "/inst/key", Workspace: "/inst/ws", Status: "running"},
+		"dev-box": {Name: "dev-box", SSHPort: 2240, KeyPath: "/inst/key", Workspace: "/home/yann", Status: "running"},
 	}
 	entries := collectConfigTargetEntries(cfg, instances)
 	if len(entries) != 1 {
 		t.Fatalf("expected one entry, got %d", len(entries))
 	}
 	entry := entries[0]
-	if entry.Port != 2240 || entry.Key != "/inst/key" || entry.Workspace != "/inst/ws" || entry.Status != "running" {
-		t.Fatalf("expected the instance's own values, got %+v", entry)
+	if entry.Port != 2240 || entry.Key != "/inst/key" || entry.Status != "running" {
+		t.Fatalf("expected the instance's own port and key, got %+v", entry)
+	}
+	if entry.Workspace != sandbox.GuestWorkspace {
+		t.Errorf("Workspace = %q, want %q", entry.Workspace, sandbox.GuestWorkspace)
 	}
 }
 

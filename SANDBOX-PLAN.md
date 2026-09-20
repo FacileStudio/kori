@@ -105,10 +105,16 @@ Both groups carry `default`, `user`, `port`, `ssh_key_path`, `root` and
 independent: a boite default port of 2226 would be wrong for every SSH host.
 
 `root` defaults to empty, and an empty `root` is meaningful rather than a hole:
-a boite target falls back to the instance's own workspace (where boite mounted
-the project), and a remote target to the SSH login directory (the user's home).
-With no workspace configured, relative tool paths stay relative and the remote
-shell resolves them there; no path is invented on the host.
+a boite target falls back to the VM's own workspace, `/workspace`, and a remote
+target to the SSH login directory (the user's home). `sandbox.root` overrides
+the guest default when it is set. With no workspace configured, relative tool
+paths stay relative and the remote shell resolves them there; no path is
+invented on the host.
+
+The instance's `state.json` is not a workspace source. Its `workspace` field is
+the host directory boite exports — the cwd `boite create` ran in — so taking it
+as the guest's directory made every VM session refuse with `project directory
+"/home/yann" does not exist in target`.
 
 `sandbox.targets` is boite-only and `remote.targets` is SSH-only. The decoder is
 strict, so an old `sandbox.targets` entry carrying `backend: ssh`/`host:` is

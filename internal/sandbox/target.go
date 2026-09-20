@@ -24,6 +24,20 @@ type Target struct {
 	AutoSnapshot *bool  `json:"auto_snapshot,omitempty" yaml:"auto_snapshot,omitempty"`
 }
 
+// GuestWorkspace is the directory a boite VM always presents the project at:
+// the base image bakes it in and workspace sync replaces it wholesale, so it is
+// the one guest path a session can be started in.
+//
+// It exists as a constant because InstanceState.Workspace is *not* that path.
+// boite records there the host directory it exports — the cwd `boite create`
+// ran in — and a guest has no such directory unless the host tree happens to
+// be laid out identically. Passing it to the preflight guard is the 0.70 bug:
+// every VM session refused with `project directory "/home/yann" does not exist
+// in target`, naming the launcher's home as if the guest had one, while the
+// tools would have run in /workspace all along. An instance with no_mount still
+// has /workspace; only its contents go stale, which is the guest's business.
+const GuestWorkspace = "/workspace"
+
 // TargetFromInstance creates a Target configured from a Boite InstanceState.
 func TargetFromInstance(st *InstanceState) *Target {
 	if st == nil {
@@ -40,7 +54,7 @@ func TargetFromInstance(st *InstanceState) *Target {
 		Port:    port,
 		User:    "boite",
 		KeyPath: st.KeyPath,
-		Workdir: st.Workspace,
+		Workdir: GuestWorkspace,
 		Status:  st.Status,
 	}
 }
@@ -59,7 +73,7 @@ func resolveConfigBoiteTarget(name string, t settings.SandboxTarget, cfg setting
 		target.Port = t.Port
 	}
 	target.KeyPath = cmp.Or(t.SSHKeyPath, target.KeyPath, cfg.Sandbox.SSHKeyPath)
-	target.Workdir = cmp.Or(t.Root, target.Workdir, cfg.Sandbox.Root)
+	target.Workdir = cmp.Or(t.Root, cfg.Sandbox.Root, target.Workdir)
 	target.AutoSnapshot = t.AutoSnapshot
 	return target, nil
 }
@@ -74,9 +88,11 @@ func resolveTargetFromConfig(name string, cfg settings.Config) (*Target, bool, e
 }
 
 // resolveTargetFromInstance builds a target from a local boite instance. The
-// instance's own workspace wins over the group's root, because boite mounted
-// the project there; sandbox.root is only a fallback for an instance that
-// names no workspace, and an unset root leaves the login directory in place.
+// instance contributes its transport and identity, not a workspace: where a
+// guest keeps the project is boite's own contract (GuestWorkspace), and the
+// directory its state records is a path on this host. An explicit sandbox.root
+// still wins, because pointing a VM at a directory you made there is the user's
+// call — that is the one override the group root was always meant to be.
 func resolveTargetFromInstance(name string, cfg settings.Config) (*Target, bool) {
 	inst, err := LoadInstance(name)
 	if err != nil || inst == nil {
@@ -89,7 +105,7 @@ func resolveTargetFromInstance(name string, cfg settings.Config) (*Target, bool)
 	if target.KeyPath == "" {
 		target.KeyPath = cfg.Sandbox.SSHKeyPath
 	}
-	target.Workdir = cmp.Or(target.Workdir, cfg.Sandbox.Root)
+	target.Workdir = cmp.Or(cfg.Sandbox.Root, target.Workdir)
 	if cfg.Sandbox.AutoSnapshot != nil {
 		target.AutoSnapshot = cfg.Sandbox.AutoSnapshot
 	}

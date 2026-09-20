@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/nacelle"
 )
 
@@ -120,7 +121,14 @@ func (s *Sink) canonical(usage nacelle.Usage, now time.Time) canonicalEvent {
 	return event
 }
 
+// repoIdentity names the project a run belongs to and the branch it sat on. A
+// target-labeled root names a remote machine, not a repo here: running host git
+// against it would silently report the project kori was launched from, so the
+// target's own name is the identity and there is no branch to name.
 func repoIdentity(root string) (string, string) {
+	if name := settings.TargetRootName(root); name != "" {
+		return name, ""
+	}
 	if root == "" {
 		root = "."
 	}

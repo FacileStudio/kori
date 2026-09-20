@@ -34,6 +34,18 @@ func TestTriggerSnapshotIfRequested(t *testing.T) {
 	}
 }
 
+// A target session must never record the directory kori was launched from: the
+// model's tools run on the other machine, and a host path there is a claim
+// about a filesystem the session never opened.
+func TestTargetSessionRootNamesTheTargetWithoutAWorkdir(t *testing.T) {
+	if got := targetSessionRoot("/srv/app", "staging"); got != "/srv/app" {
+		t.Errorf("targetSessionRoot with a workdir = %q, want the workspace on the target", got)
+	}
+	if got := targetSessionRoot("", "pingu"); got != "target:pingu" {
+		t.Errorf("targetSessionRoot without a workdir = %q, want the target label", got)
+	}
+}
+
 func TestRunTargetSession_PreflightFailure(t *testing.T) {
 	ctx := context.Background()
 	target := &sandbox.Target{

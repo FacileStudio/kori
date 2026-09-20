@@ -89,7 +89,16 @@ func countedNoun(n int, noun string) string {
 // and so answers nothing on its own — neither for the person reading the
 // banner nor for the model reading the system prompt, which are the two
 // callers.
+//
+// A target-labeled root ("target:<name>", set by remote and sandbox
+// sessions with no configured workdir) is echoed back as-is: it names the
+// machine on the other end of the SSH connection, not a directory on this
+// one, and resolving it would only rename the directory kori was launched
+// from.
 func absolute(root string) string {
+	if settings.IsTargetRoot(root) {
+		return root
+	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return root

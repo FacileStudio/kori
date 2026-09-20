@@ -130,6 +130,11 @@ type sessionEntry struct {
 // abandoned session still leaves a file saying what it was going to be. A
 // session where nobody typed anything is a fact worth having; a zero-length
 // file is not.
+//
+// The root is recorded as given when it names a target: that names a machine on
+// the other end of an SSH connection, not a directory here, and resolving it
+// would record the path kori was launched from and group the session with that
+// project instead of with its VM.
 func newSessionLog(backend, model, root string) *sessionLog {
 	dir, err := settings.HomeDir()
 	if err != nil {
@@ -140,8 +145,10 @@ func newSessionLog(backend, model, root string) *sessionLog {
 		return nil
 	}
 	absRoot := root
-	if abs, err := filepath.Abs(root); err == nil {
-		absRoot = abs
+	if !settings.IsTargetRoot(root) {
+		if abs, err := filepath.Abs(root); err == nil {
+			absRoot = abs
+		}
 	}
 	now := time.Now()
 	name := generateSessionID(dir) + ".jsonl"

@@ -20,6 +20,28 @@ func withApproval(on bool) Config {
 	return config
 }
 
+func TestEnvironmentDescribesTheTargetLoginDirectoryForARemoteSession(t *testing.T) {
+	config := withApproval(false)
+	config.Root = "target:staging"
+	remote := environment(config, time.Now(), connected{})
+
+	for _, want := range []string{"staging", "SSH login directory", "over SSH"} {
+		if !strings.Contains(remote, want) {
+			t.Errorf("environment() = %q, want it to tell the model the tools run on %q over SSH", remote, want)
+		}
+	}
+	cwd, err := filepath.Abs(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(remote, "Working directory: "+cwd) {
+		t.Errorf("environment() = %q, want no host path presented as the working directory", remote)
+	}
+	if strings.Contains(remote, "no confinement") {
+		t.Errorf("environment() = %q, want no host-confinement wording for a remote session", remote)
+	}
+}
+
 func TestEnvironmentNamesTheRootAbsolutely(t *testing.T) {
 	config := withApproval(false)
 	config.Root = "."

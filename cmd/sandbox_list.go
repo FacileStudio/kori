@@ -25,10 +25,15 @@ type sandboxListEntry struct {
 }
 
 // collectConfigTargetEntries lists the configured sandbox targets. It mirrors
-// resolveConfigBoiteTarget's precedence — the instance's own port, identity and
-// workspace first, then the target's overrides — so what this prints is what a
-// session would actually connect to, rather than a second opinion built from
-// the group defaults.
+// resolveConfigBoiteTarget's precedence — the instance's own port and identity
+// first, then the target's overrides — so what this prints is what a session
+// would actually connect to, rather than a second opinion built from the group
+// defaults.
+//
+// Workspace is the directory the session's tools run in, resolved the same way
+// the target resolves it. It is deliberately not the instance's recorded
+// workspace: that one is a directory on this host, and printing it here is how
+// a VM session came to look like it opened the launcher's home.
 func collectConfigTargetEntries(cfg settings.Config, instances map[string]*sandbox.InstanceState) []sandboxListEntry {
 	entries := make([]sandboxListEntry, 0, len(cfg.Sandbox.Targets))
 	for name, tgt := range cfg.Sandbox.Targets {
@@ -36,13 +41,12 @@ func collectConfigTargetEntries(cfg settings.Config, instances map[string]*sandb
 		entry := sandboxListEntry{Name: name, VM: vm, Backend: "boite", Host: "127.0.0.1", User: "boite", Status: "configured"}
 		if inst, ok := instances[vm]; ok {
 			entry.Port = inst.SSHPort
-			entry.Workspace = inst.Workspace
 			entry.Key = inst.KeyPath
 			entry.Status = inst.Status
 		}
 		entry.Port = cmp.Or(tgt.Port, entry.Port, 2226)
 		entry.User = cmp.Or(tgt.User, entry.User)
-		entry.Workspace = cmp.Or(tgt.Root, entry.Workspace, cfg.Sandbox.Root)
+		entry.Workspace = cmp.Or(tgt.Root, cfg.Sandbox.Root, sandbox.GuestWorkspace)
 		entry.Key = cmp.Or(tgt.SSHKeyPath, entry.Key, cfg.Sandbox.SSHKeyPath)
 		entries = append(entries, entry)
 	}
@@ -58,7 +62,7 @@ func hasEntry(entries []sandboxListEntry, vm string) bool {
 	return false
 }
 
-func collectBoiteInstanceEntries(entries []sandboxListEntry, instances []*sandbox.InstanceState) []sandboxListEntry {
+func collectBoiteInstanceEntries(entries []sandboxListEntry, instances []*sandbox.InstanceState, cfg settings.Config) []sandboxListEntry {
 	for _, inst := range instances {
 		if hasEntry(entries, inst.Name) {
 			continue
@@ -69,7 +73,7 @@ func collectBoiteInstanceEntries(entries []sandboxListEntry, instances []*sandbo
 			Backend:   "boite",
 			Host:      "127.0.0.1",
 			Port:      cmp.Or(inst.SSHPort, 2226),
-			Workspace: inst.Workspace,
+			Workspace: cmp.Or(cfg.Sandbox.Root, sandbox.GuestWorkspace),
 			Key:       inst.KeyPath,
 			Status:    inst.Status,
 		})
@@ -115,7 +119,7 @@ func printSandboxList(cfg settings.Config, jsonOutput bool) error {
 	for _, inst := range instances {
 		byName[inst.Name] = inst
 	}
-	entries := collectBoiteInstanceEntries(collectConfigTargetEntries(cfg, byName), instances)
+	entries := collectBoiteInstanceEntries(collectConfigTargetEntries(cfg, byName), instances, cfg)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
