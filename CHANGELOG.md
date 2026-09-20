@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.70.1] - 2026-09-20
+
+### Fixed
+- fix(sandbox): a boite target starts in the guest's `/workspace` — the directory boite bakes and syncs — not the host directory an instance records; the preflight guard refused every VM session with `project directory "/home/yann" does not exist in target`
+- fix(sandbox): a target session with no configured workdir records `target:<name>` as its root, so the banner, system prompt and session header name the target instead of the directory kori was launched from
+- fix(sessions): a `target:<name>` root groups and resumes by target identity, never folded into the launch directory
+- fix(usage): usage records for a target session carry the target as the project and no branch, instead of the local repository kori ran inside
+
+### Changed
+- refactor(sandbox): `kori sandbox list` prints the directory a session's tools run in, rather than the instance's host-side workspace
+
+## [0.70.0] - 2026-09-19
+
+### Added
+- feat(sandbox): split sandbox into local boite VMs and kori remote execution backends
+
+### Fixed
+- fix: remove duplicate `session.additional_prompt` definition
+
 ## [0.69.0] - 2026-09-18
 
 ### Added
@@ -89,15 +110,3 @@
 
 ### Fixed
 - fix: cron install command installs to crontab
-
-## [Unreleased]
-
-## [0.70.0] - 2026-09-19
-
-### Added
-- feat(sandbox): split sandbox into local boite VMs and kori remote execution backends
-
-### Fixed
-- fix: remove duplicate `session.additional_prompt` definition
-
-## [0.69.0] - 2026-09-18
