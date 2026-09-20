@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.70.2] - 2026-09-20
+
+### Fixed
+- fix(sandbox): `kori remote` passes `-p` only when a port is configured; a bare `user@host` or `~/.ssh/config` alias keeps ssh's own `Port` instead of being overridden with 22, and `remote.port` defaults to 0 so the group no longer forces one
+- fix(sandbox): a preflight host-key failure names the host and the command that resolves it — `ssh` for an unknown key (`ssh-keyscan` when the port is literal), `ssh-keygen -R` for a rotated one — instead of only the ssh exit status, and points a loopback target at `kori sandbox`
+
 ## [0.70.1] - 2026-09-20
 
 ### Fixed
