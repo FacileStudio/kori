@@ -38,6 +38,6 @@ func Defaults(system string) Config {
 		UI:      UI{Mode: &mode, GroupTools: &groupTools, ShowThinking: &showThinking, Diffs: &diffs, PromptPlaceholder: &promptPlaceholder, StartMessage: &startMessage, TransparentBlocks: &transparent, JSON: &json, ShowHooks: &showHooks, ShowHookOutput: &showHookOutput},
 		Editor:  Editor{Editor: "", PromptEditKey: "ctrl+g"},
 		Sandbox: Sandbox{VMName: "", Port: 2226, SSHKeyPath: "~/.ssh/id_ed25519", AutoSnapshot: &autoSnapshot},
-		Remote:  Remote{Port: 22},
+		Remote:  Remote{},
 	}
 }

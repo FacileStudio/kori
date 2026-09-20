@@ -76,13 +76,15 @@ func TestResolveRemoteTarget_DirectAddress(t *testing.T) {
 	}
 }
 
-func TestResolveRemoteTarget_AliasKeepsDefaultPort(t *testing.T) {
+// An alias with no configured port must stay zero: ssh then resolves it from
+// ~/.ssh/config or its own default, which a forced -p 22 would override.
+func TestResolveRemoteTarget_AliasLeavesPortToSSH(t *testing.T) {
 	tgt, err := ResolveRemoteTarget("myserver", settings.Config{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tgt.Host != "myserver" || tgt.Port != 22 {
-		t.Fatalf("expected ssh_config alias to keep port 22, got %+v", tgt)
+	if tgt.Host != "myserver" || tgt.Port != 0 {
+		t.Fatalf("expected ssh_config alias to leave the port unset, got %+v", tgt)
 	}
 }
 

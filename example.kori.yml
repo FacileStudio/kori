@@ -107,7 +107,8 @@ sandbox:
 remote:
   default: ""
   user: ""
-  port: 22
+  # 0 lets ssh choose: ssh_config's Port, then ssh's own default (22)
+  port: 0
   # an empty ssh_key_path lets ssh choose: ssh_config's IdentityFile, then the agent
   ssh_key_path: ""
   # an empty root starts in the SSH login directory, which is the user's home

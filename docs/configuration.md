@@ -848,7 +848,7 @@ sandbox:                          # local boite microVMs, used by 'kori sandbox'
 remote:                           # SSH hosts, used by 'kori remote'
   default: ""                     # host entered when 'kori remote' has no argument
   user: ""                        # default SSH user (ssh's own config wins when empty)
-  port: 22                        # default port
+  port: 0                         # 0 lets ssh choose: ssh_config's Port, then ssh's default (22)
   ssh_key_path: ""                # empty lets ssh choose: ssh_config IdentityFile, then the agent
   root: ""                        # empty starts in the SSH login directory (home)
   targets:
@@ -863,9 +863,14 @@ remote:                           # SSH hosts, used by 'kori remote'
 Host-key verification is deliberately not relaxed for `remote`: a host on the
 network checks against your own `known_hosts` and `~/.ssh/config`, exactly as a
 hand-typed `ssh` would, and `BatchMode=yes` refuses an unknown host rather than
-trusting it. Boite microVMs are the exception — their key is generated per
-instance, never in `known_hosts`, and the connection is loopback — so only the
-`sandbox` path turns host-key checking off.
+trusting it. Because `BatchMode` also removes the yes/no prompt a hand-typed
+ssh shows, the first connection to an unknown host fails; that failure names the
+host and the `ssh-keyscan` command that trusts it, so the step stays explicit
+rather than automatic. Boite microVMs are the exception — their key is generated
+per instance, never in `known_hosts`, and the connection is loopback — so only
+the `sandbox` path turns host-key checking off. A `remote` target that happens
+to be a local boite VM is better run through `kori sandbox`, which trusts the
+VM's key without touching `known_hosts`.
 
 Commands:
 - `kori sandbox list`: lists configured `sandbox.targets` and local boite VMs.

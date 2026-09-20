@@ -22,12 +22,10 @@ type sshEndpoint struct {
 	root    string
 }
 
-// targetFromSSH creates a Target configured for a generic SSH host.
+// targetFromSSH creates a Target configured for a generic SSH host. An unset
+// port stays zero rather than defaulting to 22, so buildRemoteSSHArgs omits -p
+// and lets ssh resolve the port from ~/.ssh/config or its own default.
 func targetFromSSH(name string, ep sshEndpoint) *Target {
-	p := ep.port
-	if p <= 0 {
-		p = 22
-	}
 	h := ep.host
 	if h == "" {
 		h = "127.0.0.1"
@@ -36,7 +34,7 @@ func targetFromSSH(name string, ep sshEndpoint) *Target {
 		Name:    name,
 		Backend: "ssh",
 		Host:    h,
-		Port:    p,
+		Port:    ep.port,
 		User:    ep.user,
 		KeyPath: ep.keyPath,
 		Workdir: ep.root,

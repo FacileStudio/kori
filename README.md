@@ -172,7 +172,7 @@ sandbox:
 remote:
   default: ""
   user: ""
-  port: 22
+  port: 0
   ssh_key_path: ""
   root: ""
   targets: {}

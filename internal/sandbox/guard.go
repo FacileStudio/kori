@@ -98,7 +98,7 @@ func PreflightCheck(ctx context.Context, target *Target, opts GuardOptions) (*Gu
 	probeCmd := BuildGuardProbeCommand(opts.ExpectedWorkdir)
 	out, err := runProbe(ctx, target, user, probeCmd, runner)
 	if err != nil {
-		return nil, fmt.Errorf("preflight isolation probe failed on target %s: %w (%s)", target.Name, err, strings.TrimSpace(string(out)))
+		return nil, probeError(target, out, err)
 	}
 	res, err := ParseGuardOutput(string(out))
 	if err != nil {

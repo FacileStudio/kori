@@ -103,6 +103,8 @@ Both groups carry `default`, `user`, `port`, `ssh_key_path`, `root` and
 `targets`. `sandbox.targets` entries additionally carry `vm_name` and
 `auto_snapshot`; `remote.targets` entries carry `host`. The groups are
 independent: a boite default port of 2226 would be wrong for every SSH host.
+`remote.port` therefore defaults to 0 rather than spelling 22, leaving the port
+to `~/.ssh/config` and ssh's own default so an alias is not overridden.
 
 `root` defaults to empty, and an empty `root` is meaningful rather than a hole:
 a boite target falls back to the VM's own workspace, `/workspace`, and a remote

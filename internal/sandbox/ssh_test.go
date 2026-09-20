@@ -33,6 +33,19 @@ func TestBuildRemoteSSHArgs_RemoteVerifiesHostKeys(t *testing.T) {
 	}
 }
 
+// An SSH host with no configured port must not get a -p: an explicit -p 22
+// overrides Port from ~/.ssh/config, sending an alias there to the wrong port.
+func TestBuildRemoteSSHArgs_OmitsPortWhenUnset(t *testing.T) {
+	target := &Target{Name: "alias", Backend: "ssh", Host: "myserver"}
+	args := strings.Join(buildRemoteSSHArgs(target, "", "id", ""), " ")
+	if strings.Contains(args, " -p ") {
+		t.Fatalf("expected no -p so ssh resolves the port, got %s", args)
+	}
+	if !strings.HasSuffix(args, " id") {
+		t.Fatalf("expected the command last: %s", args)
+	}
+}
+
 func TestWorkdirPrefix(t *testing.T) {
 	if got := workdirPrefix(""); got != "" {
 		t.Fatalf("expected no prefix for an empty workdir, got %q", got)

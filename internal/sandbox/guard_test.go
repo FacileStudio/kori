@@ -78,6 +78,67 @@ func TestPreflightCheck(t *testing.T) {
 	}
 }
 
+// BatchMode means ssh cannot prompt to trust an unknown host, so the probe has
+// to turn the raw exit status into a command the user can run.
+func TestPreflightCheckHostKeyHint(t *testing.T) {
+	target := &Target{Name: "boite@localhost:2226", Backend: "ssh", Host: "localhost", Port: 2226, User: "boite", Status: "running"}
+	opts := GuardOptions{
+		Runner: &mockRunner{
+			runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+				return []byte("Host key verification failed."), errors.New("exit status 255")
+			},
+		},
+	}
+	_, err := PreflightCheck(context.Background(), target, opts)
+	if err == nil {
+		t.Fatal("expected a host key failure")
+	}
+	for _, want := range []string{"not in ~/.ssh/known_hosts", "ssh -p 2226 boite@localhost", "ssh-keyscan -p 2226 localhost", "kori sandbox"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected %q in error, got %v", want, err)
+		}
+	}
+}
+
+// ssh-keyscan does not read ssh_config, so an alias must be left to ssh — the
+// one command that resolves the real host and port — rather than scanned under
+// a name that only ssh understands.
+func TestPreflightCheckHostKeyHintKeepsAliasToSSH(t *testing.T) {
+	target := &Target{Name: "myserver", Backend: "ssh", Host: "myserver", User: "deploy", Status: "running"}
+	opts := GuardOptions{
+		Runner: &mockRunner{
+			runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+				return []byte("Host key verification failed."), errors.New("exit status 255")
+			},
+		},
+	}
+	_, err := PreflightCheck(context.Background(), target, opts)
+	if err == nil {
+		t.Fatal("expected a host key failure")
+	}
+	if strings.Contains(err.Error(), "ssh-keyscan") {
+		t.Fatalf("an ssh_config alias must not get an ssh-keyscan hint: %v", err)
+	}
+	if !strings.Contains(err.Error(), "ssh deploy@myserver") {
+		t.Fatalf("expected the ssh command for the alias, got %v", err)
+	}
+}
+
+func TestPreflightCheckHostKeyChangedHint(t *testing.T) {
+	target := &Target{Name: "host", Backend: "ssh", Host: "build.example.com", Port: 22, User: "deploy", Status: "running"}
+	opts := GuardOptions{
+		Runner: &mockRunner{
+			runFunc: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+				return []byte("REMOTE HOST IDENTIFICATION HAS CHANGED!"), errors.New("exit status 255")
+			},
+		},
+	}
+	_, err := PreflightCheck(context.Background(), target, opts)
+	if err == nil || !strings.Contains(err.Error(), "ssh-keygen -R [build.example.com]:22") {
+		t.Fatalf("expected the stale-entry hint, got %v", err)
+	}
+}
+
 func TestPreflightCheckFailures(t *testing.T) {
 	if _, err := PreflightCheck(context.Background(), nil, DefaultGuardOptions()); err == nil {
 		t.Fatal("expected error for nil instance")

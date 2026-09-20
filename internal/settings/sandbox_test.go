@@ -24,8 +24,8 @@ func TestSandboxDefaults(t *testing.T) {
 
 func TestRemoteDefaults(t *testing.T) {
 	cfg := Defaults("test")
-	if cfg.Remote.Port != 22 {
-		t.Fatalf("expected Port 22, got %d", cfg.Remote.Port)
+	if cfg.Remote.Port != 0 {
+		t.Fatalf("expected Port 0 so ssh chooses, got %d", cfg.Remote.Port)
 	}
 	if cfg.Remote.Root != "" {
 		t.Fatalf("expected empty Root, got %s", cfg.Remote.Root)

@@ -14,12 +14,14 @@ type RemoteTarget struct {
 
 // Remote holds the defaults `kori remote` applies to SSH hosts: the host it
 // connects to with no argument, and the user, port, identity and workspace
-// every host inherits unless it overrides them. An empty root means the SSH
-// login directory, which is the user's home — where a bare ssh lands — rather
-// than a path guessed here. It is a separate group from sandbox because the two
-// name different machines — a boite microVM on loopback versus a host reached
-// over the network — and a shared group would have to spell a port default that
-// is wrong for one of them.
+// every host inherits unless it overrides them. An empty port is meaningful —
+// it lets ssh pick, honoring ~/.ssh/config's Port before ssh's own default of
+// 22 — so the group leaves it at zero rather than spelling 22 and overriding an
+// alias. An empty root means the SSH login directory, which is the user's home
+// — where a bare ssh lands — rather than a path guessed here. It is a separate
+// group from sandbox because the two name different machines — a boite microVM
+// on loopback versus a host reached over the network — and a shared group would
+// have to spell a port default that is wrong for one of them.
 type Remote struct {
 	Default    string                  `json:"default" yaml:"default"`
 	User       string                  `json:"user" yaml:"user"`
