@@ -38,6 +38,7 @@ func FromEnv() Config {
 			GrindContinuations: envInt(EnvPrefix + "GRIND_CONTINUATIONS"),
 			MaxConcurrency:     envInt(EnvPrefix + "MAX_CONCURRENCY"),
 			MaxParallelAgents:  envInt(EnvPrefix + "MAX_PARALLEL_AGENTS"),
+			Compaction:         compactionEnv(),
 		},
 		Sources: Sources{SkillDirs: envList(EnvPrefix + "SKILL_DIRS"), MCPFiles: envList(EnvPrefix + "MCP_FILES")},
 		UI: UI{

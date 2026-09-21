@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/nacelle"
 )
 
@@ -69,10 +70,9 @@ func TestRunCompactionCollectsASummary(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
 	m.agent = summarizerAgent(t, summarizing{answer: "Decisions:\n- done."})
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 	results := make(chan compactOutcome)
 
-	go runCompaction(m, t.Context(), results, evictCut)
+	go runCompaction(m, t.Context(), results, m.plan(), compaction.Mid)
 
 	outcome, open := <-results
 	if !open {
@@ -91,13 +91,12 @@ func TestRunCompactionFallsBackWhenTheSummarizerDeadlineFires(t *testing.T) {
 	m.conversation = bigConversation()
 	m.size = compactAt + 25_000
 	m.agent = summarizerAgent(t, blocking{})
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 	results := make(chan compactOutcome)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
-	go runCompaction(m, ctx, results, evictCut)
+	go runCompaction(m, ctx, results, m.plan(), compaction.Mid)
 
 	outcome, open := <-results
 	if !open {

@@ -66,7 +66,7 @@ func (m *Model) footer() []string {
 		"↑"+shortTokens(total.InputTokens+total.CacheCreationTokens),
 		"↓"+shortTokens(total.OutputTokens+m.run.liveOut))
 	if m.size > 0 {
-		spent = append(spent, "↕"+shortTokens(m.size+m.run.liveOut))
+		spent = append(spent, contextLoad(m.size+m.run.liveOut, m.policy))
 	}
 	liveSpend := m.run.usage
 	liveSpend.OutputTokens += m.run.liveOut

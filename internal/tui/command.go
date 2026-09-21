@@ -79,6 +79,7 @@ func (m *Model) clear() tea.Cmd {
 	m.spent = nacelle.Usage{}
 	m.size, m.trimmed = 0, 0
 	m.thrashCount = 0
+	m.last = compacted{}
 	m.tasks = nil
 	tasks.SetCurrentPlan(nil)
 	m.clearFinishedParallel()
@@ -142,9 +143,7 @@ func (m *Model) statusCmd() tea.Cmd {
 	if total.CacheReadTokens > 0 {
 		lines = append(lines, fmt.Sprintf("cached · %s", shortTokens(total.CacheReadTokens)))
 	}
-	if m.size > 0 {
-		lines = append(lines, fmt.Sprintf("↕ · %s", shortTokens(m.size)))
-	}
+	lines = append(lines, m.compactionLines()...)
 	if m.trimmed > 0 {
 		lines = append(lines, fmt.Sprintf("⎇ · %d", m.trimmed))
 	}

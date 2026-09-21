@@ -96,14 +96,14 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 // one struct — the banner and the launch notes take theirs from the same
 // snapshot, so the two cannot disagree about what was loaded.
 func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.SessionConfig {
+	budget := ResolveBudget(p.config.CompactAt, p.config.Compaction, backend)
 	return tui.SessionConfig{
-		Root:           p.config.Root,
-		Model:          p.config.Model,
-		Backend:        p.config.Backend,
-		Diffs:          *p.config.Diffs,
-		GroupTools:     p.config.GroupTools,
-		ShowThinking:   *p.config.ShowThinking,
-		CompactAt:      resolveCompactAt(*p.config.CompactAt, backend),
+		Root:       p.config.Root,
+		Model:      p.config.Model,
+		Backend:    p.config.Backend,
+		Diffs:      *p.config.Diffs,
+		GroupTools: p.config.GroupTools, ShowThinking: *p.config.ShowThinking,
+		Compaction:     CompactionConfig(budget, p.config.Compaction),
 		MaxConcurrency: resolveConcurrency(p.config.MaxConcurrency, p.config.MaxParallelAgents),
 		Grind: tui.GrindConfig{
 			Cost:          *p.config.GrindCost,

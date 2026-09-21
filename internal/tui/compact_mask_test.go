@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/nacelle"
 )
 
-func TestMaskFloorDropsOldLargeResults(t *testing.T) {
+func TestMaskFloorDropsOnlyHistoryResults(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
 	m.size = compactAt + 25_000
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 
-	m.maskEvicted(evictCut)
+	m.maskHistory(m.plan())
 
 	dropped, kept := 0, 0
 	for _, message := range m.conversation {
@@ -33,7 +33,7 @@ func TestMaskFloorDropsOldLargeResults(t *testing.T) {
 		}
 	}
 	if dropped != 1 || kept != 2 {
-		t.Errorf("dropped %d and kept %d large results, want the one outside the keep window dropped and both inside it kept", dropped, kept)
+		t.Errorf("dropped %d and kept %d large results, want the one history result dropped and the anchor and active ones kept", dropped, kept)
 	}
 	if m.trimmed != 1 {
 		t.Errorf("trimmed count = %d, want 1", m.trimmed)
@@ -45,9 +45,8 @@ func TestMaskKeepsThePairingShape(t *testing.T) {
 	before := bigConversation()
 	m.conversation = before
 	m.size = compactAt + 1
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 
-	m.maskEvicted(evictCut)
+	m.maskHistory(m.plan())
 
 	for i, message := range m.conversation {
 		if len(message.Parts) != len(before[i].Parts) {
@@ -68,13 +67,14 @@ func TestMaskKeepsThePairingShape(t *testing.T) {
 
 func TestMaskLeavesAShortConversationAlone(t *testing.T) {
 	m := sized()
-	m.conversation = bigConversation()
+	m.conversation = []nacelle.Message{nacelle.UserText("too short to have history")}
 	m.size = compactAt + 1
-	m.conversation = m.conversation[len(m.conversation)-keepCount(len(m.conversation)):]
-	m.maskEvicted(0)
 
+	if stats := m.maskHistory(m.plan()); stats != (compaction.MicroStats{}) {
+		t.Errorf("stats = %+v, want nothing tombstoned with no history", stats)
+	}
 	if m.trimmed != 0 {
-		t.Errorf("a conversation with an empty eviction lost %d results", m.trimmed)
+		t.Errorf("a conversation with no history lost %d results", m.trimmed)
 	}
 }
 
@@ -82,20 +82,19 @@ func TestMaskIsNotPaidTwiceOnASecondPass(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
 	m.size = compactAt + 1
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 
-	m.maskEvicted(evictCut)
+	m.maskHistory(m.plan())
 	first := m.trimmed
 	m.size = compactAt + compactSlack + 1
 
-	m.maskEvicted(evictCut)
+	m.maskHistory(m.plan())
 
 	if m.trimmed != first {
 		t.Errorf("second pass trimmed %d more; placeholders were counted as savings again", m.trimmed-first)
 	}
 }
 
-func TestMaskDropsOldThinkingBlocks(t *testing.T) {
+func TestMaskDropsHistoryThinkingBlocks(t *testing.T) {
 	msg := func(role nacelle.Role, parts ...nacelle.Part) nacelle.Message {
 		return nacelle.Message{Role: role, Parts: parts}
 	}
@@ -112,16 +111,15 @@ func TestMaskDropsOldThinkingBlocks(t *testing.T) {
 		msg(nacelle.RoleAssistant, thought(100), nacelle.Text{Text: "recent conclusion"}),
 	}
 	m.size = compactAt + 50_000
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
 
-	m.maskEvicted(evictCut)
+	m.maskHistory(m.plan())
 
 	replaced, untouched := countThinkingBlocks(m.conversation)
 	if replaced != 1 {
-		t.Errorf("%d thinking blocks replaced, want 1", replaced)
+		t.Errorf("%d thinking blocks replaced, want the one in history", replaced)
 	}
 	if untouched != 2 {
-		t.Errorf("%d thinking blocks untouched, want 2", untouched)
+		t.Errorf("%d thinking blocks untouched, want the active window's two", untouched)
 	}
 	verifyAssistantTextPreserved(t, m.conversation)
 	if m.trimmed < 2 {
@@ -133,10 +131,8 @@ func TestMaskFallbackKeepsTheConversationStanding(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
 	m.size = compactAt + 25_000
-	m.compactAt = compactAt
 
-	outcome := compactOutcome{before: m.size, evictCut: len(m.conversation) - keepCount(len(m.conversation))}
-	m.applyMaskFallback(outcome)
+	m.applyMaskFallback(compactOutcome{before: m.size, plan: m.plan(), tier: compaction.Mid})
 
 	saved := 0
 	for _, message := range m.conversation {
@@ -148,14 +144,13 @@ func TestMaskFallbackKeepsTheConversationStanding(t *testing.T) {
 		}
 	}
 	if saved == 0 {
-		t.Errorf("mask fallback masked nothing")
+		t.Error("mask fallback masked nothing")
 	}
 	if len(m.conversation) != len(bigConversation()) {
 		t.Errorf("mask fallback changed the message count: %d, was %d", len(m.conversation), len(bigConversation()))
 	}
-	said := spoken(m)
-	if len(said) < 1 || !strings.Contains(strings.Join(said, " "), "✂ Compaction summary") {
-		t.Errorf("mask fallback did not report: %v", said)
+	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "✂ Compaction summary") {
+		t.Errorf("mask fallback did not report: %v", spoken(m))
 	}
 }
 
@@ -163,12 +158,12 @@ func TestSettleCompactionFallsBackToTheMaskOnFailure(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
 	m.size = compactAt + 25_000
-	outcome := compactOutcome{before: m.size, evictCut: len(m.conversation) - keepCount(len(m.conversation)), err: errors.New("summarizer hiccuped")}
+	outcome := compactOutcome{before: m.size, plan: m.plan(), tier: compaction.Mid, err: errors.New("summarizer hiccuped")}
 
 	m.settleCompaction(outcome)
 
 	if m.compacting {
-		t.Errorf("compacting still true after the fallback")
+		t.Error("compacting still true after the fallback")
 	}
 	if len(m.conversation) != len(bigConversation()) {
 		t.Errorf("mask fallback changed the message count: %d", len(m.conversation))
@@ -183,10 +178,9 @@ func TestSettleCompactionFallsBackToTheMaskOnFailure(t *testing.T) {
 		}
 	}
 	if saved == 0 {
-		t.Errorf("a failed summary bought no headroom: nothing was masked")
+		t.Error("a failed summary bought no headroom: nothing was masked")
 	}
-	said := strings.Join(spoken(m), " ")
-	if !strings.Contains(said, "compaction summary failed") {
+	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "compaction summary failed") {
 		t.Errorf("failure not reported: %v", said)
 	}
 }
@@ -199,35 +193,26 @@ func TestSizedCountsEveryBilledInputKind(t *testing.T) {
 	}
 }
 
-func TestCompactedHistoryCarriesTheMarker(t *testing.T) {
-	block := compactedHistory("Decisions:\n- ship it")
-	text, ok := block.Parts[0].(nacelle.Text)
-	if !ok || !strings.HasPrefix(text.Text, "[compacted context") {
-		t.Errorf("compacted history = %q, want the marker prefix", text.Text)
+func TestLedgerCarriesTheSentinel(t *testing.T) {
+	block := compaction.BuildLedger("", "Decisions:\n- ship it")
+	if !compaction.IsLedger(block) {
+		t.Errorf("ledger = %+v, want the state-ledger sentinel", block)
 	}
 }
 
 func countThinkingBlocks(messages []nacelle.Message) (int, int) {
 	replaced, untouched := 0, 0
 	for _, msg := range messages {
-		r, u := countMessageThinking(msg)
-		replaced += r
-		untouched += u
-	}
-	return replaced, untouched
-}
-
-func countMessageThinking(msg nacelle.Message) (int, int) {
-	replaced, untouched := 0, 0
-	for _, part := range msg.Parts {
-		r, ok := part.(nacelle.Reasoning)
-		if !ok {
-			continue
-		}
-		if strings.HasPrefix(r.Text, droppedThinkingNotice) {
-			replaced++
-		} else {
-			untouched++
+		for _, part := range msg.Parts {
+			reasoning, ok := part.(nacelle.Reasoning)
+			if !ok {
+				continue
+			}
+			if strings.HasPrefix(reasoning.Text, droppedThinkingNotice) {
+				replaced++
+			} else {
+				untouched++
+			}
 		}
 	}
 	return replaced, untouched

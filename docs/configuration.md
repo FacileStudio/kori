@@ -93,9 +93,9 @@ could tell apart.
 | Layer | Source | Notes |
 |---|---|---|
 | Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-additional-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
-| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_FETCH`, `KORI_TASKS` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers) |
+| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_COMPACTION_SOFT_RATIO`, `KORI_COMPACTION_MID_RATIO`, `KORI_COMPACTION_HARD_RATIO`, `KORI_COMPACTION_KEEP_TURNS`, `KORI_COMPACTION_ANCHOR_MESSAGES`, `KORI_COMPACTION_JUDGE`, `KORI_COMPACTION_JUDGE_MODEL`, `KORI_COMPACTION_JUDGE_BASE_URL`, `KORI_COMPACTION_JUDGE_API_KEY`, `KORI_COMPACTION_PRUNE_THRESHOLD`, `KORI_COMPACTION_MAX_BLOCKS`, `KORI_FETCH`, `KORI_TASKS`, `TYPESAFE_API_KEY` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers). `TYPESAFE_API_KEY` is the compaction judge's key and beats `KORI_COMPACTION_JUDGE_API_KEY`; it is the one credential to keep in the environment rather than the file |
 | File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
-| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: 75000` (absolute tokens), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
+| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: unset` (an absolute override when set; unset derives the ceiling from `soft_ratio` × the context window, `0` disables), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `limits.compaction.soft_ratio: 0.65`, `limits.compaction.mid_ratio: 0.80`, `limits.compaction.hard_ratio: 0.90`, `limits.compaction.keep_turns: 3`, `limits.compaction.anchor_messages: 1`, `limits.compaction.judge.enabled: false`, `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_subagent: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
 there is nothing to find — no `AGENTS.md`/`CLAUDE.md` anywhere above `root`, no
@@ -127,10 +127,29 @@ reasoning:
   thinking: true
   budget: 8192
 limits:
-  compact_at: 75000
+  # compact_at is an absolute token ceiling. Left unset (the default) the
+  # ceiling comes from the context window and soft_ratio below; 0 turns
+  # compaction off outright.
+  # compact_at: 75000
   max_iterations: 5
   max_concurrency: 16
   max_parallel_agents: 16
+  # compaction decides, per history block, what to keep, prune or fold into the
+  # state ledger. The judge is opt-in and off by default: enabling it sends
+  # conversation history to TypeSafe (see "Compaction" below).
+  compaction:
+    soft_ratio: 0.65
+    mid_ratio: 0.80
+    hard_ratio: 0.90
+    keep_turns: 3
+    anchor_messages: 1
+    judge:
+      enabled: false
+      model: jev-latest
+      base_url: https://api.typesafe.ai
+      api_key: ""
+      prune_threshold: 0.85
+      max_blocks_per_call: 64
 session:
   root: .
   system_prompt: You are a terminal coding assistant.
@@ -335,6 +354,38 @@ During an interactive session, the `/model` command switches models on the fly:
 - `/model <name>` switches immediately to the named profile or model string (e.g. `/model fast` or `/model openai/gpt-5.4`).
 
 The conversation history remains intact when switching models mid-session.
+
+### Compaction
+
+Compaction used to trip at one absolute token count. It now has a ladder: the session measures
+itself against the backend's context window and acts at the ratio it crossed, before it reaches
+any ceiling at all.
+
+| Tier | Crossed at | What it does | Model calls |
+|---|---|---|---|
+| soft | `soft_ratio` × window | Tombstones history tool results and reasoning older than the active window — deterministic, no model call | 0 |
+| mid | `mid_ratio` × window | Tombstones, then classifies history blocks and folds the ones that matter into one `[state ledger]` message | 1 judge + 1 ledger |
+| hard | `hard_ratio` × window | Mid, plus force-summarizing the whole history and trimming to the pinned head, ledger and active window | 1 judge + 1 ledger |
+
+`limits.compact_at` still speaks last: a value someone set is an absolute ceiling and beats the
+ratios, `0` turns compaction off, and leaving it unset is what puts the ladder in charge. A
+backend that reports no context window cannot use a ratio at all and falls back to `75000`, the
+same number `DefaultCompactAt` has always carried. `keep_turns` and `anchor_messages` size the two
+ends a pass never touches: the newest turns stay verbatim, and the first user turn is pinned so
+the original task cannot be summarized away. With the judge off (the default), `mid` and `hard`
+both fold the whole history into the ledger. With it on, `mid` classifies each history block and
+keeps, prunes or folds it, and `hard` folds everything the judge did not prune.
+
+**The judge is opt-in and off by default.** Turning on `limits.compaction.judge` sends
+conversation history — which can include source code and secrets — to TypeSafe's System One model
+for classification, so it is never a shipped default and has to be asked for. It is the only
+setting here that leaves the machine. Its key prefers the `TYPESAFE_API_KEY` environment variable
+over `limits.compaction.judge.api_key`. With the judge off, compaction behaves exactly as it did
+before this ladder existed.
+
+The ladder is visible while it fills: the status line shows the live load against the window with
+its ratio and the tier that load has reached (`↕120k/200k · 0.60 · soft`), and `/status` adds the
+accumulated ledger's size and the tier of the last pass that wrote it.
 
 ## Context and skills
 
@@ -619,7 +670,7 @@ exactly on the config's settings.
 | `security:` | `approve_tools`, `path_isolation`, `deny_elevation`, `env_isolation` | `approve_tools` is forced off for every cron run whatever the job or the config says — a run nobody watches cannot answer a prompt, and a prompt nobody answers is a run that never starts. The other three apply as written |
 | `tools:` | `run_command`, `parallel_agents`, `web_fetch`, `tasks`, `diagnostics` | `run_command` defaults to **false** for cron, the reverse of the interactive default: opt in with `tools.run_command: true` or the legacy `commands: true`, and `tools:` wins when both are spelled |
 | `reasoning:` | `effort`, `thinking`, `budget` | Per-job reasoning spend — `low` for the summariser, `high` for the auditor |
-| `limits:` | `max_iterations`, `compact_at` | Iteration and compaction caps that only make sense per job |
+| `limits:` | `max_iterations`, `compact_at`, `compaction` | Iteration and compaction caps that only make sense per job; `compaction` merges member by member like every other group |
 | `hooks:` | hook specs, same shape as the config's own | **Append** to the config's hooks — a job adds chains on top of the ones every run gets, it never replaces them |
 | `gates:` | gate specs, same shape as the config's own | **Append** to the config's gates, same rule |
 

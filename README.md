@@ -121,7 +121,23 @@ session:
 
 limits:
   max_iterations: 5
-  compact_at: 75000
+  # compact_at is an absolute token ceiling when set, 0 disables compaction,
+  # and unset derives the ceiling from the context window and the ratios here.
+  compaction:
+    soft_ratio: 0.65
+    mid_ratio: 0.80
+    hard_ratio: 0.90
+    keep_turns: 3
+    anchor_messages: 1
+    # The judge is OPT-IN and off by default: enabling it sends conversation
+    # history to TypeSafe. Its key prefers the TYPESAFE_API_KEY env var.
+    judge:
+      enabled: false
+      model: jev-latest
+      base_url: https://api.typesafe.ai
+      api_key: ""
+      prune_threshold: 0.85
+      max_blocks_per_call: 64
 
 tools:
   run_command: true
@@ -177,6 +193,36 @@ remote:
   root: ""
   targets: {}
 ```
+
+## Context compaction
+
+A long session is measured against the backend's context window and compacted at
+the ratio it has crossed, instead of at one absolute token count. Three tiers,
+each a superset of the one below:
+
+| Tier | Crossed at | What it does | Model calls |
+|---|---|---|---|
+| soft | `soft_ratio` (0.65) × window | Tombstones old tool results and reasoning — deterministic, no model call | 0 |
+| mid | `mid_ratio` (0.80) × window | Tombstones, then folds the history into one `[state ledger]` message, keeping, pruning or folding each block | 1 judge + 1 ledger |
+| hard | `hard_ratio` (0.90) × window | Mid, plus force-summarizing what is left of the history and trimming to the pinned ends | 1 judge + 1 ledger |
+
+The newest `keep_turns` turns stay verbatim and the first `anchor_messages`
+messages — the original task — are never rewritten, summarized or pruned, so the
+goal cannot be compacted away. The ledger is rebuilt, never re-summarized: a
+later pass folds new facts into the existing one rather than summarizing a
+summary. `limits.compact_at` still speaks last (an absolute ceiling when set, `0`
+disables compaction), and a backend that reports no context window falls back to
+it.
+
+The judge is **opt-in and off by default**: turning on
+`limits.compaction.judge` sends conversation history — which can include source
+code and secrets — to TypeSafe's System One model for classification, so it is
+the one setting here that leaves the machine. Its key prefers the
+`TYPESAFE_API_KEY` environment variable over `limits.compaction.judge.api_key`.
+With the judge off, compaction behaves exactly as it did before the ladder
+existed. The status line shows the live load and tier
+(`↕120k/200k · 0.60 · soft`), and `/status` reports the ledger and the last
+pass's tier.
 
 ## Sandboxes & remote hosts
 
@@ -243,6 +289,8 @@ internal/tasks/     Task planning tool, validation, step updates
 internal/theme/     Terminal color palettes and syntax themes
 internal/thinking/  Collapsible reasoning viewport
 internal/toolview/  Compact and grouped tool rendering
+internal/compaction/ Zone/ledger context strategy: Plan, Apply, Tombstone, the judge
+internal/jev/       TypeSafe System One client for the opt-in compaction judge
 internal/tui/       Bubble Tea v2 model, key handling, rendering, slash commands
 internal/usage/     Token accounting and context window headroom
 internal/herdr/     Reports agent state and session identity to herdr over its socket API

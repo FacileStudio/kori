@@ -8,10 +8,21 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/kori/internal/sessions"
 )
 
 type model = Model
+
+// testSession is the fixture session config: an absolute 100k ceiling with the
+// shipped ladder and prompt placeholder, which is what every model-building test
+// wants.
+func testSession() SessionConfig {
+	return SessionConfig{
+		Compaction:        CompactionConfig{Policy: compaction.Policy{Ceiling: 100_000}},
+		PromptPlaceholder: "placeholder",
+	}
+}
 
 // printMessage is what bubbletea turns a Println into. The type is the
 // library's own and unexported, so the only handle on it out here is its name.
@@ -127,7 +138,9 @@ func TestAutoResumeLoadsSession(t *testing.T) {
 	log.Line(sessions.FromReader, "hello")
 	log.Line(sessions.FromModel, "world")
 
-	m := NewModel(nil, "banner", nil, SessionConfig{CompactAt: 100_000, AutoResume: true, PromptPlaceholder: "placeholder"})
+	config := testSession()
+	config.AutoResume = true
+	m := NewModel(nil, "banner", nil, config)
 	if cmd := m.Init(); cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}
@@ -141,7 +154,9 @@ func TestAutoResumeNoSessionLeavesConversationEmpty(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	m := NewModel(nil, "banner", nil, SessionConfig{CompactAt: 100_000, AutoResume: true, PromptPlaceholder: "placeholder"})
+	config := testSession()
+	config.AutoResume = true
+	m := NewModel(nil, "banner", nil, config)
 	if cmd := m.Init(); cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}

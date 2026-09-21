@@ -54,6 +54,7 @@ func (c *Config) mergeLimits(over Config) {
 	if over.MaxParallelAgents != nil {
 		c.MaxParallelAgents = over.MaxParallelAgents
 	}
+	c.Compaction.Merge(over.Compaction)
 }
 
 // mergeStrings overwrites every string setting over actually mentions. A

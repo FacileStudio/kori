@@ -1,16 +1,20 @@
 package tui
 
 import (
+	"errors"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/nacelle"
 )
 
-// compactAt is the session default, kept as a literal here rather than
-// imported from the internal settings package, which package main cannot
-// import. It must stay in step with settings.DefaultCompactAt: if that
-// moves, this and the 100_000 in sized()/bareBanner move with it by hand.
+// compactAt is the session default, kept as a literal here rather than imported
+// from the internal settings package, which package main cannot import. It must
+// stay in step with settings.DefaultCompactAt: if that moves, this and the
+// session fixtures move with it by hand.
 const compactAt int64 = 100_000
 
 func bigConversation() []nacelle.Message {
@@ -27,204 +31,154 @@ func bigConversation() []nacelle.Message {
 	}
 }
 
-func TestKeepCountKeepsAFractionOfLongConversations(t *testing.T) {
-	t.Run("short conversation is kept whole", func(t *testing.T) {
-		if kept := keepCount(3); kept != 3 {
-			t.Errorf("keepCount(3) = %d, want 3", kept)
-		}
-	})
-	t.Run("floor applies to a small conversation", func(t *testing.T) {
-		if kept := keepCount(6); kept != 4 {
-			t.Errorf("keepCount(6) = %d, want the 4-message floor", kept)
-		}
-	})
-	t.Run("a quarter of a long conversation stays verbatim", func(t *testing.T) {
-		if kept := keepCount(40); kept != 10 {
-			t.Errorf("keepCount(40) = %d, want 10 (25%%)", kept)
-		}
-		if kept := keepCount(80); kept != 20 {
-			t.Errorf("keepCount(80) = %d, want 20 (25%%)", kept)
-		}
-	})
-}
+// The first user turn is pinned as the anchor and the newest turns stay
+// verbatim, whatever the ratios do.
+func TestPlanPinsTheAnchorAndKeepsTheNewestTurns(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
 
-func TestApplyReplacesTheEvictedMiddleWithASummary(t *testing.T) {
-	conv := bigConversation()
-	evictCut := len(conv) - keepCount(len(conv))
+	spans := m.plan()
 
-	outcome := compactApply(conv, evictCut, "Decisions:\n- went with the read.", int64(125_000))
-
-	assertSummaryBlock(t, conv, evictCut, outcome)
-	assertKeptTail(t, outcome.conversation, conv, evictCut)
-	if outcome.done.turns != evictCut {
-		t.Errorf("summarized turns = %d, want %d", outcome.done.turns, evictCut)
+	anchor := compaction.Section(m.conversation, spans, compaction.ZoneAnchor)
+	if len(anchor) != 1 || anchor[0].Parts[0].(nacelle.ToolResult).ID != "old-1" {
+		t.Errorf("anchor = %v, want the first user turn pinned", anchor)
 	}
-	if outcome.done.results != 0 {
-		t.Errorf("masked results = %d, want 0 on a summarized pass — the mask only runs as a fallback", outcome.done.results)
+	if active := compaction.Section(m.conversation, spans, compaction.ZoneActive); len(active) != 3 {
+		t.Errorf("active = %d messages, want the newest 3", len(active))
 	}
-	if outcome.after >= outcome.before {
-		t.Errorf("after = %d, want a pass to shrink before = %d", outcome.after, outcome.before)
-	}
-	if !strings.Contains(outcome.summary, "Decisions:") {
-		t.Errorf("outcome summary = %q, want the summary carried back", outcome.summary)
-	}
-}
-
-// assertSummaryBlock checks the leading user turn of the rebuilt conversation:
-// that it replaced the evicted middle, holds the summary and the compacted
-// marker, and kept the merged turn's original tool result.
-func assertSummaryBlock(t *testing.T, conv []nacelle.Message, evictCut int, outcome compactOutcome) {
-	if len(outcome.conversation) != len(conv)-evictCut {
-		t.Errorf("conversation after = %d messages, want the evicted middle replaced by one summary + the kept tail", len(outcome.conversation))
-	}
-	first := outcome.conversation[0]
-	if first.Role != nacelle.RoleUser {
-		t.Errorf("summary block role = %q, want user", first.Role)
-	}
-	text, ok := first.Parts[0].(nacelle.Text)
-	if !ok || !strings.Contains(text.Text, "Decisions:") {
-		t.Errorf("summary block = %q, want the summary kept inside", text.Text)
-	}
-	if !strings.HasPrefix(text.Text, "[compacted context") {
-		t.Errorf("summary block = %q, want the compacted marker", text.Text)
-	}
-	lastResult, lastOk := first.Parts[len(first.Parts)-1].(nacelle.ToolResult)
-	if !lastOk || lastResult.ID != "old-2" {
-		t.Errorf("the merged user turn lost its original tool result: %v", first.Parts)
-	}
-}
-
-// assertKeptTail checks that the kept tail of the rebuilt conversation matches
-// the original messages verbatim, in order.
-func assertKeptTail(t *testing.T, conversation []nacelle.Message, conv []nacelle.Message, evictCut int) {
-	for i := range len(conversation) {
-		if conversation[i].Role != conv[evictCut+i].Role {
-			t.Errorf("message %d of the tail does not match the kept message %d", i, evictCut+i)
-		}
-	}
-}
-
-func TestCompactedConversationKeepsRolesAlternating(t *testing.T) {
-	alternates := func(messages []nacelle.Message) bool {
-		for i := 1; i < len(messages); i++ {
-			if messages[i].Role == messages[i-1].Role {
-				return false
-			}
-		}
-		return true
-	}
-
-	merged := compactedConversation(bigConversation(), 2, "Decisions:\n- done.")
-	if !alternates(merged) {
-		t.Errorf("conversation = %v, want the summary folded in rather than two user turns in a row", merged)
-	}
-
-	noMerge := []nacelle.Message{
-		{Role: nacelle.RoleUser},
-		{Role: nacelle.RoleAssistant, Parts: []nacelle.Part{nacelle.Text{Text: "old"}}},
-		{Role: nacelle.RoleUser},
-		{Role: nacelle.RoleAssistant},
-	}
-	inserted := compactedConversation(noMerge, 1, "Decisions:\n- done.")
-	if !alternates(inserted) {
-		t.Errorf("conversation = %v, want the summary inserted with alternation preserved", inserted)
-	}
-	if inserted[0].Role != nacelle.RoleUser || inserted[1].Role != nacelle.RoleAssistant {
-		t.Errorf("conversation = %v, want summary-user then the kept assistant, roles alternating", inserted)
-	}
-}
-
-func TestSummarizerSeesTheRawEvictedChunk(t *testing.T) {
-	conv := bigConversation()
-	evictCut := len(conv) - keepCount(len(conv))
-
-	prompt := compactPrompt(conv, evictCut)
-
-	for i := range evictCut {
-		for _, part := range prompt[i].Parts {
-			result, ok := part.(nacelle.ToolResult)
-			if !ok {
-				continue
-			}
-			if strings.HasPrefix(result.Result, droppedNotice) {
-				t.Errorf("message %d fed the summarizer already masked (%q), want the raw result", i, result.Result)
-			}
-		}
+	if _, _, ok := compaction.HistoryRange(spans); !ok {
+		t.Error("plan has no history, want the middle eligible for a pass")
 	}
 }
 
 func TestCompactReportNamesTheWholePass(t *testing.T) {
-	outcome := compactApply(bigConversation(), 2, "Decisions:\n- done.", int64(125_000))
+	m := sized()
+	m.conversation = bigConversation()
+	start, end, _ := compaction.HistoryRange(m.plan())
+	outcome := compactOutcome{
+		before: 125_000,
+		after:  90_000,
+		done:   compacted{evictCut: end - start, turns: 2, kept: len(m.conversation) - end, tier: compaction.Hard},
+	}
 
 	line := compactReport(outcome)
 
-	if !strings.Contains(line, "✂") {
-		t.Errorf("report = %q, want the compaction icon", line)
-	}
-	if !strings.Contains(line, "Compaction summary") {
-		t.Errorf("report = %q, want the summary heading", line)
-	}
-	if !strings.Contains(line, "kept ") || !strings.Contains(line, "verbatim") {
-		t.Errorf("report = %q, want the kept share", line)
-	}
-	if !strings.Contains(line, "summarized 2 turns") {
-		t.Errorf("report = %q, want the summarized turns", line)
-	}
-	if !strings.Contains(line, "freed") {
-		t.Errorf("report = %q, want the freed tokens", line)
+	for _, want := range []string{"✂", "Compaction summary", "verbatim", "summarized 2 turns", "freed", "hard"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("report = %q, want it to mention %q", line, want)
+		}
 	}
 }
 
 func TestSettleCompactionInstallsASummary(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	outcome := compactOutcome{before: int64(125_000), evictCut: len(m.conversation) - keepCount(len(m.conversation)), summary: "Decisions:\n- done."}
+	anchor := m.conversation[0]
+	plan := m.plan()
+	outcome := compactOutcome{
+		before:  int64(125_000),
+		plan:    plan,
+		fold:    compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)},
+		tier:    compaction.Mid,
+		summary: "Decisions:\n- done.",
+	}
 
 	m.settleCompaction(outcome)
 
 	if m.compacting {
-		t.Errorf("compacting still true after the outcome is installed")
+		t.Error("compacting still true after the outcome is installed")
 	}
-	if len(m.conversation) != len(bigConversation())-2 {
-		t.Errorf("conversation = %d messages, want the evicted middle replaced (folded into the kept user turn)", len(m.conversation))
+	if !reflect.DeepEqual(m.conversation[0], anchor) {
+		t.Errorf("anchor = %+v, want it byte-identical after the pass", m.conversation[0])
 	}
-	want := compactApply(bigConversation(), 2, "Decisions:\n- done.", int64(125_000)).after
-	if m.size != want {
-		t.Errorf("size = %d, want the rebuild's %d", m.size, want)
+	if !installedLedger(m.conversation) {
+		t.Errorf("conversation = %v, want a state ledger installed", m.conversation)
 	}
 	if m.size >= outcome.before {
 		t.Errorf("size = %d, want a summarized pass to shrink below %d", m.size, outcome.before)
 	}
-	said := spoken(m)
-	if len(said) != 1 {
-		t.Fatalf("spoken = %v, want the compaction report alone", said)
-	}
-	line := strings.Join(strings.Split(said[0], "\n"), " ")
-	if !strings.Contains(line, "✂ Compaction summary") || !strings.Contains(line, "summarized") || !strings.Contains(line, "freed") {
-		t.Errorf("report = %q, want the compaction card naming the summary", said[0])
+	said := strings.Join(spoken(m), "\n")
+	if !strings.Contains(said, "✂ Compaction summary") || !strings.Contains(said, "summarized") {
+		t.Errorf("report = %q, want the compaction card naming the summary", said)
 	}
 }
 
-func TestCompactPromptFeedsExactlyTheEvictedChunk(t *testing.T) {
-	conv := bigConversation()
-	evictCut := len(conv) - keepCount(len(conv))
+// The rebuilt conversation alternates roles: the ledger is folded into the turn
+// that follows it when both would be the assistant's.
+func TestSettleCompactionKeepsRolesAlternating(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
+	outcome := compactOutcome{before: int64(125_000), plan: m.plan(), tier: compaction.Mid, summary: "Decisions:\n- done."}
 
-	prompt := compactPrompt(conv, evictCut)
+	m.settleCompaction(outcome)
 
-	if len(prompt) != evictCut+1 {
-		t.Fatalf("summarizer prompt = %d messages, want the %d evicted + the ask", len(prompt), evictCut)
-	}
-	for i := range evictCut {
-		if prompt[i].Role != conv[i].Role || len(prompt[i].Parts) != len(conv[i].Parts) {
-			t.Errorf("prompt message %d does not match the evicted chunk message %d", i, i)
+	for i := 1; i < len(m.conversation); i++ {
+		if m.conversation[i].Role == m.conversation[i-1].Role {
+			t.Fatalf("messages %d and %d share role %q: %v", i-1, i, m.conversation[i].Role, m.conversation)
 		}
 	}
-	ask, ok := prompt[evictCut].Parts[0].(nacelle.Text)
-	if !ok || !strings.Contains(ask.Text, "older turns") {
-		t.Errorf("last prompt message = %q, want the compact ask", ask.Text)
+}
+
+func TestCompactPromptFeedsExactlyTheHistory(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
+	plan := m.plan()
+	history := compaction.HistoryMessages(m.conversation, plan)
+	fold := compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)}
+
+	prompt := compactPrompt(m.conversation, plan, fold)
+
+	if len(prompt) < len(history) || len(prompt) > len(history)+1 {
+		t.Fatalf("summarizer prompt = %d messages, want the %d history plus at most the ask", len(prompt), len(history))
 	}
-	if len(prompt) == len(conv) {
-		t.Errorf("prompt fed the whole conversation instead of the evicted chunk")
+	for i := range history {
+		if prompt[i].Role != history[i].Role {
+			t.Errorf("prompt message %d role = %q, want the history's %q", i, prompt[i].Role, history[i].Role)
+		}
+	}
+	if !promptText(prompt, "older turns") {
+		t.Error("prompt = no compact ask, want the request appended")
+	}
+	for i := 1; i < len(prompt); i++ {
+		if prompt[i].Role == prompt[i-1].Role {
+			t.Errorf("messages %d and %d share role %q, want the ask folded in rather than two user turns", i-1, i, prompt[i].Role)
+		}
+	}
+}
+
+func promptText(messages []nacelle.Message, want string) bool {
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if text, ok := part.(nacelle.Text); ok && strings.Contains(text.Text, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// A judge failure is named as the judge's and degrades to the mask: nothing is
+// pruned, the conversation stands, and the session continues.
+func TestSettleCompactionReportsAJudgeFailure(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
+	m.size = compactAt + 25_000
+	outcome := compactOutcome{
+		before: m.size,
+		plan:   m.plan(),
+		tier:   compaction.Mid,
+		judged: true,
+		stage:  "judge",
+		err:    errors.New("typesafe: http 429"),
+	}
+
+	m.settleCompaction(outcome)
+
+	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "compaction judge failed") {
+		t.Errorf("said = %q, want the judge failure named", said)
+	}
+	if len(m.conversation) != len(bigConversation()) {
+		t.Errorf("conversation = %d messages, want the failed pass to prune nothing", len(m.conversation))
 	}
 }
 
@@ -243,4 +197,8 @@ func TestCompactPromptScopesTheSummaryToItsChunk(t *testing.T) {
 	if !strings.Contains(compactSystem, "Never invent facts") {
 		t.Errorf("compactSystem = %q, want a no-invention rule", compactSystem)
 	}
+}
+
+func installedLedger(messages []nacelle.Message) bool {
+	return slices.ContainsFunc(messages, compaction.IsLedger)
 }

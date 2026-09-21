@@ -19,7 +19,10 @@ session:
 
 limits:
   max_iterations: 5
-  compact_at: 75000
+  # compact_at is an absolute token ceiling. Left unset (the default) the
+  # ceiling comes from the backend's context window and soft_ratio below; 0
+  # turns compaction off outright.
+  # compact_at: 75000
   max_concurrency: 16
   # max_parallel_agents: 16
   # grind budget: the per-run minimum spend a run must reach before stopping
@@ -29,6 +32,23 @@ limits:
   grind_min_cost: 0
   grind_min_tokens: 0
   grind_continuations: 2
+  # compaction decides, per history block, what to keep, prune or fold into the
+  # state ledger. The judge is OPT-IN and off by default: enabling it sends
+  # conversation history to TypeSafe (see docs/configuration.md); its key is
+  # TYPESAFE_API_KEY, with judge.api_key as the file-side alternative.
+  compaction:
+    soft_ratio: 0.65
+    mid_ratio: 0.80
+    hard_ratio: 0.90
+    keep_turns: 3
+    anchor_messages: 1
+    judge:
+      enabled: false
+      model: jev-latest
+      base_url: https://api.typesafe.ai
+      api_key: ""
+      prune_threshold: 0.85
+      max_blocks_per_call: 64
 
 tools:
   run_command: true

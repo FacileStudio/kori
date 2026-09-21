@@ -68,6 +68,7 @@ func mergeJobLimits(cfg *settings.Config, r settings.Reasoning, l settings.Limit
 	if l.CompactAt != nil {
 		cfg.CompactAt = l.CompactAt
 	}
+	cfg.Compaction.Merge(l.Compaction)
 }
 
 func mergeJobConfig(cfg settings.Config, job settings.CronJob) settings.Config {

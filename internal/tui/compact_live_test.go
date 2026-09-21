@@ -48,7 +48,7 @@ func TestCompactionArmsTheSpinnerAndStampsTheTimer(t *testing.T) {
 func TestSettleCompactionSaysWhenTheSummaryCameBackEmpty(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	outcome := compactOutcome{before: int64(125_000), evictCut: len(m.conversation) - keepCount(len(m.conversation))}
+	outcome := compactOutcome{before: int64(125_000), plan: m.plan()}
 	m.settleCompaction(outcome)
 	if m.compacting {
 		t.Errorf("compacting still true after the empty fallback")

@@ -1,53 +1,14 @@
 package tui
 
-import "github.com/FacileStudio/nacelle"
+import (
+	"github.com/FacileStudio/kori/internal/compaction"
+	"github.com/FacileStudio/nacelle"
+)
 
-// alignedEvictCut returns a cut no larger than want that never separates an
-// assistant ToolCall message from the user ToolResult message answering it.
-// A cut landing between the pair leaves the kept tail opening with a tool
-// result whose call id was evicted, which Anthropic rejects with a 400. Pulling
-// the cut back one message keeps the pair intact, so alignment never evicts
-// more than the caller asked for.
+// alignedEvictCut is the thin TUI delegate for the compaction package's
+// boundary-safe cut. It stays a one-line wrapper so the existing callers and
+// their tests keep their name, while the rule itself lives beside the zones and
+// blocks it protects.
 func alignedEvictCut(conv []nacelle.Message, want int) int {
-	if want <= 0 || want >= len(conv) {
-		return want
-	}
-	trIDs := toolResultIDs(conv[want])
-	if len(trIDs) == 0 {
-		return want
-	}
-	prev := conv[want-1]
-	if prev.Role != nacelle.RoleAssistant {
-		return want
-	}
-	calls := toolCallIDs(prev)
-	for _, id := range trIDs {
-		if calls[id] {
-			return want - 1
-		}
-	}
-	return want
-}
-
-// toolResultIDs collects the ToolCall ids a message answers, empty for any
-// user turn that is prose.
-func toolResultIDs(msg nacelle.Message) []string {
-	var ids []string
-	for _, part := range msg.Parts {
-		if tr, ok := part.(nacelle.ToolResult); ok {
-			ids = append(ids, tr.ID)
-		}
-	}
-	return ids
-}
-
-// toolCallIDs collects the ToolCall ids an assistant message asked for.
-func toolCallIDs(msg nacelle.Message) map[string]bool {
-	ids := map[string]bool{}
-	for _, part := range msg.Parts {
-		if tc, ok := part.(nacelle.ToolCall); ok {
-			ids[tc.ID] = true
-		}
-	}
-	return ids
+	return compaction.AlignedCut(conv, want)
 }

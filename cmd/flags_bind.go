@@ -116,7 +116,7 @@ func bindDiscoveryFlags(cmd *cobra.Command, f *discoveryFlags) {
 	fl.BoolVar(&f.trustHooks, "trust-hooks", false, "Trust current project .kori/hooks.yml")
 	fl.StringVar(&f.gatesFile, "gates-file", "", "YAML file of gate checks the session must pass")
 	fl.IntVar(&f.iterations, "max-iterations", 5, "Maximum model turns before asking the user")
-	fl.Int64Var(&f.compactAt, "compact-at", 75000, "Transcript token threshold for compaction (0 disables)")
+	fl.Int64Var(&f.compactAt, "compact-at", 0, "Absolute transcript token threshold for compaction (0 disables; unset derives it from the context window)")
 	fl.IntVar(&f.maxConcurrency, "max-concurrency", 16, "Maximum concurrent workers for parallel delegation")
 	fl.IntVar(&f.maxParallelAgents, "max-parallel-agents", 16, "Maximum parallel agents running concurrently")
 	fl.BoolVar(&f.json, "json", false, "Emit output as JSON document where supported")

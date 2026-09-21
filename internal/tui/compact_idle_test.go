@@ -164,7 +164,7 @@ func TestSettleCompactionDeliversLinesQueuedDuringThePass(t *testing.T) {
 		t.Fatalf("queue = %d, want the typed line queued while the pass runs", m.Len())
 	}
 
-	outcome := compactOutcome{before: int64(125_000), evictCut: len(m.conversation) - keepCount(len(m.conversation)), summary: "Decisions:\n- done."}
+	outcome := compactOutcome{before: int64(125_000), plan: m.plan(), summary: "Decisions:\n- done."}
 	m.settleCompaction(outcome)
 	defer m.run.cancel()
 

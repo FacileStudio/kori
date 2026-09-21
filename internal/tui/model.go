@@ -44,9 +44,10 @@ func NewModel(agent *nacelle.Agent, banner string, skills []skill, c SessionConf
 	byName := bySkillName(skills)
 	base := theme.Themed(true)
 
+	policy := resolvedPolicy(c.Compaction.Policy)
 	m := &Model{
 		core:          core{agent: agent, banner: banner, autoResume: c.AutoResume, resumePath: c.Resume, herdrClient: herdr.NewFromEnv()},
-		transcript:    transcript{compactAt: c.CompactAt},
+		transcript:    transcript{compactAt: policy.Ceiling, policy: policy, judge: c.Compaction.Judge},
 		composer:      composer{prompt: newPrompt(c.PromptPlaceholder, base.Border), hist: history.New()},
 		look:          look{theme: base, spin: status.NewSpinner(), showHooks: c.Hooks.Show, showHookOutput: c.Hooks.ShowOutput},
 		account:       account{began: time.Now(), grind: grindBudget{cost: c.Grind.Cost, tokens: c.Grind.Tokens, cap: c.Grind.Continuations}},

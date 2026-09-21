@@ -14,7 +14,7 @@ import (
 // tuiModel is a model switched into alternate-screen mode with a window, the
 // arrangement the mode setting produces in Launch.
 func tuiModel() *Model {
-	m := NewModel(nil, "banner", nil, SessionConfig{CompactAt: 100_000, PromptPlaceholder: "placeholder"})
+	m := NewModel(nil, "banner", nil, testSession())
 	m.mode = modeTUI
 	m.resize(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return m

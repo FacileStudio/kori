@@ -18,18 +18,21 @@ const ConfigFile = ".kori.yml"
 // Limits is the threshold settings that cap the run. Embedded in Config so
 // every field still reads as c.MaxIterations.
 type Limits struct {
-	MaxIterations *int   `yaml:"max_iterations"`
-	CompactAt     *int64 `yaml:"compact_at"`
+	MaxIterations *int `yaml:"max_iterations"`
+	// CompactAt is an absolute token ceiling when set, 0 disables compaction,
+	// and unset derives the ceiling from Compaction's ratios and the window.
+	CompactAt *int64 `yaml:"compact_at"`
 	// GrindBudget is the per-run minimum spend the model must reach before a
 	// stop counts as finished: a run that ends below it on a stop the model
 	// chose is continued with a notice naming what is left. GrindCost is
 	// dollars, GrindTokens counts output tokens, both default to zero which
 	// turns the budget off, and when both are set a run owes both.
-	GrindCost          *float64 `yaml:"grind_min_cost"`
-	GrindTokens        *int64   `yaml:"grind_min_tokens"`
-	GrindContinuations *int     `yaml:"grind_continuations"`
-	MaxConcurrency     *int     `yaml:"max_concurrency"`
-	MaxParallelAgents  *int     `yaml:"max_parallel_agents"`
+	GrindCost          *float64   `yaml:"grind_min_cost"`
+	GrindTokens        *int64     `yaml:"grind_min_tokens"`
+	GrindContinuations *int       `yaml:"grind_continuations"`
+	MaxConcurrency     *int       `yaml:"max_concurrency"`
+	MaxParallelAgents  *int       `yaml:"max_parallel_agents"`
+	Compaction         Compaction `yaml:"compaction"`
 }
 
 // Provider is the backend in use plus the endpoint and key that reach it.
@@ -184,12 +187,6 @@ type GateSpec struct {
 type Automation struct {
 	Hooks []HookSpec `yaml:"hooks"`
 	Gates []GateSpec `yaml:"gates"`
-}
-
-// DerefBool reads a pointer out of a toggle. Every toggle is filled in by
-// defaults, so the pointer is never nil by the time it reaches a caller.
-func DerefBool(b *bool) bool {
-	return b != nil && *b
 }
 
 // Load reads the config file. A missing file is not an error — most people

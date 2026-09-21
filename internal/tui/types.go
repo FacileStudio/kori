@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/glamour/v2"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/kori/internal/herdr"
 	"github.com/FacileStudio/kori/internal/history"
 	"github.com/FacileStudio/kori/internal/menu"
@@ -106,9 +107,20 @@ type transcript struct {
 	// tui-mode window back from the newest row. Held lines are drawn tail-first
 	// with the prompt pinned; scrolling up raises this so earlier rows surface
 	// above the live region, scrolling down returns it to 0 (the newest row).
-	scrollTop  int
-	compactAt  int64
+	scrollTop int
+	compactAt int64
+	// policy is the resolved tier ladder this session compacts by: the ratios,
+	// the window they are measured against, the absolute ceiling and the two
+	// ends a pass never touches. compactAt stays the absolute figure the gates
+	// read; policy is what decides how hard a pass is. judge is the opt-in
+	// classifier, nil while it is off — the default.
+	policy     compaction.Policy
+	judge      compaction.Judge
 	compacting bool
+	// last is the numbers of the most recent pass of any tier — the soft
+	// tombstone, the mid/hard fold, or the mask fallback. /status names the
+	// tier from it; the zero value (Below) means no pass has run this session.
+	last compacted
 	// thrashCount is how many consecutive compaction passes ended with the
 	// conversation still over the trigger threshold — a single very large
 	// result, usually in the kept tail, that eviction and summarization cannot

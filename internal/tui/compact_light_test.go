@@ -1,73 +1,98 @@
 package tui
 
-// Tests for the light lever (mask-before-summarize) and the thrash guard.
+// Tests for the light lever, the tier dispatch and the thrash guard.
 
 import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/FacileStudio/kori/internal/compaction"
 )
 
-func TestMaskLightLandsUnderAndReportsTheMask(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	m.size = compactAt + 25_000
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
-
-	ok := m.maskLight(evictCut)
-
-	if !ok {
-		t.Errorf("maskLight = false, want true once masking landed the conversation under the trigger threshold")
-	}
-	if m.size > m.compactAt+compactSlack {
-		t.Errorf("size = %d after the mask, want under the trigger threshold %d", m.size, m.compactAt+compactSlack)
-	}
-	said := strings.Join(spoken(m), " ")
-	if !strings.Contains(said, "✂ Compaction summary") || !strings.Contains(said, "masked") {
-		t.Errorf("report = %q, want the mask described", said)
-	}
-	if strings.Contains(said, "summarized") {
-		t.Errorf("report = %q, want no summary on a mask-only pass", said)
+// windowedPolicy is a policy whose ratios can be measured: soft at 130k, mid at
+// 160k and hard at 180k of a 200k window, with compact_at pinned at 100k.
+func windowedPolicy() compaction.Policy {
+	return compaction.Policy{
+		Ratios:         compaction.Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Window:         200_000,
+		Ceiling:        100_000,
+		KeepTurns:      3,
+		AnchorMessages: 1,
 	}
 }
 
-func TestMaskLightEscalatesWhenItCannotLandUnder(t *testing.T) {
+func TestEvictionCanLandUnderRequiresTheHistoryToMatter(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	m.size = 200_000
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
+	start, end, _ := compaction.HistoryRange(m.plan())
 
-	ok := m.maskLight(evictCut)
+	m.size = int64(1_000_000)
+	if m.evictionCanLandUnder(start, end) {
+		t.Error("evictionCanLandUnder = true, want false when the pinned ends alone overshoot the ceiling")
+	}
 
-	if ok {
-		t.Errorf("maskLight = true, want false when the evicted middle cannot yield enough to land under")
-	}
-	if m.size <= m.compactAt+compactSlack {
-		t.Errorf("size = %d, want it left above the threshold so the caller escalates", m.size)
-	}
-	if said := strings.Join(spoken(m), " "); strings.Contains(said, "✂") {
-		t.Errorf("said = %q, want no report when the mask did not complete the pass", said)
+	m.size = int64(105_000)
+	if !m.evictionCanLandUnder(start, end) {
+		t.Error("evictionCanLandUnder = false, want true when folding the history lands a 105k conversation under the ceiling")
 	}
 }
 
-// TestCompactBeforeSendRunsOnlyTheLightLever checks that a pre-flight that the
-// mask alone clears does not escalate to a summary pass: it returns nil (no
-// wait for an outcome) and lands the conversation under the threshold.
-func TestCompactBeforeSendRunsOnlyTheLightLeverWhenItSuffices(t *testing.T) {
+func TestBeginCompactionSkipsTheSummarizerWhenEvictionCannotLandUnder(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	m.size = compactAt + 25_000
+	m.size = int64(1_000_000)
 
-	cmd := m.compactBeforeSend(t.Context())
-
-	if cmd != nil {
-		t.Errorf("compactBeforeSend = a Cmd, want nil when masking alone cleared the threshold — no pass should be waiting")
-	}
-	if m.size > m.compactAt+compactSlack {
-		t.Errorf("size = %d after the light lever, want under the trigger threshold", m.size)
+	if cmd := m.beginCompaction(context.Background()); cmd != nil {
+		t.Error("beginCompaction = a Cmd, want nil when the history cannot land under the ceiling — no summarizer call")
 	}
 	if m.compacting {
-		t.Errorf("compacting = true, want no pass started")
+		t.Error("compacting = true, want no summarizer goroutine spawned")
+	}
+	if said := strings.Join(spoken(m), "\n"); !strings.Contains(said, "kept tail") {
+		t.Errorf("report = %q, want the kept-tail explanation on a skipped pass", said)
+	}
+}
+
+func TestMaskOnlyPassReportsTheKeptTailAndCountsTowardThrash(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
+	m.size = int64(1_000_000)
+
+	cmd := m.maskOnlyPass(m.plan())
+
+	if cmd != nil {
+		t.Error("maskOnlyPass = a Cmd, want nil")
+	}
+	if m.thrashCount != 1 {
+		t.Errorf("thrashCount = %d, want 1 after a skip left the context over the threshold", m.thrashCount)
+	}
+	if said := strings.Join(spoken(m), "\n"); !strings.Contains(said, "kept tail") {
+		t.Errorf("report = %q, want the kept-tail explanation", said)
+	}
+}
+
+// The soft tier is free: it tombstones history and returns with no goroutine and
+// no model call.
+func TestSoftTierTombstonesWithoutAModelCall(t *testing.T) {
+	m := sized()
+	m.conversation = bigConversation()
+	m.policy = windowedPolicy()
+	m.size = 140_000
+
+	cmd := m.compactTiered(context.Background())
+
+	if cmd != nil {
+		t.Error("compactTiered = a Cmd at the soft tier, want nil so no pass waits")
+	}
+	if m.compacting {
+		t.Error("compacting = true, want no goroutine at the soft tier")
+	}
+	if m.trimmed == 0 {
+		t.Error("trimmed = 0, want the soft tier to have tombstoned the history")
+	}
+	if said := strings.Join(spoken(m), " "); strings.Contains(said, "summarized") {
+		t.Errorf("report = %q, want no summary on a soft pass", said)
 	}
 }
 
@@ -106,57 +131,6 @@ func TestCheckThrashResetsTheCounterWhenUnder(t *testing.T) {
 		t.Errorf("thrashCount = %d after a pass landed under the threshold, want it reset", m.thrashCount)
 	}
 	if m.thrashed() {
-		t.Errorf("thrashed = true after a pass landed under, want it cleared")
-	}
-}
-
-func TestEvictionCanLandUnderRequiresTheMiddleToMatter(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
-
-	m.size = int64(1_000_000)
-	if m.evictionCanLandUnder(evictCut) {
-		t.Errorf("evictionCanLandUnder = true, want false when the kept tail alone already overshoots compactAt")
-	}
-
-	m.size = int64(108_000)
-	if !m.evictionCanLandUnder(evictCut) {
-		t.Errorf("evictionCanLandUnder = false, want true when evicting the ~10k-token middle lands a 108k conversation under compactAt")
-	}
-}
-
-func TestBeginCompactionSkipsTheSummarizerWhenEvictionCannotLandUnder(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	m.size = int64(1_000_000)
-
-	if cmd := m.beginCompaction(context.Background()); cmd != nil {
-		t.Errorf("beginCompaction = a Cmd, want nil when the evicted middle cannot land under the threshold — no summarizer call")
-	}
-	if m.compacting {
-		t.Errorf("compacting = true, want no summarizer goroutine spawned")
-	}
-	if said := strings.Join(spoken(m), "\n"); !strings.Contains(said, "kept tail") {
-		t.Errorf("report = %q, want the kept-tail explanation on a skipped pass", said)
-	}
-}
-
-func TestMaskOnlyPassReportsTheKeptTailAndCountsTowardThrash(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	m.size = int64(1_000_000)
-	evictCut := len(m.conversation) - keepCount(len(m.conversation))
-
-	cmd := m.maskOnlyPass(evictCut)
-
-	if cmd != nil {
-		t.Errorf("maskOnlyPass = a Cmd, want nil")
-	}
-	if m.thrashCount != 1 {
-		t.Errorf("thrashCount = %d, want 1 after a skip left the context over the threshold", m.thrashCount)
-	}
-	if said := strings.Join(spoken(m), "\n"); !strings.Contains(said, "kept tail") {
-		t.Errorf("report = %q, want the kept-tail explanation", said)
+		t.Error("thrashed = true after a pass landed under, want it cleared")
 	}
 }

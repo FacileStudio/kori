@@ -35,15 +35,21 @@ func (e testConfigEnv) read(t *testing.T, over s.Config) s.Config {
 	return c
 }
 
-func TestCompactAtDefaults(t *testing.T) {
+// compact_at is unset by default: a session with no opinion of its own derives
+// its ceiling from the context window and the compaction ratios, so a non-zero
+// default would quietly make the ratio ladder dead. The constant survives as
+// the fallback for a backend that reports no window at all.
+func TestCompactAtDefaultsUnset(t *testing.T) {
 	defaults := s.Defaults("")
-	if *defaults.CompactAt != s.DefaultCompactAt {
-		t.Fatalf("default compact_at = %d, want %d", *defaults.CompactAt, s.DefaultCompactAt)
+	if defaults.CompactAt != nil {
+		t.Fatalf("default compact_at = %d, want unset so the ratios decide", *defaults.CompactAt)
+	}
+	if s.DefaultCompactAt != 75_000 {
+		t.Errorf("DefaultCompactAt = %d, want the 75000 windowless fallback", s.DefaultCompactAt)
 	}
 	env := setupConfigEnv(t)
-	c := env.read(t, s.Config{})
-	if *c.CompactAt != s.DefaultCompactAt {
-		t.Errorf("default compact_at = %d, want %d", *c.CompactAt, s.DefaultCompactAt)
+	if c := env.read(t, s.Config{}); c.CompactAt != nil {
+		t.Errorf("resolved compact_at = %d, want unset", *c.CompactAt)
 	}
 }
 
@@ -68,12 +74,12 @@ func TestCompactAtPrecedence(t *testing.T) {
 func TestCompactAtFileVariants(t *testing.T) {
 	env := setupConfigEnv(t)
 	env.write(t, "provider:\n  backend: anthropic\n")
-	if c := env.read(t, s.Config{}); *c.CompactAt != s.DefaultCompactAt {
-		t.Errorf("unmentioned compact_at = %d, want default %d", *c.CompactAt, s.DefaultCompactAt)
+	if c := env.read(t, s.Config{}); c.CompactAt != nil {
+		t.Errorf("unmentioned compact_at = %d, want unset", *c.CompactAt)
 	}
 
 	env.write(t, "limits:\n  compact_at: 0\n")
-	if c := env.read(t, s.Config{}); *c.CompactAt != 0 {
-		t.Errorf("compact_at: 0 = %d, want 0", *c.CompactAt)
+	if c := env.read(t, s.Config{}); c.CompactAt == nil || *c.CompactAt != 0 {
+		t.Errorf("compact_at: 0 = %v, want an explicit 0 (compaction off)", c.CompactAt)
 	}
 }

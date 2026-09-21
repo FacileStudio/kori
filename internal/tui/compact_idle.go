@@ -6,17 +6,22 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/FacileStudio/kori/internal/compaction"
 )
 
 // shouldCompactIdle is the decision behind maybeCompactIdle, split out so a
 // test can drive it without running a pass. It asks the questions that have
 // stable checkable answers: is no pass already running, is nothing queued that
-// will start a run, and is the conversation over the threshold.
+// will start a run, and is the conversation over the trigger. The absolute
+// compact_at is checked before the tier trigger on purpose: an explicit 0 turns
+// compaction off, while Policy.Trigger still reports a ratio for the window it
+// was resolved against, so the guard is what honours the disable.
 func (m *Model) shouldCompactIdle() bool {
 	if m.compacting || m.nextToSend() >= 0 || m.thrashed() {
 		return false
 	}
-	return m.compactAt > 0 && m.size > m.compactAt
+	return m.compactAt > 0 && m.size > m.policy.Trigger()
 }
 
 // maybeCompactIdle triggers a compaction pass after a run ends, when the model
@@ -28,15 +33,15 @@ func (m *Model) shouldCompactIdle() bool {
 // settleCompaction, which starts nothing while the model is idle.
 //
 // It only fires when nothing is queued, so it cannot race a run about to
-// start: deliver hands any queued line to send, whose own pre-flight CountTokens
-// check handles the same context. While the pass runs the update loop waits on
-// it exactly as the send path does, so a message typed meanwhile is queued, not
-// sent into a compacting middle.
+// start: deliver hands any queued line to send, whose own pre-flight check sees
+// the same context. While the pass runs the update loop waits on it exactly as
+// the send path does, so a message typed meanwhile is queued, not sent into a
+// compacting middle.
 func (m *Model) maybeCompactIdle() tea.Cmd {
 	if !m.shouldCompactIdle() {
 		return nil
 	}
-	return m.beginCompaction(context.Background())
+	return m.compactTiered(context.Background())
 }
 
 // compactCmd is the manual /compact: run a compaction pass now, on demand,
@@ -60,7 +65,7 @@ func (m *Model) compactCmd() tea.Cmd {
 		m.say(fromClient, "already compacting")
 		return nil
 	}
-	if evictCut := alignedEvictCut(m.conversation, len(m.conversation)-keepCount(len(m.conversation))); evictCut <= 0 {
+	if _, _, ok := compaction.HistoryRange(m.plan()); !ok {
 		m.say(fromClient, "nothing to compact — the conversation is too short")
 		return nil
 	}

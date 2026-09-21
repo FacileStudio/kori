@@ -96,7 +96,7 @@ func declareFlags(fallback Config) declared {
 		},
 		togglesFlags:      declareToggles(fallback),
 		iterations:        flag.Int("max-iterations", *fallback.MaxIterations, "how many times the model may be asked"),
-		compactAt:         flag.Int64("compact-at", *fallback.CompactAt, "transcript size in tokens at which the session compacts; 0 turns compaction off"),
+		compactAt:         flag.Int64("compact-at", 0, "absolute transcript size in tokens at which the session compacts; 0 turns compaction off, leaving it unset derives it from the context window"),
 		maxConcurrency:    flag.Int("max-concurrency", 16, "maximum concurrent workers"),
 		maxParallelAgents: flag.Int("max-parallel-agents", 16, "maximum parallel agents"),
 		discoveryFlags: discoveryFlags{

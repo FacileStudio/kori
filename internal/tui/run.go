@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/kori/internal/herdr"
 	"github.com/FacileStudio/kori/internal/skills"
 	"github.com/FacileStudio/nacelle"
@@ -45,6 +46,14 @@ type HookUIConfig struct {
 	ShowOutput bool
 }
 
+// CompactionConfig is the resolved compaction surface for one session: the tier
+// policy and the opt-in judge that classifies history before a pass. Judge is
+// nil when the judge is off, which is the shipped default.
+type CompactionConfig struct {
+	Policy compaction.Policy
+	Judge  compaction.Judge
+}
+
 // SessionConfig configures the runtime settings for an interactive session.
 type SessionConfig struct {
 	Root              string
@@ -53,7 +62,7 @@ type SessionConfig struct {
 	Diffs             bool
 	GroupTools        *bool
 	ShowThinking      bool
-	CompactAt         int64
+	Compaction        CompactionConfig
 	MaxConcurrency    int
 	AutoResume        bool
 	Resume            string
@@ -123,9 +132,9 @@ func (m *Model) send(text string) tea.Cmd {
 
 	herdr.Report(m.herdrClient, herdr.Working)
 
-	if count, err := m.agent.CountTokens(ctx, m.conversation); err == nil && m.compactAt > 0 && !m.thrashed() && count > m.compactAt+compactSlack {
+	if count, err := m.agent.CountTokens(ctx, m.conversation); err == nil && m.compactAt > 0 && !m.thrashed() && count > m.policy.Trigger()+compactSlack {
 		m.size = count
-		if waiting := m.compactBeforeSend(ctx); waiting != nil {
+		if waiting := m.compactTiered(ctx); waiting != nil {
 			return waiting
 		}
 	}
