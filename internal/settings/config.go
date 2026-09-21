@@ -216,6 +216,12 @@ func Load(path string) (Config, error) {
 
 // Settings resolves every layer in one place: flag beats environment beats
 // file beats default. The scaffold runs before the file is read.
+//
+// flags is a sparse overlay: only the settings the user actually typed, which
+// is what FromFlags returns. merge overwrites what a layer mentions and leaves
+// the rest standing, so a field nobody typed is not "no opinion" but an active
+// value that wins — passing Defaults(system) here silently discards the whole
+// file, and every untyped setting in it with it.
 func Settings(system string, flags Config) (Config, error) {
 	migrateLegacyHome()
 	migrateLegacyConfig()

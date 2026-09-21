@@ -1,6 +1,9 @@
 package settings
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 // A profile is a layer of its own, so it beats the file that named it — and
 // the environment and the flags still beat the profile, field by field, which
@@ -68,6 +71,19 @@ func TestEveryLayerThatNamesAProfileResolvesItTheSameWay(t *testing.T) {
 				t.Errorf("max iterations = %d, want the profile's 12 over the file's 3", *cfg.MaxIterations)
 			}
 		})
+	}
+}
+
+// The flags layer is only what was typed, and that is the whole reason it can
+// sit on top of the file: a setting nobody typed has to leave the file's
+// standing rather than overwrite it. The fallback FromFlags takes seeds each
+// flag's default, which is what -h prints — it must not come back as part of
+// the layer, or every setting in it would replace the file's without anyone
+// asking. It reads the layer out of flag.Visit, so the answer here is nothing.
+func TestFromFlagsCollectsOnlyWhatWasTyped(t *testing.T) {
+	flags := FromFlags(Defaults(""))
+	if !reflect.DeepEqual(flags, Config{}) {
+		t.Errorf("flags = %+v, want nothing: an untyped flag must not override the file", flags)
 	}
 }
 
