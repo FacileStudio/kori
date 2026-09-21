@@ -105,6 +105,10 @@ func newBlock(conv []nacelle.Message, start, end int) Block {
 	}
 }
 
+// renderBlock is the text a judge is shown for one atomic block: every part of
+// every message in it, in order. A tool call carries its arguments, abbreviated:
+// the name alone cannot tell two reads of different files apart, and a block is
+// judged by what the call actually did.
 func renderBlock(conv []nacelle.Message, start, end int) string {
 	var b strings.Builder
 	for i := start; i < end; i++ {
@@ -116,7 +120,7 @@ func renderBlock(conv []nacelle.Message, start, end int) string {
 				b.WriteString(typed.Text)
 			case nacelle.ToolCall:
 				b.WriteString("tool call ")
-				b.WriteString(typed.Name)
+				b.WriteString(callText(typed, maxBlockInput))
 			case nacelle.ToolResult:
 				b.WriteString(typed.Result)
 			}

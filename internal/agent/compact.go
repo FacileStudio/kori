@@ -24,6 +24,13 @@ type Budget struct {
 // falls back to settings.DefaultCompactAt when the backend reports no window at
 // all. The ratio ladder is carried whether or not compact_at overrode the
 // ceiling, so a session that pins compact_at still tiers its passes.
+//
+// A derived ceiling that comes out zero or less falls back to
+// settings.DefaultCompactAt rather than staying at zero, because a ceiling of
+// zero is how every gate spells "compaction off": letting a degenerate ratio
+// produce one would turn the ladder off while reporting it as enabled. Settings
+// rejects such a ratio at load, so this is the floor under a caller that built a
+// Compaction itself.
 func ResolveBudget(compactAt *int64, c settings.Compaction, backend nacelle.Backend) Budget {
 	soft, mid, hard := c.Ratios()
 	budget := Budget{Window: backend.Capabilities().ContextWindow}
@@ -33,6 +40,9 @@ func ResolveBudget(compactAt *int64, c settings.Compaction, backend nacelle.Back
 		budget.Ceiling = *compactAt
 	case budget.Window > 0:
 		budget.Ceiling = int64(soft * float64(budget.Window))
+		if budget.Ceiling <= 0 {
+			budget.Ceiling = settings.DefaultCompactAt
+		}
 	default:
 		budget.Ceiling = settings.DefaultCompactAt
 	}

@@ -54,7 +54,7 @@ func (m *Model) maybeCompactIdle() tea.Cmd {
 // thrash flag, because asking by hand is a positive re-attempt.
 func (m *Model) compactCmd() tea.Cmd {
 	if m.compactAt <= 0 {
-		m.say(fromClient, "compaction is disabled — compact_at is 0")
+		m.say(fromClient, "compaction is off — limits.compact_at is 0")
 		return nil
 	}
 	if m.run.busy {

@@ -18,18 +18,18 @@ const (
 	// placeholder twice or counts it as savings.
 	DroppedNotice = "[dropped "
 
-	// DroppedThinkingNotice opens the text a tombstoned thinking block is
-	// replaced with. It plays the same role as DroppedNotice and uses the same
-	// prefix so a reader sees one mechanism.
-	DroppedThinkingNotice = "[dropped thinking: "
+	// maxBlockInput bounds a tool call's arguments in the text a judge is shown:
+	// enough for a path, a command or a pattern, not enough for one call's payload
+	// to dominate a request that carries dozens of blocks. callText is the only
+	// reader.
+	maxBlockInput = 200
 )
 
-// MicroStats is what a tombstone pass did: how many results and thinking blocks
-// it replaced, and the bytes it took out of the conversation.
+// MicroStats is what a tombstone pass did: how many tool results it replaced,
+// and the bytes it took out of the conversation.
 type MicroStats struct {
-	Results  int
-	Thinking int
-	Bytes    int
+	Results int
+	Bytes   int
 }
 
 // EstTokens is the bytes-to-tokens estimate the whole package uses: four bytes
@@ -74,11 +74,30 @@ func PartBytes(part nacelle.Part) int {
 	}
 }
 
-// Tombstone replaces oversized tool results and thinking blocks in the given
-// spans with placeholders, keeping the call/result pairing intact. It is
-// deterministic, needs no backend, and is idempotent: a stub already in place is
-// never re-stubbed or counted again. It mutates conv in place, which is safe
-// because the caller owns the conversation on its own thread.
+// measure is what one reassembly cost, in the same estimate Bytes reports.
+func measure(conv, out []nacelle.Message, summarized int) Stats {
+	return Stats{
+		Before:     EstTokens(Bytes(conv)),
+		After:      EstTokens(Bytes(out)),
+		Summarized: summarized,
+	}
+}
+
+// Tombstone replaces oversized tool results in the given spans with
+// placeholders, keeping the call/result pairing intact. It is deterministic,
+// needs no backend, and is idempotent: a stub already in place is never
+// re-stubbed or counted again. It mutates conv in place, which is safe because
+// the caller owns the conversation on its own thread.
+//
+// Tool results are the whole of it, because they are the only history weight
+// that reaches the backend. Reasoning is deliberately left alone: it is recorded
+// and displayed but never sent back, since every backend drops it when it builds
+// a request (nacelle's anthropic blocksOf and the shared oairunner sift both
+// switch on Text, ToolCall and ToolResult and nothing else — Anthropic accepts a
+// thinking block only with the signature it was issued with, and the stream
+// never carries one). A tombstone on it would therefore free no context at all
+// while editing a transcript the reader can still scroll back to, and the pass
+// would report the savings as if it had bought something.
 func Tombstone(conv []nacelle.Message, spans []Span) MicroStats {
 	var stats MicroStats
 	for _, span := range spans {
@@ -86,28 +105,19 @@ func Tombstone(conv []nacelle.Message, spans []Span) MicroStats {
 			continue
 		}
 		for i := span.Start; i < span.End && i < len(conv); i++ {
-			partial := tombstoneMessage(&conv[i])
+			partial := tombstoneResults(&conv[i])
 			stats.Results += partial.Results
-			stats.Thinking += partial.Thinking
 			stats.Bytes += partial.Bytes
 		}
 	}
 	return stats
 }
 
-// tombstoneMessage routes one message to the half that owns its role: only user
-// messages carry tool results, only assistant messages carry reasoning.
-func tombstoneMessage(msg *nacelle.Message) MicroStats {
-	switch msg.Role {
-	case nacelle.RoleUser:
-		return tombstoneResults(msg)
-	case nacelle.RoleAssistant:
-		return tombstoneThinking(msg)
-	default:
-		return MicroStats{}
-	}
-}
-
+// tombstoneResults replaces the oversized results in one message. A result that
+// already opens with the notice is left alone, which is what makes a second pass
+// free. A result is a user turn's part, and scanning every message rather than
+// only the user's is deliberate: the pairing is a property of the ids, not of the
+// role, so nothing here has to trust the role to find one.
 func tombstoneResults(msg *nacelle.Message) MicroStats {
 	var stats MicroStats
 	for i, part := range msg.Parts {
@@ -127,18 +137,20 @@ func tombstoneResults(msg *nacelle.Message) MicroStats {
 	return stats
 }
 
-func tombstoneThinking(msg *nacelle.Message) MicroStats {
-	var stats MicroStats
-	for i, part := range msg.Parts {
-		reasoning, ok := part.(nacelle.Reasoning)
-		if !ok || reasoning.Text == "" || strings.HasPrefix(reasoning.Text, DroppedThinkingNotice) {
-			continue
-		}
-		stats.Bytes += len(reasoning.Text)
-		msg.Parts[i] = nacelle.Reasoning{
-			Text: fmt.Sprintf("%s%d bytes%s", DroppedThinkingNotice, len(reasoning.Text), ". See the assistant text above for the conclusion."),
-		}
-		stats.Thinking++
+// callText is one tool call as the text a judge is shown: the tool's name and
+// its own arguments, abbreviated to at most n bytes. The arguments are the point
+// — a block judged on "tool call read" alone cannot tell two reads of different
+// files apart — and they are cut because a block is one of dozens in a single
+// request. A cut through a multi-byte rune is trimmed rather than emitted broken:
+// this text lands in a JSON body.
+func callText(call nacelle.ToolCall, n int) string {
+	args := strings.TrimSpace(string(call.Input))
+	switch {
+	case args == "":
+		return call.Name
+	case len(args) <= n:
+		return call.Name + " " + args
+	default:
+		return call.Name + " " + strings.ToValidUTF8(args[:n], "") + "…"
 	}
-	return stats
 }

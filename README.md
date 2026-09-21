@@ -202,9 +202,9 @@ each a superset of the one below:
 
 | Tier | Crossed at | What it does | Model calls |
 |---|---|---|---|
-| soft | `soft_ratio` (0.65) × window | Tombstones old tool results and reasoning — deterministic, no model call | 0 |
-| mid | `mid_ratio` (0.80) × window | Tombstones, then folds the history into one `[state ledger]` message, keeping, pruning or folding each block | 1 judge + 1 ledger |
-| hard | `hard_ratio` (0.90) × window | Mid, plus force-summarizing what is left of the history and trimming to the pinned ends | 1 judge + 1 ledger |
+| soft | `soft_ratio` (0.65) × window | Tombstones oversized old tool results — deterministic, no model call | 0 |
+| mid | `mid_ratio` (0.80) × window | Classifies each history block and folds it into one `[state ledger]` message, keeping, pruning or folding | 1 judge + 1 ledger |
+| hard | `hard_ratio` (0.90) × window | Mid, plus force-folding what is left of the history and landing at the pinned ends | 1 judge + 1 ledger |
 
 The newest `keep_turns` turns stay verbatim and the first `anchor_messages`
 messages — the original task — are never rewritten, summarized or pruned, so the

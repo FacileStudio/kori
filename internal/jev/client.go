@@ -87,24 +87,29 @@ func New(c Config) *Client {
 
 // Evaluate sends one state and its questions and returns every answer, all of
 // them computed against the same state in a single call. A transient failure —
-// a 429, a 529, or a transport that never answered — is retried with exponential
-// backoff up to Attempts times; anything else comes back as its typed error. The
-// caller's context bounds all of it: once it is spent the loop stops rather than
-// spending what is left of the attempt budget on requests that are already out of
-// time.
+// a 429, a 529, a gateway that never reached the endpoint, or a transport that
+// never answered — is retried with exponential backoff up to Attempts times;
+// anything else comes back as its typed error. The caller's context bounds all
+// of it: once it is spent the loop stops rather than spending what is left of
+// the attempt budget on requests that are already out of time.
+//
+// At least one attempt always happens, whatever Attempts says: a zero-value
+// Client must come back with a transport error, never with an empty response
+// that a caller would read as a successful call with no answers.
 func (c *Client) Evaluate(ctx context.Context, state any, questions map[string]Question) (Response, error) {
 	payload, err := json.Marshal(request{State: state, Model: c.model, Questions: questions})
 	if err != nil {
 		return Response{}, err
 	}
+	attempts := max(c.attempts, 1)
 	var last error
-	for attempt := range c.attempts {
+	for attempt := range attempts {
 		response, err := c.post(ctx, payload)
 		if err == nil {
 			return response, nil
 		}
 		last = err
-		if !retryable(err) || attempt == c.attempts-1 || ctx.Err() != nil {
+		if !retryable(err) || attempt == attempts-1 || ctx.Err() != nil {
 			break
 		}
 		if err := c.pause(ctx, attempt); err != nil {
@@ -127,7 +132,7 @@ func (c *Client) post(ctx context.Context, payload []byte) (Response, error) {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
-	res, err := c.http.Do(req)
+	res, err := c.doer().Do(req)
 	if err != nil {
 		return Response{}, err
 	}
@@ -146,6 +151,17 @@ func (c *Client) post(ctx context.Context, payload []byte) (Response, error) {
 		return Response{}, &HTTPError{Status: res.StatusCode, Detail: "malformed response: " + err.Error()}
 	}
 	return out, nil
+}
+
+// doer is the HTTP client one attempt goes through: the configured one, or the
+// default for a Client that was not built by New. Without the fallback a
+// zero-value Client is a nil dereference rather than an error, which is the
+// worst way for a caller to find out it skipped the constructor.
+func (c *Client) doer() *http.Client {
+	if c.http == nil {
+		return http.DefaultClient
+	}
+	return c.http
 }
 
 // pause waits out one backoff interval, doubling per attempt, and gives up the

@@ -2,6 +2,7 @@ package compaction
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/FacileStudio/nacelle"
@@ -18,14 +19,12 @@ type Fold struct {
 
 // Survives reports whether a conversation index is kept in place by this fold.
 // It is the predicate Apply is handed, so a prune can only ever drop what the
-// judge tagged.
+// judge tagged. Kept comes out of Blocks in ascending order and its blocks never
+// overlap, and Apply asks once per history index, so the lookup is a binary
+// search over End rather than a walk of every kept block.
 func (f Fold) Survives(index int) bool {
-	for _, block := range f.Kept {
-		if index >= block.Start && index < block.End {
-			return true
-		}
-	}
-	return false
+	at := sort.Search(len(f.Kept), func(i int) bool { return f.Kept[i].End > index })
+	return at < len(f.Kept) && f.Kept[at].Start <= index
 }
 
 // LedgerMessages is the raw history the summarizer is fed: the ledger-tagged

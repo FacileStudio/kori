@@ -122,7 +122,13 @@ func loadJobFile(path string) (JobFile, error) {
 }
 
 // decodeJob turns one job file's bytes into a CronJob, defaulting the name
-// to the file stem.
+// to the file stem, and validates the job's own compaction block on the way
+// through.
+//
+// A job's limits merge over the already-resolved config, after Settings has had
+// its say, so this is the only point that ever sees its ladder — and a job whose
+// ratio cannot work would otherwise be the one surface where the mistake is
+// still silent.
 func decodeJob(raw []byte, path string) (CronJob, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	decoder.KnownFields(true)
@@ -132,6 +138,9 @@ func decodeJob(raw []byte, path string) (CronJob, error) {
 	}
 	if job.Name == "" {
 		job.Name = strings.TrimSuffix(filepath.Base(path), ".yml")
+	}
+	if err := validateCompaction(job.Limits.Compaction); err != nil {
+		return CronJob{}, err
 	}
 	return job, nil
 }

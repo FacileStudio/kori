@@ -42,11 +42,11 @@ func TestApplyKeepsAnAbsorbedToolPairWhole(t *testing.T) {
 		{Decision: Keep}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger},
 	}, false)
 
-	out, _ := Apply(conv, policy, plan, "folded", fold.Survives)
+	out, _ := Apply(conv, plan, "folded", fold.Survives)
 	assertPairsWhole(t, out, policy)
 
 	worked := appendTurn(out, "c9")
-	next, _ := Apply(worked, policy, Plan(worked, policy), "folded again", nil)
+	next, _ := Apply(worked, Plan(worked, policy), "folded again", nil)
 	assertPairsWhole(t, next, policy)
 	if !carriesToolPair(next) {
 		t.Errorf("the absorbed tool pair was dropped on the second pass: %v", next)
@@ -71,7 +71,7 @@ func TestApplyCarriesWhatTheLedgerAbsorbed(t *testing.T) {
 	}
 	policy := Policy{AnchorMessages: 1, KeepTurns: 2}
 
-	out, stats := Apply(conv, policy, Plan(conv, policy), "a new summary", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "a new summary", nil)
 
 	if stats.Refused {
 		t.Fatalf("the pass was refused, so the carry is not being exercised: %+v", stats)

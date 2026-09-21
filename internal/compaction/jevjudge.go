@@ -24,9 +24,20 @@ func NewJevJudge(cfg JudgeConfig) Judge {
 	}
 	return &jevJudge{
 		client:    jev.New(jev.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model}),
-		threshold: cfg.PruneThreshold,
+		threshold: pruneThreshold(cfg.PruneThreshold),
 		maxBlocks: cfg.MaxBlocks,
 	}
+}
+
+// pruneThreshold fills in a threshold an adapter was handed none of. A config
+// that never mentions the key carries a zero, and a zero would be cleared by any
+// prune probability at all — so the value a half-filled config falls back to is
+// the shipped default, not "prune whenever the judge is not sure".
+func pruneThreshold(threshold float64) float64 {
+	if threshold <= 0 || threshold > 1 {
+		return DefaultPruneThreshold
+	}
+	return threshold
 }
 
 // Classify asks every block's question in one call and maps the answers back.

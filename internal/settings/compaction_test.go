@@ -51,6 +51,54 @@ func TestCompactionFileLeavesUnmentionedRatiosAlone(t *testing.T) {
 	}
 }
 
+// The ladder is a chain of comparisons over one number, so a ratio outside (0,1]
+// or a rung below the one under it is a trigger that either never fires or fires
+// out of order — and nothing at run time says so. A mistyped 1.5 looks exactly
+// like an enabled compaction that never compacts, and soft_ratio: 0 derives a
+// zero ceiling, which every gate reads as "compaction off". Both are refused at
+// load rather than discovered later.
+func TestCompactionRejectsAnUnusableLadder(t *testing.T) {
+	tests := map[string]string{
+		"a ratio above one":           "limits:\n  compaction:\n    hard_ratio: 1.5\n",
+		"a zero soft ratio":           "limits:\n  compaction:\n    soft_ratio: 0\n",
+		"a negative ratio":            "limits:\n  compaction:\n    mid_ratio: -0.2\n",
+		"rungs out of order":          "limits:\n  compaction:\n    soft_ratio: 0.9\n",
+		"a zero prune threshold":      "limits:\n  compaction:\n    judge:\n      prune_threshold: 0\n",
+		"a prune threshold above one": "limits:\n  compaction:\n    judge:\n      prune_threshold: 1.2\n",
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			written(t, body)
+			if _, err := settings(Config{}); err == nil {
+				t.Error("settings accepted the ladder, want a load error naming the key")
+			}
+		})
+	}
+}
+
+// A job file's own compaction block merges over the resolved config after
+// Settings has run, so it is validated where the job is decoded — otherwise a
+// job file would be the one surface where an unusable ladder stays silent.
+func TestJobFileCompactionIsValidated(t *testing.T) {
+	if _, err := decodeJob([]byte("prompt: hi\nlimits:\n  compaction:\n    soft_ratio: 0\n"), "job.yml"); err == nil {
+		t.Error("decodeJob accepted a job ladder that cannot work")
+	}
+	if _, err := decodeJob([]byte("prompt: hi\nlimits:\n  compaction:\n    soft_ratio: 0.5\n"), "job.yml"); err != nil {
+		t.Errorf("decodeJob rejected a usable job ladder: %v", err)
+	}
+}
+
+// A ladder somebody can actually run still loads, so the gate above is a
+// judgement on the values and not a refusal to have any: a rung at exactly 1 is
+// the inclusive end of the range, not a mistake.
+func TestCompactionAcceptsAUsableLadder(t *testing.T) {
+	written(t, "limits:\n  compaction:\n    soft_ratio: 0.5\n    mid_ratio: 0.75\n    hard_ratio: 1\n    judge:\n      prune_threshold: 0.9\n")
+
+	if _, err := settings(Config{}); err != nil {
+		t.Errorf("settings rejected a usable ladder: %v", err)
+	}
+}
+
 // The judge's key can live in the file like any other setting: an environment
 // that mentions neither vendor variable must not clear it, and the vendor's own
 // variable must still win over it when it is set.

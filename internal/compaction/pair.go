@@ -28,6 +28,27 @@ func AlignedCut(conv []nacelle.Message, want int) int {
 	return want
 }
 
+// Covers reports whether a plan still describes a conversation: whether its
+// spans tile the whole slice, contiguously and without overlapping, so every
+// index a pass reasons about is one the conversation actually has.
+//
+// It lives beside AlignedCut because it is the same kind of arithmetic — both
+// reason about which index is safe to touch — and it is the check a pass makes
+// before it reassembles. A plan is measured against one conversation and applied
+// to whatever is in the field when the pass lands, and a conversation that moved
+// under a pass (a /clear or a /resume between the plan and the install) would
+// otherwise be indexed past its own end or, worse, silently replaced by nothing.
+func Covers(conv []nacelle.Message, spans []Span) bool {
+	at := 0
+	for _, span := range spans {
+		if span.Start != at || span.End < span.Start {
+			return false
+		}
+		at = span.End
+	}
+	return at == len(conv)
+}
+
 // toolResultIDs collects the ToolCall ids a message answers, empty for any user
 // turn that is prose.
 func toolResultIDs(msg nacelle.Message) []string {

@@ -11,6 +11,10 @@ package settings
 // flags still beat it field by field, so a machine's own settings survive a
 // profile the whole suite shares. file is empty under -no-config, which skips
 // ~/.kori.yml rather than the profile a flag or KORI_PROFILE names.
+//
+// The finished chain is validated in one place, here, rather than per layer: a
+// ratio a lower layer wrote and a higher one never mentioned is only wrong once
+// every layer has had its say, and both callers below go through this function.
 func resolveLayers(system string, file, env, flags Config) (Config, error) {
 	resolved := Defaults(system)
 	resolved.merge(file)
@@ -21,6 +25,9 @@ func resolveLayers(system string, file, env, flags Config) (Config, error) {
 	}
 	resolved.merge(env)
 	resolved.merge(flags)
+	if err := validateCompaction(resolved.Compaction); err != nil {
+		return Config{}, err
+	}
 	return resolved, nil
 }
 

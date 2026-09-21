@@ -65,6 +65,18 @@ func ExtraParts(m nacelle.Message) []nacelle.Part {
 	return m.Parts[1:]
 }
 
+// opposite is the role a message can sit next to without colliding. It belongs
+// to the ledger's construction because that is the only reason this package
+// needs it: the sentinel's role is chosen as the opposite of its neighbour, and
+// BuildLedger's own default is the one that alternates with the user turn that
+// anchors the head.
+func opposite(role nacelle.Role) nacelle.Role {
+	if role == nacelle.RoleUser {
+		return nacelle.RoleAssistant
+	}
+	return nacelle.RoleUser
+}
+
 // fold merges a previous ledger into a new one without duplicating either: an
 // empty side yields the other, an already-contained side is not repeated, and
 // two genuinely new halves are concatenated.

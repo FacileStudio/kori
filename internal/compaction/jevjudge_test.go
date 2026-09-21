@@ -104,6 +104,28 @@ func TestJevJudgeFoldsWhatItCannotBatch(t *testing.T) {
 	}
 }
 
+// A judge built without a prune threshold falls back to the shipped one rather
+// than to "prune on any probability at all": a half-filled config must not
+// invert the one destructive verdict. The answer here is a 0.20 prune
+// probability, which clears a threshold of zero and nothing else.
+func TestJevJudgeFallsBackToTheDefaultThreshold(t *testing.T) {
+	var asked map[string]json.RawMessage
+	var requests atomic.Int32
+	server := answerServer(t, `{"answers":{"block-1":{"choice":"keep","confidence":0.95,"probabilities":{"prune":0.20,"keep":0.80}}}}`, &asked, &requests)
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, MaxBlocks: 64})
+	conv := judgeSample()
+
+	verdicts, err := judge.Classify(t.Context(), "the task", Blocks(conv, judgePlan(conv)))
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if verdicts[0].Decision != Keep {
+		t.Errorf("verdict = %v, want keep — a 0.20 prune probability must not clear the shipped %v threshold",
+			verdicts[0].Decision, DefaultPruneThreshold)
+	}
+}
+
 // A disabled judge builds nothing, so an off setting cannot accidentally reach
 // the network.
 func TestNewJevJudgeIsNilWhenDisabled(t *testing.T) {

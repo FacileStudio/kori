@@ -36,9 +36,9 @@ type account struct {
 	// by the backend's own accounting, not guessed from bytes.
 	size int64
 
-	// trimmed is how many tool results and thinking blocks have been masked.
-	// It reaches the status line, because a model whose memory was quietly
-	// edited should not be the only one who knows.
+	// trimmed is how many history tool results have been masked. It reaches the
+	// status line, because a model whose memory was quietly edited should not be
+	// the only one who knows.
 	trimmed int
 
 	// compactBegan is when the current compaction pass started, stamped in

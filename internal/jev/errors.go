@@ -61,7 +61,24 @@ func retryable(err error) bool {
 	}
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {
-		return httpErr.Status == http.StatusTooManyRequests || httpErr.Status == 529
+		return transient(httpErr.Status)
 	}
 	return true
+}
+
+// transient reports whether a status is one a second attempt can clear.
+//
+// A gateway's 502, 503 or 504 is a transport failure wearing a status code: the
+// request never reached the endpoint, so nothing was asked and nothing was
+// decided, and treating it as the endpoint speaking would spend the whole
+// attempt budget on a pass that has to fall back anyway. 429 and 529 are
+// JEV's own retryable answers; every other status is a real reply.
+func transient(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, 529,
+		http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
 }

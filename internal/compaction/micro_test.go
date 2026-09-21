@@ -1,8 +1,10 @@
 package compaction
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/FacileStudio/nacelle"
 )
@@ -79,6 +81,34 @@ func TestTombstoneKeepsThePairingShape(t *testing.T) {
 	}
 }
 
+// A call's text is its name and its own arguments, so two reads of different
+// files are not the same text. A long argument list is cut and marked, so a
+// reader can tell an abbreviated block from a complete one — and a cut through a
+// multi-byte rune is trimmed rather than emitted broken, since this text lands in
+// a JSON request body.
+func TestCallTextCarriesTheArgumentsAndMarksTheCut(t *testing.T) {
+	call := func(input string) nacelle.ToolCall {
+		return nacelle.ToolCall{ID: "c1", Name: "read", Input: json.RawMessage(input), Finished: true}
+	}
+
+	if got := callText(call(`{"path":"main.go"}`), maxBlockInput); got != `read {"path":"main.go"}` {
+		t.Errorf("callText = %q, want the name and its arguments", got)
+	}
+	if got := callText(call(""), maxBlockInput); got != "read" {
+		t.Errorf("callText = %q, want the bare name for a call with no arguments", got)
+	}
+
+	long := call(`{"path":"` + strings.Repeat("x", maxBlockInput+50) + `"}`)
+	if got := callText(long, maxBlockInput); !strings.HasSuffix(got, "…") {
+		t.Errorf("callText = %q, want a marked cut at the cap", got)
+	}
+
+	runes := call(strings.Repeat("é", maxBlockInput))
+	if cut := callText(runes, maxBlockInput-1); !utf8.ValidString(cut) {
+		t.Errorf("callText cut a multi-byte rune in half: %q", cut)
+	}
+}
+
 func TestTombstoneLeavesSmallResultsAlone(t *testing.T) {
 	conv := []nacelle.Message{nacelle.UserText("task"), resultMessage("c", "read", strings.Repeat("x", MinResult-1))}
 
@@ -87,26 +117,28 @@ func TestTombstoneLeavesSmallResultsAlone(t *testing.T) {
 	}
 }
 
-func TestTombstoneDropsHistoryReasoningButKeepsText(t *testing.T) {
+// Reasoning is recorded and displayed but never sent — every backend drops it
+// when it builds a request — so the deterministic pass leaves it alone. A stub
+// on it would free no context while editing a transcript the reader can still
+// scroll back to, and it would count as savings in the pass's own report.
+func TestTombstoneLeavesHistoryReasoningAlone(t *testing.T) {
+	thought := strings.Repeat("t", 5000)
 	conv := []nacelle.Message{
 		nacelle.UserText("task"),
-		{Role: nacelle.RoleAssistant, Parts: []nacelle.Part{nacelle.Reasoning{Text: strings.Repeat("t", 5000)}, nacelle.Text{Text: "conclusion"}}},
+		{Role: nacelle.RoleAssistant, Parts: []nacelle.Part{nacelle.Reasoning{Text: thought}, nacelle.Text{Text: "conclusion"}}},
 		{Role: nacelle.RoleAssistant, Parts: []nacelle.Part{nacelle.Reasoning{Text: strings.Repeat("u", 50)}, nacelle.Text{Text: "recent"}}},
 	}
 	spans := []Span{{Zone: ZoneHistory, Start: 1, End: 2}, {Zone: ZoneActive, Start: 2, End: 3}}
 
 	stats := Tombstone(conv, spans)
 
-	if stats.Thinking != 1 || stats.Results != 0 {
-		t.Errorf("stats = %+v, want one reasoning block replaced", stats)
+	if stats != (MicroStats{}) {
+		t.Errorf("stats = %+v, want nothing replaced and nothing credited", stats)
 	}
-	if reasoning := conv[1].Parts[0].(nacelle.Reasoning); !strings.HasPrefix(reasoning.Text, DroppedThinkingNotice) {
-		t.Errorf("history reasoning = %q, want a placeholder", reasoning.Text)
+	if reasoning := conv[1].Parts[0].(nacelle.Reasoning); reasoning.Text != thought {
+		t.Errorf("history reasoning = %q, want it kept verbatim", reasoning.Text)
 	}
 	if text := conv[1].Parts[1].(nacelle.Text); text.Text != "conclusion" {
 		t.Errorf("assistant text = %q, want it preserved", text.Text)
-	}
-	if reasoning := conv[2].Parts[0].(nacelle.Reasoning); strings.HasPrefix(reasoning.Text, DroppedThinkingNotice) {
-		t.Error("the active window's reasoning was tombstoned")
 	}
 }

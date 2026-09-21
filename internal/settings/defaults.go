@@ -19,9 +19,10 @@ const DefaultCompactAt int64 = 75_000
 // fallback there. They alias the compaction package so the two layers cannot
 // drift.
 const (
-	DefaultSoftRatio = compaction.DefaultSoftRatio
-	DefaultMidRatio  = compaction.DefaultMidRatio
-	DefaultHardRatio = compaction.DefaultHardRatio
+	DefaultSoftRatio      = compaction.DefaultSoftRatio
+	DefaultMidRatio       = compaction.DefaultMidRatio
+	DefaultHardRatio      = compaction.DefaultHardRatio
+	DefaultPruneThreshold = compaction.DefaultPruneThreshold
 )
 
 // Defaults is the bottom layer, and the only one that answers everything.

@@ -130,13 +130,11 @@ func (m *Model) settleCompaction(outcome compactOutcome) tea.Cmd {
 	m.run.compactChan = nil
 
 	if outcome.err != nil {
-		m.applyMaskFallback(outcome)
-		m.say(fromCompact, "compaction "+outcome.failedAt()+" failed · "+outcome.err.Error()+" — masked instead")
+		m.say(fromCompact, "compaction "+outcome.failedAt()+" failed · "+outcome.err.Error()+maskNote(m.applyMaskFallback(outcome)))
 	} else if outcome.installs() {
 		m.installFold(outcome)
 	} else {
-		m.applyMaskFallback(outcome)
-		m.say(fromCompact, "compaction summary came back empty — masked instead")
+		m.say(fromCompact, "compaction summary came back empty"+maskNote(m.applyMaskFallback(outcome)))
 	}
 
 	m.checkThrash()
@@ -157,11 +155,20 @@ func (m *Model) settleCompaction(outcome compactOutcome) tea.Cmd {
 // ledger longer than the turn was — and installing it would grow the context the
 // pass exists to shrink. The conversation and the size are already correct, so
 // the pass only has to be honest about having bought nothing.
+//
+// A stale plan is the other way out, and the more dangerous one: the pass measured
+// a conversation that is no longer the one in the field, so its spans bound
+// nothing. Apply refuses it and this reports it, rather than folding a plan into
+// whatever happens to be sitting at those indices.
 func (m *Model) installFold(outcome compactOutcome) {
 	start, end, _ := compaction.HistoryRange(outcome.plan)
 	kept := len(compaction.Section(m.conversation, outcome.plan, compaction.ZoneActive))
 
-	conv, stats := compaction.Apply(m.conversation, m.policy, outcome.plan, outcome.summary, outcome.fold.Survives)
+	conv, stats := compaction.Apply(m.conversation, outcome.plan, outcome.summary, outcome.fold.Survives)
+	if stats.Stale {
+		m.say(fromCompact, "the conversation changed while the pass ran — nothing was folded")
+		return
+	}
 	if stats.Refused {
 		m.last = compacted{tier: outcome.tier}
 		m.say(fromCompact, "context unchanged — the ledger would have outweighed the turns it folds")

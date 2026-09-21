@@ -68,7 +68,7 @@ func (m *Model) maskOnlyPass(plan []compaction.Span) tea.Cmd {
 	report := compactOutcome{
 		before: before,
 		after:  m.size,
-		done:   compacted{evictCut: end - start, kept: len(m.conversation) - end, results: stats.Results, thinking: stats.Thinking, tier: tier},
+		done:   compacted{evictCut: end - start, kept: len(m.conversation) - end, results: stats.Results, tier: tier},
 	}
 	m.last = report.done
 	m.say(fromCompact, compactReport(report)+"\n   cost sits in the kept tail — compaction protects the newest turns; /clear or read in chunks")
@@ -84,7 +84,7 @@ func (m *Model) softPass() tea.Cmd {
 	plan := m.plan()
 	before := m.size
 	stats := m.maskHistory(plan)
-	if stats.Results == 0 && stats.Thinking == 0 {
+	if stats.Results == 0 {
 		return nil
 	}
 	start, end, _ := compaction.HistoryRange(plan)
@@ -95,7 +95,6 @@ func (m *Model) softPass() tea.Cmd {
 			evictCut: end - start,
 			kept:     len(m.conversation) - end,
 			results:  stats.Results,
-			thinking: stats.Thinking,
 			tier:     compaction.Soft,
 		},
 	}

@@ -13,7 +13,7 @@ import (
 // compacted holds one compaction pass's numbers, so the report and the tests
 // that check it share one shape rather than a bag of named arguments. evictCut
 // and kept are the history and active sizes the pass measured, which is what the
-// "kept N% verbatim" line is drawn from; results, thinking and turns are what it
+// "kept N% verbatim" line is drawn from; results, turns and pruned are what it
 // actually did.
 type compacted struct {
 	evictCut int
@@ -21,7 +21,6 @@ type compacted struct {
 	kept     int
 	pruned   int
 	results  int
-	thinking int
 	tier     compaction.Tier
 }
 
@@ -80,9 +79,6 @@ func compactReport(outcome compactOutcome) string {
 	var work []string
 	if d.results > 0 {
 		work = append(work, "masked "+countedNoun(d.results, "result"))
-	}
-	if d.thinking > 0 {
-		work = append(work, "masked "+countedNoun(d.thinking, "thinking block"))
 	}
 	if d.turns > 0 {
 		work = append(work, "summarized "+countedNoun(d.turns, "turn"))

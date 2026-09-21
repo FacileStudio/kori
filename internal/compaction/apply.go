@@ -15,6 +15,13 @@ type Stats struct {
 	// two-byte turn and get a verbose ledger back, and a pass that adds weight is
 	// not a pass. A refused pass reports Before == After and no work.
 	Refused bool
+	// Stale reports that the plan no longer described the conversation it was
+	// measured against, so nothing was assembled and the original stands. A plan
+	// and a conversation travel together but are installed at different moments,
+	// so this is the one way a pass can be handed a plan that does not bound it —
+	// and indexing one conversation with another's spans would either run off its
+	// end or silently replace it with nothing.
+	Stale bool
 }
 
 // Apply reassembles a conversation after a pass: the pinned anchor verbatim, one
@@ -24,11 +31,24 @@ type Stats struct {
 // alternate in the result (I4), and a rebuild that would grow the conversation is
 // refused outright (I5), handing the original back with Stats.Refused set.
 //
-// keep selects the history indices that survive in place; nil drops the whole
-// history, which is what an unclassified pass does. A call that changes nothing —
-// no history to drop, nothing kept, no ledger text and no previous ledger — is
-// handed back untouched rather than rewritten to close a boundary it never
-// created.
+// The one precondition is that the plan still covers conv: a plan measured
+// against a conversation that is no longer there cannot be applied to it, so it
+// comes back as Stats.Stale with the original untouched. That check lives here,
+// at the boundary, so no caller has to remember it — the assembly below assumes
+// it has already held.
+func Apply(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
+	if !Covers(conv, plan) {
+		before := EstTokens(Bytes(conv))
+		return conv, Stats{Before: before, After: before, Stale: true}
+	}
+	return assemble(conv, plan, ledger, keep)
+}
+
+// assemble is Apply's body: the plan is known to cover conv. keep selects the
+// history indices that survive in place; nil drops the whole history, which is
+// what an unclassified pass does. A call that changes nothing — no history to
+// drop, nothing kept, no ledger text and no previous ledger — is handed back
+// untouched rather than rewritten to close a boundary it never created.
 //
 // Every other call installs a ledger, even with no word to put in one, because
 // that message is the buffer that keeps the pinned head and whatever follows it
@@ -36,7 +56,7 @@ type Stats struct {
 // only ways out of that are merging the next turn into the head — which would
 // rewrite the anchor (I2) — or standing a ledger between them even when it has
 // nothing to say.
-func Apply(conv []nacelle.Message, policy Policy, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
+func assemble(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
 	anchor := Section(conv, plan, ZoneAnchor)
 	active := Section(conv, plan, ZoneActive)
 	surviving := survivingHistory(conv, plan, keep)
@@ -135,13 +155,6 @@ func ledgerRole(anchor, following []nacelle.Message) nacelle.Role {
 	return nacelle.RoleUser
 }
 
-func opposite(role nacelle.Role) nacelle.Role {
-	if role == nacelle.RoleUser {
-		return nacelle.RoleAssistant
-	}
-	return nacelle.RoleUser
-}
-
 // alternateFrom folds any same-role neighbours starting at index from, moving
 // the later message's parts into the earlier one. Starting at from keeps the
 // anchor untouched, and the ledger is what makes that hold: its role is chosen
@@ -160,12 +173,4 @@ func alternateFrom(msgs []nacelle.Message, from int) []nacelle.Message {
 		out = append(out, msg)
 	}
 	return out
-}
-
-func measure(conv, out []nacelle.Message, summarized int) Stats {
-	return Stats{
-		Before:     EstTokens(Bytes(conv)),
-		After:      EstTokens(Bytes(out)),
-		Summarized: summarized,
-	}
 }

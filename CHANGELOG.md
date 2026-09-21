@@ -9,6 +9,7 @@
 
 ### Changed
 - feat(settings): `limits.compact_at` is unset by default and the ceiling now derives from the compaction ratios against the backend's context window; an absolute value still overrides and `0` still disables compaction
+- feat(settings): `limits.compaction` ratios and `judge.prune_threshold` are validated at load — a ratio outside `(0,1]`, a ladder with its rungs out of order, or an unusable prune threshold is now a startup error instead of a trigger that silently never fires
 
 ### Fixed
 - fix(compaction): a pass can no longer orphan a tool pair the ledger absorbed — the ledger zone claims the replies to its own calls and carries an absorbed block forward, so a later prune cannot split a call from its result and a later rebuild cannot shed what a fold put in (`internal/compaction`)
@@ -16,6 +17,12 @@
 - fix(compaction): a rebuild heavier than the conversation it replaces is refused and the context left unchanged, so a pass never grows the context it exists to shrink (folding a two-byte turn can no longer install a verbose ledger)
 - fix(compaction): the pinned head is extended over the replies answering the calls it carries, and a pass that folds nothing still stands a ledger between the head and the active window — the two cases where the assembly could merge a kept turn into the anchor or emit two messages of one role
 - fix(jev): a transport error (a dropped connection or a per-attempt timeout) is retried like a 429/529, bounded by the caller's context rather than spending the attempt budget on requests that are already out of time
+- fix(compaction): the soft tier tombstones tool results only — every backend drops a `Reasoning` block when it builds a request, so stubbing one freed no context while taking the chain of thought out of a transcript the reader can still scroll back to, and the pass reported the saved bytes as if it had bought headroom
+- fix(compaction): a judge built without a prune threshold falls back to the shipped `0.85` instead of pruning on any probability at all, and a block the model kept can no longer be dropped by a threshold of zero
+- fix(compaction): `soft_ratio: 0` no longer turns compaction off while the tier ladder still reports it on — the derived ceiling falls back to `75000` instead of zero, which every trigger reads as "disabled", and the setting is refused at load
+- fix(compaction): a pass refuses a plan that no longer covers the conversation instead of indexing past the end of it, so a `/clear` or `/resume` landing mid-pass cannot take the session down with it, and the mask fallback refuses one too rather than promising a fallback it did not run
+- fix(compaction): a tool call's own arguments (abbreviated) reach the judge, which was classifying every block from the tool's name alone
+- fix(jev): a gateway's 502/503/504 is retried like a 429/529, and a zero-value client makes one attempt instead of returning an empty response with no error
 
 ## [0.70.2] - 2026-09-20
 

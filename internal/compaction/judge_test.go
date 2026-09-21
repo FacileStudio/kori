@@ -32,6 +32,23 @@ func TestDecidePrunesOnlyAtTheThreshold(t *testing.T) {
 	}
 }
 
+// The threshold is the number that decides a deletion, so an unusable one refuses
+// to prune instead of treating every probability as over it. It is the shape a
+// config arrives in: a key nobody mentioned is a zero, and a zero would be
+// cleared by any answer the judge happened to give.
+func TestDecideNeverPrunesBelowAnUnusableThreshold(t *testing.T) {
+	probs := map[string]float64{optionPrune: 0.9, optionKeep: 0.1}
+
+	for _, threshold := range []float64{0, -0.5} {
+		if got := decide(probs, optionPrune, 0.95, threshold); got.Decision != Keep {
+			t.Errorf("threshold %v pruned at %v prune probability, want keep", threshold, probs[optionPrune])
+		}
+	}
+	if got := decide(probs, optionPrune, 0.95, DefaultPruneThreshold); got.Decision != Prune {
+		t.Errorf("threshold %v = %v, want a usable threshold to still prune", DefaultPruneThreshold, got.Decision)
+	}
+}
+
 func TestDecideCarriesTheNumbers(t *testing.T) {
 	verdict := decide(map[string]float64{optionPrune: 0.9}, optionPrune, 0.95, 0.85)
 	if verdict.PruneProb != 0.9 || verdict.Confidence != 0.95 {

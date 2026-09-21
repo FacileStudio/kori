@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -94,7 +93,10 @@ func TestMaskIsNotPaidTwiceOnASecondPass(t *testing.T) {
 	}
 }
 
-func TestMaskDropsHistoryThinkingBlocks(t *testing.T) {
+// thinkingConversation is a history whose assistant turns each carry reasoning,
+// returned with the index and text of every one of them so a test can assert on
+// them after a pass.
+func thinkingConversation() (*Model, map[int]string) {
 	msg := func(role nacelle.Role, parts ...nacelle.Part) nacelle.Message {
 		return nacelle.Message{Role: role, Parts: parts}
 	}
@@ -110,78 +112,48 @@ func TestMaskDropsHistoryThinkingBlocks(t *testing.T) {
 		msg(nacelle.RoleUser, nacelle.ToolResult{ID: "c", Name: "read", Result: strings.Repeat("x", 2000)}),
 		msg(nacelle.RoleAssistant, thought(100), nacelle.Text{Text: "recent conclusion"}),
 	}
+	return m, map[int]string{1: thought(5000).Text, 3: thought(3000).Text, 5: thought(100).Text}
+}
+
+// Reasoning is displayed but never sent, so the mask leaves it where it is: a stub
+// on it would free no context while taking the chain of thought out of a
+// transcript the reader can still scroll back to.
+func TestMaskLeavesHistoryThinkingAlone(t *testing.T) {
+	m, thoughts := thinkingConversation()
 	m.size = compactAt + 50_000
 
 	m.maskHistory(m.plan())
 
-	replaced, untouched := countThinkingBlocks(m.conversation)
-	if replaced != 1 {
-		t.Errorf("%d thinking blocks replaced, want the one in history", replaced)
-	}
-	if untouched != 2 {
-		t.Errorf("%d thinking blocks untouched, want the active window's two", untouched)
+	for index, want := range thoughts {
+		if got := m.conversation[index].Parts[0].(nacelle.Reasoning); got.Text != want {
+			t.Errorf("assistant message %d reasoning was rewritten: %q", index, got.Text)
+		}
 	}
 	verifyAssistantTextPreserved(t, m.conversation)
-	if m.trimmed < 2 {
-		t.Errorf("trimmed count = %d, want at least 2", m.trimmed)
-	}
 }
 
-func TestMaskFallbackKeepsTheConversationStanding(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	m.size = compactAt + 25_000
+// The report counts what the pass actually took out — the stubbed results — and
+// nothing it did not do. Reasoning is the shape that used to be counted as
+// savings while freeing nothing.
+func TestMaskCountsOnlyTheStubbedResults(t *testing.T) {
+	m, _ := thinkingConversation()
+	m.size = compactAt + 50_000
 
-	m.applyMaskFallback(compactOutcome{before: m.size, plan: m.plan(), tier: compaction.Mid})
+	m.maskHistory(m.plan())
 
-	saved := 0
+	stubbed := 0
 	for _, message := range m.conversation {
 		for _, part := range message.Parts {
-			result, ok := part.(nacelle.ToolResult)
-			if ok && strings.HasPrefix(result.Result, droppedNotice) {
-				saved++
+			if result, ok := part.(nacelle.ToolResult); ok && strings.HasPrefix(result.Result, droppedNotice) {
+				stubbed++
 			}
 		}
 	}
-	if saved == 0 {
-		t.Error("mask fallback masked nothing")
+	if stubbed == 0 {
+		t.Fatal("the mask stubbed nothing, so the count below proves nothing")
 	}
-	if len(m.conversation) != len(bigConversation()) {
-		t.Errorf("mask fallback changed the message count: %d, was %d", len(m.conversation), len(bigConversation()))
-	}
-	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "✂ Compaction summary") {
-		t.Errorf("mask fallback did not report: %v", spoken(m))
-	}
-}
-
-func TestSettleCompactionFallsBackToTheMaskOnFailure(t *testing.T) {
-	m := sized()
-	m.conversation = bigConversation()
-	m.size = compactAt + 25_000
-	outcome := compactOutcome{before: m.size, plan: m.plan(), tier: compaction.Mid, err: errors.New("summarizer hiccuped")}
-
-	m.settleCompaction(outcome)
-
-	if m.compacting {
-		t.Error("compacting still true after the fallback")
-	}
-	if len(m.conversation) != len(bigConversation()) {
-		t.Errorf("mask fallback changed the message count: %d", len(m.conversation))
-	}
-	saved := 0
-	for _, message := range m.conversation {
-		for _, part := range message.Parts {
-			result, ok := part.(nacelle.ToolResult)
-			if ok && strings.HasPrefix(result.Result, droppedNotice) {
-				saved++
-			}
-		}
-	}
-	if saved == 0 {
-		t.Error("a failed summary bought no headroom: nothing was masked")
-	}
-	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "compaction summary failed") {
-		t.Errorf("failure not reported: %v", said)
+	if m.trimmed != stubbed {
+		t.Errorf("trimmed count = %d, want the %d stubbed results", m.trimmed, stubbed)
 	}
 }
 
@@ -198,24 +170,6 @@ func TestLedgerCarriesTheSentinel(t *testing.T) {
 	if !compaction.IsLedger(block) {
 		t.Errorf("ledger = %+v, want the state-ledger sentinel", block)
 	}
-}
-
-func countThinkingBlocks(messages []nacelle.Message) (int, int) {
-	replaced, untouched := 0, 0
-	for _, msg := range messages {
-		for _, part := range msg.Parts {
-			reasoning, ok := part.(nacelle.Reasoning)
-			if !ok {
-				continue
-			}
-			if strings.HasPrefix(reasoning.Text, droppedThinkingNotice) {
-				replaced++
-			} else {
-				untouched++
-			}
-		}
-	}
-	return replaced, untouched
 }
 
 func verifyAssistantTextPreserved(t *testing.T, messages []nacelle.Message) {

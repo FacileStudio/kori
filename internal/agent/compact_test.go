@@ -60,3 +60,20 @@ func TestResolveBudgetCarriesTheRatios(t *testing.T) {
 		t.Errorf("ceiling = %d, want the pinned 80000", got.Ceiling)
 	}
 }
+
+// A derived ceiling that comes out zero would be read by every gate as
+// "compaction off", so a degenerate ratio falls back to the windowless default
+// rather than quietly disabling the ladder. Settings refuses such a ratio at
+// load, which leaves this as the floor under a caller that built a Compaction
+// itself — the shape a test or a programmatic embed reaches.
+func TestResolveBudgetNeverDerivesAZeroCeiling(t *testing.T) {
+	zero, negative := 0.0, -0.5
+
+	for _, soft := range []*float64{&zero, &negative} {
+		got := ResolveBudget(nil, settings.Compaction{SoftRatio: soft}, &fixedWindow{window: 200_000})
+		if got.Ceiling != settings.DefaultCompactAt {
+			t.Errorf("ceiling = %d for soft_ratio %v, want %d — a zero ceiling reads as disabled",
+				got.Ceiling, *soft, settings.DefaultCompactAt)
+		}
+	}
+}

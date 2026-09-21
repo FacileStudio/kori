@@ -26,7 +26,7 @@ func TestLoadSettlesUnderTheHardRatio(t *testing.T) {
 	for turn := range 40 {
 		conv = appendTurn(conv, fmt.Sprintf("c%d", turn))
 		if policy.Tier(EstTokens(Bytes(conv))) >= Soft {
-			conv, _ = Apply(conv, policy, Plan(conv, policy), "Decisions:\n- kept going", nil)
+			conv, _ = Apply(conv, Plan(conv, policy), "Decisions:\n- kept going", nil)
 		}
 	}
 

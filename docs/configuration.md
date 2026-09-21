@@ -363,9 +363,16 @@ any ceiling at all.
 
 | Tier | Crossed at | What it does | Model calls |
 |---|---|---|---|
-| soft | `soft_ratio` × window | Tombstones history tool results and reasoning older than the active window — deterministic, no model call | 0 |
-| mid | `mid_ratio` × window | Tombstones, then classifies history blocks and folds the ones that matter into one `[state ledger]` message | 1 judge + 1 ledger |
-| hard | `hard_ratio` × window | Mid, plus force-summarizing the whole history and trimming to the pinned head, ledger and active window | 1 judge + 1 ledger |
+| soft | `soft_ratio` × window | Tombstones oversized history tool results older than the active window — deterministic, no model call | 0 |
+| mid | `mid_ratio` × window | Classifies each history block and keeps, prunes or folds it into one `[state ledger]` message | 1 judge + 1 ledger |
+| hard | `hard_ratio` × window | Mid, plus force-folding everything the judge did not prune, landing at the pinned head, ledger and active window | 1 judge + 1 ledger |
+
+Only tool results are tombstoned, not reasoning: every backend drops a `Reasoning` block when it
+builds a request (Anthropic wants the signature it was issued with, and the stream never carries
+one), so a stub on it would free no context while editing a transcript you can still scroll back
+to. What the soft tier reclaims is the tool output. A ratio outside `(0,1]`, or a ladder whose
+rungs are out of order, is refused at load rather than quietly never firing — `soft_ratio: 0` would
+derive a zero ceiling, which every trigger reads as "compaction off".
 
 `limits.compact_at` still speaks last: a value someone set is an absolute ceiling and beats the
 ratios, `0` turns compaction off, and leaving it unset is what puts the ladder in charge. A

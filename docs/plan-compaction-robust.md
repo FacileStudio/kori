@@ -41,9 +41,9 @@ plan was written against is gone.
 | `internal/compaction/policy.go` | `Ratios`, `Policy`, `Tier`, `Zone`, `Span`, `Plan`, `Tier`/`Trigger`/`reaches`, `activeStart`, `ledgerIndex` |
 | `internal/compaction/spans.go` | `Section`, `HistoryMessages`, `HistoryRange`, `LedgerText`, `LedgerEnd`, `answersAny`, `clamp` |
 | `internal/compaction/blocks.go` | `Block`, `Blocks`, atomic pairing (`blockEnd`/`opensToolPair`/`foldOrphanResults`), `renderBlock` |
-| `internal/compaction/pair.go` | `AlignedCut`, `toolResultIDs`, `toolCallIDs` |
+| `internal/compaction/pair.go` | `AlignedCut`, `Covers`, `toolResultIDs`, `toolCallIDs` |
 | `internal/compaction/ledger.go` | `Sentinel`, `IsLedger`, `Body`, `BuildLedger`, `ExtraParts`, `fold` |
-| `internal/compaction/micro.go` | `EstTokens`, `Bytes`/`MsgBytes`/`PartBytes`, `Tombstone`, `MicroStats`, `MinResult`, the two dropped notices |
+| `internal/compaction/micro.go` | `EstTokens`, `Bytes`/`MsgBytes`/`PartBytes`, `measure`, `Tombstone`, `MicroStats`, `MinResult`, `DroppedNotice`, `abbreviate` |
 | `internal/compaction/macro.go` | `Fold`, `Classify`, `JudgeRequest`, `GoalText`, `foldVerdicts` |
 | `internal/compaction/judge.go` | `Decision`, `Verdict`, `Judge`, `JudgeConfig`, `ConfidenceFloor`, `decide`, `keepAll` |
 | `internal/compaction/jevjudge.go` | `NewJevJudge` (the System One adapter), `state`, `questions`, `choiceQuestion` |
@@ -87,9 +87,9 @@ synchronous mask on any error, then runs `checkThrash`. `checkThrash` counts con
 fail to land under the threshold; at 3 the automatic triggers stand down. The `m.size` debit the
 mask applies is an estimate the next `sized()` overwrites (G6).
 
-`compaction.Tombstone` replaces oversized history `ToolResult`s (≥ 1024 bytes) and `Reasoning`
-blocks with `[dropped N bytes…]` stubs, keeping `ID`/`Name`; it is idempotent and mutates the
-conversation in place. `LedgerEnd` extends a ledger span over the replies answering the calls the
+`compaction.Tombstone` replaces oversized history `ToolResult`s (≥ 1024 bytes) with
+`[dropped N bytes…]` stubs, keeping `ID`/`Name`; it is idempotent and mutates the conversation in
+place. Reasoning is deliberately not tombstoned — see the second round of review follow-ups. `LedgerEnd` extends a ledger span over the replies answering the calls the
 ledger carries, and `Apply`'s `ledgerCarry` re-emits them, so the ledger zone can be more than one
 message — see the Phase 4 note.
 
@@ -151,8 +151,8 @@ The conversation is partitioned **by index** into spans, in this order:
 
 | Tier | Trigger | Action | Model calls |
 |---|---|---|---|
-| **Soft** | `size ≥ soft_ratio × window` | Deterministic `Tombstone` of history tool results / reasoning older than the active window. | 0 |
-| **Mid** | `size ≥ mid_ratio × window` | Tombstone **+** one batched JEV `Classify` over history blocks → prune (atomic) + ledger blocks. | 1 JEV call + 1 LLM call (ledger) |
+| **Soft** | `size ≥ soft_ratio × window` | Deterministic `Tombstone` of oversized history tool results older than the active window. | 0 |
+| **Mid** | `size ≥ mid_ratio × window` | One batched JEV `Classify` over history blocks → prune (atomic) + ledger blocks + keep the rest. | 1 JEV call + 1 LLM call (ledger) |
 | **Hard** | `size ≥ hard_ratio × window` | Mid, **plus** force-summarize the whole history (ignore `Keep` verdicts). Every `Keep` becomes a fold and every `Prune` still drops, so the rebuild lands at anchor+ledger+active by construction; there is no separate trim step to take. | 1 JEV + 1 LLM |
 
 Defaults (locked in §5): soft `0.65`, mid `0.80`, hard `0.90`. Absolute `compact_at`, when set,
@@ -319,10 +319,10 @@ Replaces `compactedHeader` / `compactedHistory` (moved from `compact_summary.go`
 
 **Step 1.4 — `internal/compaction/micro.go`** (new): move `estTokens`, `msgBytes`, `partBytes` and
 the replacement logic of `trimResults`/`trimThinking`; expose
-`Tombstone(conv []nacelle.Message, spans []Span) MicroStats` (`Results`, `Thinking`, `Bytes`).
+`Tombstone(conv []nacelle.Message, spans []Span) MicroStats` (`Results`, `Bytes`).
 Idempotent: a stub is never re-stubbed or re-counted.
 
-**Step 1.5 — `internal/compaction/apply.go`** (new): `Apply(conv, policy, plan, ledgerText) ([]nacelle.Message, Stats)`
+**Step 1.5 — `internal/compaction/apply.go`** (new): `Apply(conv, plan, ledgerText) ([]nacelle.Message, Stats)`
 assembling anchor + ledger + surviving blocks + active window, preserving role alternation (I4) and
 returning `Stats{Before, After, Masked, Pruned, Summarized, Tier}`.
 
@@ -536,6 +536,50 @@ Also folded in: `/status` names an opted-in judge, so the one setting that ships
 machine is visible where the reader already looks for the ladder; and the JEV client retries a dropped
 connection or a per-attempt timeout as well as a 429/529, bounded by the caller's own context.
 
+### Review follow-ups, second round (2026-09-21)
+
+A second review of the same unpushed work, run against a tree where all four gates were already
+green, found five more things worth closing. Recorded here per §0.5. No invariant was weakened:
+I1–I7 hold as before, and two of these close holes *inside* them.
+
+1. **The soft tier credited itself the wrong thing.** Reasoning was tombstoned alongside tool
+   results and counted as bytes freed. No backend ever sends a `Reasoning` part back — `anthropic`'s
+   `blocksOf` and the shared `internal/oairunner` `sift` both switch on `Text`/`ToolCall`/`ToolResult`
+   and nothing else, because a thinking block needs the signature the stream never carries. So the
+   stub freed no context at all, `maskHistory` debited `m.size` by bytes that were never in the
+   request, and the report said "masked N thinking blocks" as if it had bought headroom — while
+   taking the chain of thought out of a transcript the reader can still scroll back to. `Tombstone`
+   now touches tool results only, `MicroStats` lost `Thinking`, and one dropped notice is left.
+2. **A zero prune threshold pruned everything.** `decide` compares `pruneProb >= threshold`, and a
+   config that never mentions the key arrives as a zero — so a block the model voted 80% *keep* would
+   be dropped, inverting the one destructive verdict. The threshold now has a floor
+   (`DefaultPruneThreshold`, aliased from settings), `NewJevJudge` fills an unusable one, `decide`
+   refuses to prune below a positive threshold, and settings refuses a value outside `(0,1]`.
+3. **`soft_ratio: 0` turned compaction off while reporting it on.** The derived ceiling is
+   `soft_ratio × window`, so a zero produced a zero ceiling — which is how every gate spells
+   "disabled" — while `Policy.Tier` still reported `hard`. `validateCompaction` now rejects an
+   out-of-range or out-of-order ladder at load, `ResolveBudget` floors a degenerate derived ceiling at
+   `DefaultCompactAt`, and the `/compact` refusal names the setting that did it.
+4. **`Apply` indexed the conversation with the pass's plan.** A plan is measured against one
+   conversation and installed against whatever is in the field, and `Section` sliced
+   `conv[span.Start:span.End]` unguarded: a `/clear` or `/resume` landing mid-pass was an
+   index-out-of-range panic. `Covers` is now the precondition, `Stats.Stale` reports the refusal, and
+   the selectors trim a span past the end rather than trusting it.
+5. **Two smaller ones.** A tool call's arguments now reach the judge, abbreviated to
+   `maxBlockInput`, since a block judged on `tool call read` alone cannot tell two reads of different
+   files apart; and the JEV client retries a gateway's 502/503/504 like a 429/529, while a zero-value
+   `Client` makes one attempt through the default HTTP client instead of returning an empty success
+   that a caller cannot tell from "nothing to prune".
+
+6. **The mask fallback guarded the conversation it touches, and a dead parameter went.**
+   `applyMaskFallback` was the one remaining place a pass's plan could be applied to a conversation
+   it never measured; it now checks `Covers` and reports whether it masked, so the "masked instead"
+   notice cannot claim a fallback that did not land. And `Apply`'s `policy` parameter was unused —
+   the plan already carries the two ends the assembly needs — so it is gone rather than left as a
+   signature that implies a decision the function does not make.
+
+`nacelle.Trim` remains unused, for the reason recorded in the first round.
+
 ---
 
 ## 7. Test & validation matrix
@@ -559,6 +603,12 @@ connection or a per-attempt timeout as well as a 429/529, bounded by the caller'
 | Load | 40 turns of large reads stay under hard ratio | `internal/compaction/load_test.go` |
 | Asymmetric judge | `prune` at 0.70 ignored; at 0.86 applied | `internal/compaction/judge_test.go` |
 | Batching | N blocks ⇒ one HTTP request | `internal/compaction/jevjudge_test.go` |
+| Reasoning is never tombstoned | a stub on it frees nothing and is not credited | `internal/compaction/micro_test.go`, `internal/tui/compact_mask_test.go` |
+| The prune threshold has a floor | an unusable threshold prunes nothing | `internal/compaction/judge_test.go`, `jevjudge_test.go` |
+| A degenerate ratio cannot disable the ladder | derived ceiling falls back; the value is refused at load | `internal/agent/compact_test.go`, `internal/settings/compaction_test.go` |
+| A stale plan is refused, not indexed | `Covers` is exact; `Apply` reports `Stale` with the original | `internal/compaction/apply_test.go`, `policy_test.go` |
+| The judge sees what a call did | a block carries the call's arguments, abbreviated | `internal/compaction/blocks_test.go`, `micro_test.go` |
+| A gateway failure is transient | 502 retried like a 429 | `internal/jev/client_test.go` |
 
 **Gate, every phase:**
 ```

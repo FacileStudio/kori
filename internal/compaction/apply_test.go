@@ -36,7 +36,7 @@ func TestApplyKeepsTheAnchorByteForByte(t *testing.T) {
 
 	for pass := range 5 {
 		conv = appendTurn(conv, fmt.Sprintf("c%d", pass))
-		next, _ := Apply(conv, policy, Plan(conv, policy), fmt.Sprintf("fold %d", pass), nil)
+		next, _ := Apply(conv, Plan(conv, policy), fmt.Sprintf("fold %d", pass), nil)
 		conv = next
 		if !reflect.DeepEqual(conv[0], anchor) {
 			t.Fatalf("pass %d rewrote the anchor: %+v", pass, conv[0])
@@ -49,7 +49,7 @@ func TestApplyInstallsALedgerAndKeepsTheEnds(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 
-	out, stats := Apply(conv, policy, Plan(conv, policy), "Decisions:\n- done", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- done", nil)
 
 	if len(out) != len(conv)-2 {
 		t.Fatalf("conversation = %d messages, want the three history turns replaced by one ledger", len(out))
@@ -83,7 +83,7 @@ func TestApplyKeepsRolesAlternating(t *testing.T) {
 		nacelle.AssistantText("five"),
 	}
 
-	out, stats := Apply(conv, policy, Plan(conv, policy), "Decisions:\n- merged", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- merged", nil)
 
 	if stats.Refused {
 		t.Fatalf("the pass was refused, so the merge is not being exercised: %+v", stats)
@@ -123,7 +123,7 @@ func TestApplyNeverGrowsTheConversation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			out, stats := Apply(tc.conv, applyPolicy(), Plan(tc.conv, applyPolicy()), tc.ledger, tc.keep)
+			out, stats := Apply(tc.conv, Plan(tc.conv, applyPolicy()), tc.ledger, tc.keep)
 			if stats.Refused != tc.refused || stats.After > stats.Before {
 				t.Fatalf("stats = %+v, want a refused pass of %v over %v", stats, tc.refused, tc.conv)
 			}
@@ -143,6 +143,29 @@ func assertAlternating(t *testing.T, conv []nacelle.Message) {
 	}
 }
 
+// A plan is measured against one conversation and applied to whatever is in the
+// field when the pass lands. A conversation that changed in between — here a
+// shorter one, as a /clear or a /resume leaves behind — must be refused rather
+// than indexed with the old spans: the assembly would either run off the end of
+// it or silently replace it with nothing.
+func TestApplyRefusesAPlanThatNoLongerCoversTheConversation(t *testing.T) {
+	policy := applyPolicy()
+	plan := Plan(applySample(), policy)
+	moved := []nacelle.Message{nacelle.UserText("a different conversation")}
+
+	out, stats := Apply(moved, plan, "a ledger for a conversation that is gone", nil)
+
+	if !stats.Stale {
+		t.Fatalf("stats = %+v, want the plan refused as stale", stats)
+	}
+	if stats.Before != stats.After || stats.Summarized != 0 {
+		t.Errorf("stats = %+v, want no work claimed", stats)
+	}
+	if !reflect.DeepEqual(out, moved) {
+		t.Errorf("conversation = %v, want it handed back untouched", out)
+	}
+}
+
 // A pass that drops history but has no summary to install still installs the
 // ledger buffer. The sentinel is what keeps the pinned head and the turns after
 // it role-legal — the head's last turn and the next turn routinely share a role —
@@ -151,7 +174,7 @@ func TestApplyBuffersTheBoundaryWithoutALedger(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 
-	out, _ := Apply(conv, policy, Plan(conv, policy), "", nil)
+	out, _ := Apply(conv, Plan(conv, policy), "", nil)
 
 	if len(out) != 4 {
 		t.Fatalf("conversation = %v, want the anchor, the buffer and the active window", out)
@@ -177,7 +200,7 @@ func TestApplyLeavesAnUnchangedConversationAlone(t *testing.T) {
 		nacelle.AssistantText("last"),
 	}
 
-	out, stats := Apply(conv, policy, Plan(conv, policy), "", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "", nil)
 
 	if !reflect.DeepEqual(out, conv) {
 		t.Errorf("conversation = %v, want it handed back untouched", out)

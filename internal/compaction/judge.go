@@ -47,10 +47,13 @@ type Judge interface {
 // enabling it sends conversation history — source code, possibly secrets — to a
 // third party, so it is never a shipped default.
 type JudgeConfig struct {
-	Enabled        bool
-	Model          string
-	BaseURL        string
-	APIKey         string
+	Enabled bool
+	Model   string
+	BaseURL string
+	APIKey  string
+	// PruneThreshold is the prune probability a block must reach to be dropped.
+	// A value outside (0,1] is unusable and falls back to DefaultPruneThreshold,
+	// so a config that never mentions it cannot prune on any probability at all.
 	PruneThreshold float64
 	MaxBlocks      int
 }
@@ -60,6 +63,12 @@ type JudgeConfig struct {
 // confidence is calibrated, so a low one means the distribution is flat and the
 // safe answer is to keep everything.
 const ConfidenceFloor = 0.6
+
+// DefaultPruneThreshold is the prune probability a block must reach before it
+// may be dropped, and the value an adapter falls back to when it is handed no
+// usable one. Settings alias it, so the number cannot drift between the two
+// layers.
+const DefaultPruneThreshold = 0.85
 
 const (
 	optionKeep   = "keep"
@@ -72,13 +81,18 @@ const (
 // over the floor, while anything ambiguous, missing or empty is kept. The
 // failure mode of a bad prune is a conversation that lost a fact; the failure
 // mode of a bad keep is a little more context.
+//
+// The threshold must itself be usable, which is the second half of that
+// asymmetry: a threshold of zero would be cleared by any prune probability at
+// all, so an unusable one prunes nothing rather than everything. A caller who
+// means "no pruning" gets a conversation instead of a deletion.
 func decide(probabilities map[string]float64, choice string, confidence, threshold float64) Verdict {
 	pruneProb, hasPrune := probabilities[optionPrune]
 	verdict := Verdict{Decision: Keep, PruneProb: pruneProb, Confidence: confidence}
 	if confidence < ConfidenceFloor {
 		return verdict
 	}
-	if hasPrune && pruneProb >= threshold {
+	if hasPrune && threshold > 0 && pruneProb >= threshold {
 		verdict.Decision = Prune
 		return verdict
 	}

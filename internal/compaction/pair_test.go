@@ -34,6 +34,35 @@ func TestAlignedCutNeverSplitsAToolPair(t *testing.T) {
 	}
 }
 
+// Covers is the precondition Apply checks before it assembles, and it is exact:
+// spans that tile the conversation pass, anything else — a gap, an overlap, a
+// span past the end — does not.
+func TestCoversAcceptsOnlyAPlanThatTilesTheConversation(t *testing.T) {
+	conv := []nacelle.Message{nacelle.UserText("task"), nacelle.AssistantText("one"), nacelle.UserText("two")}
+	tiled := []Span{{Zone: ZoneAnchor, Start: 0, End: 1}, {Zone: ZoneActive, Start: 1, End: 3}}
+
+	tests := []struct {
+		name  string
+		spans []Span
+		want  bool
+	}{
+		{"a tiled plan covers", tiled, true},
+		{"a span past the end does not", []Span{{Zone: ZoneAnchor, Start: 0, End: 9}}, false},
+		{"a gap does not", []Span{{Zone: ZoneAnchor, Start: 0, End: 1}, {Zone: ZoneActive, Start: 2, End: 3}}, false},
+		{"an empty plan covers nothing", nil, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Covers(conv, tc.spans); got != tc.want {
+				t.Errorf("Covers(%v) = %v, want %v", tc.spans, got, tc.want)
+			}
+		})
+	}
+	if !Covers(conv, Plan(conv, Policy{AnchorMessages: 1, KeepTurns: 1})) {
+		t.Error("Plan did not produce a covering plan, so every pass would be refused")
+	}
+}
+
 func TestAlignedCutLeavesOutOfRangeCutsAlone(t *testing.T) {
 	conv := []nacelle.Message{resultMessage("c", "read", "x")}
 	if got := AlignedCut(conv, 0); got != 0 {

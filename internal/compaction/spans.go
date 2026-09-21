@@ -2,13 +2,17 @@ package compaction
 
 import "github.com/FacileStudio/nacelle"
 
-// Section returns the messages covered by every span of one zone, in order.
+// Section returns the messages covered by every span of one zone, in order. A
+// span that reaches past the conversation is trimmed rather than trusted: the
+// plan is measured against one conversation and read against whatever is in the
+// field, and a selector is the wrong place to find out the two disagree.
 func Section(conv []nacelle.Message, spans []Span, zone Zone) []nacelle.Message {
 	var out []nacelle.Message
 	for _, span := range spans {
-		if span.Zone == zone {
-			out = append(out, conv[span.Start:span.End]...)
+		if span.Zone != zone || span.Start >= len(conv) {
+			continue
 		}
+		out = append(out, conv[span.Start:min(span.End, len(conv))]...)
 	}
 	return out
 }
@@ -35,10 +39,12 @@ func HistoryRange(spans []Span) (start, end int, ok bool) {
 }
 
 // LedgerText is the body of the conversation's state ledger, empty when it has
-// none yet.
+// none yet. A ledger span past the end of the conversation is a plan that no
+// longer describes it, so it reads as no ledger rather than an out-of-range
+// panic.
 func LedgerText(conv []nacelle.Message, spans []Span) string {
 	for _, span := range spans {
-		if span.Zone == ZoneLedger {
+		if span.Zone == ZoneLedger && span.Start < len(conv) {
 			return Body(conv[span.Start])
 		}
 	}

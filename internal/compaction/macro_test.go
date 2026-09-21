@@ -118,7 +118,7 @@ func TestPruneDropsWholeAtomicBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
-	out, _ := Apply(conv, Policy{AnchorMessages: 1, KeepTurns: 2}, plan, "Decisions:\n- read the file", fold.Survives)
+	out, _ := Apply(conv, plan, "Decisions:\n- read the file", fold.Survives)
 
 	for i, msg := range out {
 		if opensWithToolResult(msg) {

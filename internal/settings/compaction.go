@@ -1,6 +1,9 @@
 package settings
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 // Compaction is the ratio-based context-management surface: the tier ladder
 // that decides when a session tombstones, prunes or folds history, and the
@@ -100,7 +103,7 @@ func (c Compaction) Ratios() (soft, mid, hard float64) {
 func defaultCompaction() Compaction {
 	soft, mid, hard := DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio
 	keepTurns, anchorMessages, maxBlocks := 3, 1, 64
-	pruneThreshold, judgeEnabled := 0.85, false
+	pruneThreshold, judgeEnabled := DefaultPruneThreshold, false
 	return Compaction{
 		SoftRatio:      &soft,
 		MidRatio:       &mid,
@@ -146,4 +149,48 @@ func judgeKeyEnv() string {
 		return key
 	}
 	return envGet("COMPACTION_JUDGE_API_KEY")
+}
+
+// validateCompaction rejects a tier ladder that cannot work. It runs on the
+// resolved settings, so a ratio no layer mentioned has already been filled from
+// the defaults and only a value somebody actually wrote down is judged.
+//
+// The ladder is a chain of comparisons over one number, so a ratio outside (0,1]
+// or a rung below the one under it is not a preference — it is a trigger that
+// never fires or fires out of order, and nothing at run time says so. A typo like
+// hard_ratio: 1.5 looks exactly like an enabled compaction that never compacts,
+// and soft_ratio: 0 derives a zero ceiling, which every gate reads as "compaction
+// off". Failing at load is what keeps either from being found out later.
+func validateCompaction(c Compaction) error {
+	soft, mid, hard := c.Ratios()
+	rungs := []struct {
+		key   string
+		ratio float64
+	}{{"soft_ratio", soft}, {"mid_ratio", mid}, {"hard_ratio", hard}}
+	for _, rung := range rungs {
+		if rung.ratio <= 0 || rung.ratio > 1 {
+			return &ParseError{Path: "limits.compaction." + rung.key, Err: fmt.Errorf(
+				"want a ratio in (0,1], got %v — use limits.compact_at: 0 to turn compaction off", rung.ratio)}
+		}
+	}
+	if soft > mid || mid > hard {
+		return &ParseError{Path: "limits.compaction", Err: fmt.Errorf(
+			"want soft_ratio <= mid_ratio <= hard_ratio, got %v/%v/%v", soft, mid, hard)}
+	}
+	return validateJudge(c.Judge)
+}
+
+// validateJudge rejects a prune threshold that cannot mean anything. It is the
+// one setting guarding a deletion, so a value outside (0,1] is refused rather
+// than reinterpreted: the adapter's own fallback is the floor under a config
+// built in code, not a licence to write an unusable one in a file.
+func validateJudge(j Judge) error {
+	if j.PruneThreshold == nil {
+		return nil
+	}
+	if *j.PruneThreshold <= 0 || *j.PruneThreshold > 1 {
+		return &ParseError{Path: "limits.compaction.judge.prune_threshold", Err: fmt.Errorf(
+			"want a probability in (0,1], got %v", *j.PruneThreshold)}
+	}
+	return nil
 }

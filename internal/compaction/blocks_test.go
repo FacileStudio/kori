@@ -1,8 +1,10 @@
 package compaction
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/FacileStudio/nacelle"
@@ -54,6 +56,34 @@ func TestBlocksCoverTheHistoryContiguously(t *testing.T) {
 		if blocks[i].Start != blocks[i-1].End {
 			t.Errorf("blocks %d and %d are not contiguous: %v", i-1, i, blocks)
 		}
+	}
+}
+
+// A block shows the judge what a call did, not only what it was called: two
+// reads of different files are not the same block, and a judge told "tool call
+// read" twice has nothing to decide between them on. The arguments are
+// abbreviated, so one call cannot dominate a request carrying dozens of blocks.
+func TestBlockTextCarriesTheToolCallArguments(t *testing.T) {
+	call := callMessage("c1", "read")
+	call.Parts[0] = nacelle.ToolCall{ID: "c1", Name: "read", Input: json.RawMessage(`{"path":"internal/tui/compact.go"}`), Finished: true}
+	conv := []nacelle.Message{
+		nacelle.UserText("the task"),
+		call,
+		resultMessage("c1", "read", "contents"),
+		nacelle.AssistantText("answer"),
+		nacelle.UserText("more"),
+	}
+	spans := Plan(conv, Policy{AnchorMessages: 1, KeepTurns: 1})
+
+	blocks := Blocks(conv, spans)
+	if len(blocks) == 0 {
+		t.Fatal("no blocks to read the text of")
+	}
+	if text := blocks[0].Text; !strings.Contains(text, "internal/tui/compact.go") {
+		t.Errorf("block text = %q, want the call's own arguments in it", text)
+	}
+	if text := blocks[0].Text; !strings.Contains(text, "tool call read") {
+		t.Errorf("block text = %q, want the call still named", text)
 	}
 }
 

@@ -75,14 +75,18 @@ func TestShouldCompactIdleSkipsWhenThrashed(t *testing.T) {
 	}
 }
 
+// The notice names the setting that did it rather than asserting a cause the
+// reader has to guess at: settings refuses a ratio that would derive a zero
+// ceiling and the resolver floors it, so compact_at: 0 is the only way to be off
+// — and it is the key to go and look at.
 func TestCompactCmdRefusesWhenDisabled(t *testing.T) {
 	m := sized()
 	m.compactAt = 0
 
 	m.compactCmd()
 
-	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "compaction is disabled") {
-		t.Errorf("said = %q, want the disabled notice", said)
+	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "limits.compact_at") {
+		t.Errorf("said = %q, want the refusal to name the setting", said)
 	}
 }
 

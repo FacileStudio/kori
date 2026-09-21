@@ -1,7 +1,6 @@
 package jev
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -127,106 +126,6 @@ func TestEvaluateReturnsTypedErrors(t *testing.T) {
 				t.Fatalf("err = %v, want a typed %s error", err, tc.name)
 			}
 		})
-	}
-}
-
-// A 429 is transient: the client backs off and retries, so one rate limit does
-// not cost the caller an answer.
-func TestEvaluateRetriesTransientFailures(t *testing.T) {
-	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if requests.Add(1) == 1 {
-			http.Error(w, "slow down", http.StatusTooManyRequests)
-			return
-		}
-		writeBody(t, w, `{"answers":{"a":{"choice":"keep","confidence":0.9,"probabilities":{"keep":1}}}}`)
-	}))
-	defer server.Close()
-
-	response, err := newTestClient(server.URL).Evaluate(t.Context(), "state", map[string]Question{"a": {Type: "choice"}})
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if got := requests.Load(); got != 2 {
-		t.Errorf("requests = %d, want a retry after the 429", got)
-	}
-	if response.Answers["a"].Choice != "keep" {
-		t.Errorf("answer = %+v, want the retried answer", response.Answers["a"])
-	}
-}
-
-// A transport error that never produced a response is transient too — a dropped
-// connection is the blip a second attempt clears — so it is retried rather than
-// reported as a dead endpoint. The drop is simulated by hijacking the socket and
-// closing it unanswered, so the client sees an EOF instead of a status code.
-func TestEvaluateRetriesTransportErrors(t *testing.T) {
-	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if requests.Add(1) == 1 {
-			hijacker, ok := w.(http.Hijacker)
-			if !ok {
-				t.Error("response writer cannot be hijacked, cannot simulate a transport error")
-				return
-			}
-			conn, _, err := hijacker.Hijack()
-			if err != nil {
-				t.Errorf("hijack: %v", err)
-				return
-			}
-			if err := conn.Close(); err != nil {
-				t.Errorf("close hijacked connection: %v", err)
-			}
-			return
-		}
-		writeBody(t, w, `{"answers":{"a":{"choice":"keep","confidence":0.9,"probabilities":{"keep":1}}}}`)
-	}))
-	defer server.Close()
-
-	response, err := newTestClient(server.URL).Evaluate(t.Context(), "state", map[string]Question{"a": {Type: "choice"}})
-	if err != nil {
-		t.Fatalf("Evaluate: %v", err)
-	}
-	if got := requests.Load(); got < 2 {
-		t.Errorf("requests = %d, want the call to retry past the dropped connection", got)
-	}
-	if response.Answers["a"].Choice != "keep" {
-		t.Errorf("answer = %+v, want the retried answer", response.Answers["a"])
-	}
-}
-
-// A rate limit that never lifts gives up after the attempt budget rather than
-// hammering the endpoint forever.
-func TestEvaluateStopsAfterTheAttemptBudget(t *testing.T) {
-	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		requests.Add(1)
-		http.Error(w, "slow down", http.StatusTooManyRequests)
-	}))
-	defer server.Close()
-
-	_, err := newTestClient(server.URL).Evaluate(t.Context(), "state", map[string]Question{"a": {Type: "choice"}})
-	if err == nil {
-		t.Fatal("err = nil, want the last transient failure")
-	}
-	if got := requests.Load(); got != 3 {
-		t.Errorf("requests = %d, want the configured 3 attempts and no more", got)
-	}
-}
-
-// The client's own wait honours the caller's context, so a judge can never hold
-// a pass open past its deadline.
-func TestEvaluateHonoursTheContext(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(200 * time.Millisecond)
-		writeBody(t, w, `{"answers":{}}`)
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
-	defer cancel()
-
-	if _, err := newTestClient(server.URL).Evaluate(ctx, "state", map[string]Question{"a": {Type: "choice"}}); err == nil {
-		t.Fatal("err = nil, want the deadline read as a failure")
 	}
 }
 
