@@ -31,7 +31,12 @@ func (d Decision) String() string {
 // Verdict is one block's classification, carrying the numbers behind it so a
 // caller can log or re-threshold without asking again.
 type Verdict struct {
-	Decision   Decision
+	Decision Decision
+	// Choice is the option the judge picked, kept beside the probabilities and
+	// not only folded into Decision: re-thresholding needs it to tell a Ledger
+	// verdict from a Keep, and the calibration harness sweeps the prune threshold
+	// over one call's answers rather than paying for the corpus again.
+	Choice     string
 	PruneProb  float64
 	Confidence float64
 }
@@ -41,6 +46,25 @@ type Verdict struct {
 // the summarizer's job, fed only the blocks this tags.
 type Judge interface {
 	Classify(ctx context.Context, goal string, blocks []Block) ([]Verdict, error)
+}
+
+// Answer is what a judge's most recent call came back from: the versioned id of
+// the model that answered it, and what it billed. TypeSafe ships a drifting
+// `jev-latest` alias, reports the id that actually answered in every response,
+// and tells callers to log it and pin it once thresholds have been tuned against
+// it — so a session has to be able to read both back.
+type Answer struct {
+	Model        string
+	InputTokens  int
+	OutputTokens int
+}
+
+// Reporter is the optional half of Judge that a judge backed by a versioned
+// remote service implements, so a caller can name what answered it without the
+// transport leaking through the Judge interface. A judge that decides locally
+// has no answer to report and simply does not implement it.
+type Reporter interface {
+	LastAnswer() Answer
 }
 
 // JudgeConfig is the opt-in classifier's settings. It is off by default:
@@ -68,7 +92,17 @@ const ConfidenceFloor = 0.6
 // may be dropped, and the value an adapter falls back to when it is handed no
 // usable one. Settings alias it, so the number cannot drift between the two
 // layers.
-const DefaultPruneThreshold = 0.85
+//
+// It was 0.85 until the calibration harness was pointed at the live model, which
+// is the first time the number had ever been measured against anything. Over the
+// labeled corpus, 0.85 pruned 17% of the blocks a careful operator would have
+// dropped; 0.75 recovers 50% of them at the same zero false prunes, and lifts
+// agreement with the labels from 65% to 76%. Recall is the cheaper thing to
+// recover here — a missed prune costs a little context, and the confidence floor
+// still refuses every verdict the model is unsure of, so the asymmetry that keeps
+// a false prune impossible is untouched. See calibration_test.go and
+// testdata/judge_labels.json; re-run them before moving this again.
+const DefaultPruneThreshold = 0.75
 
 const (
 	optionKeep   = "keep"
@@ -88,7 +122,7 @@ const (
 // means "no pruning" gets a conversation instead of a deletion.
 func decide(probabilities map[string]float64, choice string, confidence, threshold float64) Verdict {
 	pruneProb, hasPrune := probabilities[optionPrune]
-	verdict := Verdict{Decision: Keep, PruneProb: pruneProb, Confidence: confidence}
+	verdict := Verdict{Decision: Keep, Choice: choice, PruneProb: pruneProb, Confidence: confidence}
 	if confidence < ConfidenceFloor {
 		return verdict
 	}

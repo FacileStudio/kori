@@ -106,9 +106,16 @@ func newBlock(conv []nacelle.Message, start, end int) Block {
 }
 
 // renderBlock is the text a judge is shown for one atomic block: every part of
-// every message in it, in order. A tool call carries its arguments, abbreviated:
-// the name alone cannot tell two reads of different files apart, and a block is
-// judged by what the call actually did.
+// every message in it, in order, cut to maxBlockText so one block holding a whole
+// tool result cannot dominate a request carrying dozens of them. A tool call
+// carries its arguments, abbreviated: the name alone cannot tell two reads of
+// different files apart, and a block is judged by what the call actually did.
+//
+// Reasoning is rendered here even though Tombstone leaves it alone and MsgBytes
+// counts it as unsent. The two are not the same question: the tombstone pass
+// edits a transcript the reader scrolls back to, where a stub buys no context,
+// while the judge is shown the block's own content — and a chain of thought is
+// often what says whether the turn after it was a decision or a dead end.
 func renderBlock(conv []nacelle.Message, start, end int) string {
 	var b strings.Builder
 	for i := start; i < end; i++ {
@@ -127,5 +134,5 @@ func renderBlock(conv []nacelle.Message, start, end int) string {
 			b.WriteByte('\n')
 		}
 	}
-	return b.String()
+	return clampText(b.String(), maxBlockText)
 }

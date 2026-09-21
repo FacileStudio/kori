@@ -71,32 +71,28 @@ func (m *Model) beginCompaction(ctx context.Context) tea.Cmd {
 	resultsChan := make(chan compactOutcome)
 	m.run.compactChan = resultsChan
 
-	go runCompaction(m, ctx, resultsChan, plan, m.policy.Tier(m.size))
+	go runCompaction(ctx, resultsChan, m.pass(plan, m.policy.Tier(m.size)))
 	return tea.Batch(waitForCompact(resultsChan), m.spin.Tick)
 }
 
 // runCompaction is the pass's own goroutine. It asks the backend for a summary
 // of the raw history zone and sends back just that result; it never mutates the
-// conversation. Reading it here is safe because nothing else touches the
-// conversation while a pass is in flight: the pre-send path leaves the run busy,
-// and on the idle and /compact paths ask queues every line while m.compacting is
-// set, so only the update loop could mutate the slice — and it is waiting on
-// this pass.
+// conversation, and it never touches the Model at all — everything it reads
+// arrives on the compactPass the update loop snapshotted for it.
 //
 // The summarizer runs inside a deadline set by summarizeInto, so a wedged
 // backend cannot hold the session at "compacting" forever: whichever way the
 // stream winds down once the deadline fires, the outcome still arrives and
 // the pass falls back to the mask.
-func runCompaction(m *Model, ctx context.Context, results chan compactOutcome, plan []compaction.Span, tier compaction.Tier) {
+func runCompaction(ctx context.Context, results chan compactOutcome, pass compactPass) {
 	defer close(results)
-	conv := m.conversation
-	outcome := compactOutcome{before: m.size, plan: plan, tier: tier, judged: m.judge != nil}
+	outcome := compactOutcome{before: pass.size, plan: pass.plan, tier: pass.tier, judged: pass.judge != nil}
 
 	judgeCtx, cancel := context.WithTimeout(ctx, compactJudgeTimeout)
-	fold, err := compaction.Classify(judgeCtx, conv, plan, compaction.JudgeRequest{
-		Goal:  compaction.GoalText(conv, plan),
-		Force: tier == compaction.Hard,
-	}, m.judge)
+	fold, err := compaction.Classify(judgeCtx, pass.conv, pass.plan, compaction.JudgeRequest{
+		Goal:  compaction.GoalText(pass.conv, pass.plan),
+		Force: pass.tier == compaction.Hard,
+	}, pass.judge)
 	cancel()
 	if err != nil {
 		outcome.err, outcome.stage = err, "judge"
@@ -105,14 +101,12 @@ func runCompaction(m *Model, ctx context.Context, results chan compactOutcome, p
 	}
 	outcome.fold = fold
 
-	if len(fold.Ledger) > 0 {
-		if agent := m.summarizer(); agent != nil {
-			summary, err := summarizeInto(ctx, agent, compactPrompt(conv, plan, fold))
-			if err != nil {
-				outcome.err, outcome.stage = err, "summary"
-			} else {
-				outcome.summary = summary
-			}
+	if len(fold.Ledger) > 0 && pass.agent != nil {
+		summary, err := summarizeInto(ctx, pass.agent, compactPrompt(pass.conv, pass.plan, fold))
+		if err != nil {
+			outcome.err, outcome.stage = err, "summary"
+		} else {
+			outcome.summary = summary
 		}
 	}
 

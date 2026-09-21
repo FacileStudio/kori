@@ -1,5 +1,5 @@
-// Package tui — the explicit triggers of context compaction: the automatic
-// post-turn check and the manual /compact command.
+// Package tui — the triggers of context compaction: the pre-send guard, the
+// automatic post-turn check and the manual /compact command.
 package tui
 
 import (
@@ -9,6 +9,52 @@ import (
 
 	"github.com/FacileStudio/kori/internal/compaction"
 )
+
+// compactBeforeSend is the pre-flight half of the trigger: when the context the
+// next turn is about to inherit is already far enough over the tier trigger that
+// the turn would land past the ceiling, compact first and hold the send until
+// the pass settles. It is the guard that turns the threshold into prevention —
+// without it a single heavy turn is absorbed rather than avoided.
+//
+// It must not depend on the backend being able to count tokens. Counting is the
+// accurate measure when it is offered, because it sees the conversation exactly
+// as it will be sent, but the OpenAI-compatible runner reports token counting as
+// Unsupported — and a guard that only runs when counting succeeds is a guard
+// that silently does nothing on that backend. Counting is therefore the
+// preferred measure, not the required one: when it is unavailable the last size
+// the provider reported in a usage event stands in. That is the same source the
+// post-turn trigger reads, so the two automatic paths agree on what the
+// conversation costs instead of one of them going quiet.
+func (m *Model) compactBeforeSend(ctx context.Context) tea.Cmd {
+	if m.compactAt <= 0 || m.thrashed() {
+		return nil
+	}
+	size, ok := m.sendSize(ctx)
+	if !ok || size <= m.policy.Trigger()+compactSlack {
+		return nil
+	}
+	m.size = size
+	return m.compactTiered(ctx)
+}
+
+// sendSize reports what the next send would carry. It prefers a real count from
+// the backend and falls back to the last usage-reported size. ok is false only
+// when neither is available, which is the one case where compaction has nothing
+// to measure against and so must not fire on a guess — and a count of zero is
+// read as no answer rather than a measure, because a non-empty conversation
+// never costs nothing: zero from a backend means it counted nothing, not that
+// there is nothing to count.
+func (m *Model) sendSize(ctx context.Context) (int64, bool) {
+	if m.agent != nil {
+		if count, err := m.agent.CountTokens(ctx, m.conversation); err == nil && count > 0 {
+			return count, true
+		}
+	}
+	if m.size > 0 {
+		return m.size, true
+	}
+	return 0, false
+}
 
 // shouldCompactIdle is the decision behind maybeCompactIdle, split out so a
 // test can drive it without running a pass. It asks the questions that have

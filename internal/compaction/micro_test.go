@@ -2,6 +2,7 @@ package compaction
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -55,6 +56,57 @@ func TestTombstoneIsIdempotent(t *testing.T) {
 
 	if second != (MicroStats{}) {
 		t.Errorf("second pass = %+v, want no stub and no debit", second)
+	}
+}
+
+// The placeholder is what the model reads in place of the result, so it has to
+// read as one balanced sentence that says what happened and what to do about it,
+// not as a truncated result. It keeps the call's id and name, which is what keeps
+// the pairing readable.
+func TestTombstonePlaceholderSaysWhatItReplaced(t *testing.T) {
+	conv := historySample()
+
+	Tombstone(conv, splitSpans())
+
+	result := conv[2].Parts[0].(nacelle.ToolResult)
+	want := "[dropped 40000 bytes] Re-run the tool if the detail matters."
+	if result.Result != want {
+		t.Errorf("placeholder = %q, want %q", result.Result, want)
+	}
+	if result.ID != "c1" || result.Name != "read" {
+		t.Errorf("placeholder = %+v, want the call's id and name kept", result)
+	}
+}
+
+// DroppableBytes is the pre-flight a caller runs before it pays for a cache
+// invalidation: it reports exactly what Tombstone would take out, and takes
+// nothing out itself.
+func TestDroppableBytesMeasuresWithoutChanging(t *testing.T) {
+	conv := historySample()
+	before := historySample()
+
+	if got := DroppableBytes(conv, splitSpans()); got != 40_000 {
+		t.Errorf("DroppableBytes = %d, want the one oversized history result", got)
+	}
+	if !reflect.DeepEqual(conv, before) {
+		t.Error("DroppableBytes changed the conversation, want a measurement only")
+	}
+
+	stats := Tombstone(conv, splitSpans())
+	if stats.Bytes != 40_000 {
+		t.Errorf("Tombstone freed %d bytes, want the 40000 DroppableBytes promised", stats.Bytes)
+	}
+	if got := DroppableBytes(conv, splitSpans()); got != 0 {
+		t.Errorf("DroppableBytes after the pass = %d, want nothing left to drop", got)
+	}
+}
+
+// MinCleared is the floor under a whole pass and MinResult the floor under one
+// result, so the two are different questions and the pass floor has to be the
+// larger one or it could never gate anything.
+func TestMinClearedIsAboveASingleResult(t *testing.T) {
+	if MinCleared <= MinResult {
+		t.Errorf("MinCleared = %d, want it above the %d one result needs", MinCleared, MinResult)
 	}
 }
 

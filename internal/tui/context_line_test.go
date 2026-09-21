@@ -17,6 +17,15 @@ func (stubJudge) Classify(context.Context, string, []compaction.Block) ([]compac
 	return nil, nil
 }
 
+// reportingJudge is a stubJudge that also reports an answer, the shape a judge
+// backed by a versioned remote service has.
+type reportingJudge struct {
+	stubJudge
+	answer compaction.Answer
+}
+
+func (j reportingJudge) LastAnswer() compaction.Answer { return j.answer }
+
 // The footer names the context against the window it is measured on, with the
 // ratio and the tier the size has reached, so a reader can see the ladder
 // coming rather than only learning about it from the compaction report.
@@ -105,5 +114,40 @@ func TestStatusNamesAnOptedInJudge(t *testing.T) {
 
 	if got := strings.Join(m.unprinted, "\n"); !strings.Contains(got, "judge · on") {
 		t.Errorf("status = %q, want the judge named while it is on", got)
+	}
+}
+
+// The version that answered is named, because the configured model defaults to
+// the vendor's drifting alias and the thresholds are tuned against one build
+// behind it. Without this line there is nothing to pin the setting to.
+func TestStatusNamesTheModelThatAnsweredAndWhatItBilled(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.size = 150_000
+	m.judge = reportingJudge{answer: compaction.Answer{Model: "jev-1.13.0", InputTokens: 12_400}}
+
+	m.statusCmd()
+
+	got := strings.Join(m.unprinted, "\n")
+	for _, want := range []string{"judge · on", "judge model · jev-1.13.0", "12.4k tokens in"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("status missing %q in %q", want, got)
+		}
+	}
+}
+
+// A judge that has not answered yet — or one that decides locally and implements
+// no reporter — adds no model line, so the surface never names a version it never
+// saw.
+func TestStatusSaysNothingAboutTheJudgeModelBeforeAnAnswer(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.size = 150_000
+	m.judge = reportingJudge{}
+
+	m.statusCmd()
+
+	if got := strings.Join(m.unprinted, "\n"); strings.Contains(got, "judge model") {
+		t.Errorf("status = %q, want no model line before the judge has answered", got)
 	}
 }

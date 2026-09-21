@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- feat(compaction): a labeled-example calibration harness for the judge — one batched call over a corpus of labeled history blocks, re-scored across a sweep of prune thresholds, printing where the model's confidence and its accuracy part company (`TYPESAFE_API_KEY=... go test ./internal/compaction -run JudgeCalibration -v`; skipped without a key, so CI never pays for it)
+
+### Changed
+- feat(compaction): `limits.compaction.judge.prune_threshold` defaults to `0.75`, not `0.85`. The old number had never been measured against the model; the harness shows it recovering 17% of the blocks a careful operator would drop where 0.75 recovers 50%, at the same zero false prunes, and lifts agreement with the labels from 65% to 76%
+
+### Fixed
+- fix(compaction): the pre-send guard did nothing at all on a backend that cannot count tokens. It read `if count, err := CountTokens(...); err == nil && count > trigger` — and the OpenAI-compatible runner answers with `*Unsupported`, so the error branch skipped the whole check while the post-turn trigger kept running and compaction still looked healthy. A conversation already past the ceiling was sent anyway and the overshoot was absorbed into the next turn instead of prevented; the guard now falls back to the last usage-reported size, so the two automatic triggers agree on what the context costs (`internal/tui`)
+- fix(compaction): a usage event reporting no input tokens erased `m.size`, the only measure both automatic triggers read, silently standing compaction down until a real usage arrived — a backend that reports usage on some events but not others was enough to switch it off. A zero is now read as "unknown" and the last real reading kept (`internal/tui`)
+- fix(compaction): the judge's choice questions were rejected by the live endpoint — TypeSafe takes a choice's `criteria` as an object keyed by option, not a list, so every classification was a 422 and fell back to the mask. The judge had never successfully classified anything, and no test could see it because they all talk to a stub (`internal/compaction`)
+- fix(compaction): every question in a batch was identical, so the model had no way to tell which block it was being asked about and answered the same way for all of them; each question now names its own block in its instructions (`internal/compaction`)
+- fix(compaction): the criteria described a dead end under both `ledger` and `prune`, leaving the model no confident answer — the distribution flattened under the confidence floor and no verdict was ever acted on. The three descriptions are now disjoint, and confidence rises from 0.2–0.3 to 0.8–0.9
+- fix(compaction): the soft tier tombstoned however little it found, rewriting the prompt-cache prefix for a few hundred bytes; it now stands down below `MinCleared`, and `DroppableBytes` is the pre-flight a caller measures a pass with before paying for the cache it invalidates
+- fix(compaction): the judge's request was bounded in block count but not in bytes, so a handful of large tool results produced a multi-hundred-KB call to a small decision model; each block is now cut to `maxBlockText` and the batch to `defaultMaxState`, folding the oldest blocks that do not fit rather than asking about none of them
+- fix(compaction): a tombstoned result's placeholder never closed its bracket — `[dropped 40000 bytes. Re-run the tool…` where the documented shape is `[dropped N bytes]`
+- fix(compaction): the versioned model id that answered was decoded and thrown away, and the setting defaults to the drifting `jev-latest` alias; `/status` now names the model that answered and what it billed, so the setting can be pinned to the build the thresholds were tuned against (`internal/compaction`, `internal/tui`)
+- refactor(compaction): a pass runs on a snapshot taken on the update loop instead of reading the model off its own goroutine, so its read safety is local rather than an invariant spread across every command that might mutate the session mid-pass (`internal/tui`)
+
+### Removed
+- chore(compaction): the dead `alignedEvictCut` wrapper, whose only caller in the repository was its own test, and the superseded `compaction-upgrade.md` spec at the repository root
+
 ## [0.71.0] - 2026-09-21
 
 ### Added

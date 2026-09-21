@@ -1,9 +1,11 @@
 package tui
 
-// Tests for the post-turn compaction trigger: shouldCompactIdle decides, and
-// maybeCompactIdle starts a pass. The decision logic is the testable seam — a
-// pass is an async goroutine — so these drive the decision across the guards
-// that keep it from racing a run or thrashing.
+// Tests for the automatic and manual compaction triggers: shouldCompactIdle
+// decides the post-turn one and maybeCompactIdle starts its pass, compactCmd is
+// the manual /compact, and the send path compacts before a run it cannot afford.
+// The decision logic is the testable seam — a pass is an async goroutine — so
+// these drive the decision across the guards that keep it from racing a run or
+// thrashing.
 
 import (
 	"strings"
@@ -126,6 +128,32 @@ func TestCompactCmdRefusesWhenTheConversationIsTooShort(t *testing.T) {
 	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "nothing to compact") {
 		t.Errorf("said = %q, want the too-short notice", said)
 	}
+}
+
+// The pre-send defect at its original site. The check lived in send's own body,
+// written so that an uncountable backend read as "nothing to do" — so this drives
+// send rather than the guard it was extracted into: on the old code the
+// conversation was sent over the ceiling and the overshoot absorbed into the
+// following turn.
+func TestSendCompactsFirstOnABackendThatCannotCount(t *testing.T) {
+	m := sized()
+	m.agent = agentOver(t, blind{})
+	m.conversation = heavyHistory()
+	m.size = 130_000
+
+	cmd := m.send("carry on")
+	defer m.run.cancel()
+
+	if cmd == nil {
+		t.Fatal("send = nil, want the pass that holds it")
+	}
+	if !m.compacting {
+		t.Error("compacting = false, want the send to have compacted before starting a run")
+	}
+	if m.run.results != nil {
+		t.Error("a run was started against a conversation the pass was still replacing")
+	}
+	drain(t, m)
 }
 
 // A message typed while a post-turn pass is in flight must queue, not dispatch

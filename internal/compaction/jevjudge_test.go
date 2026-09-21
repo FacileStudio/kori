@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -131,5 +132,112 @@ func TestJevJudgeFallsBackToTheDefaultThreshold(t *testing.T) {
 func TestNewJevJudgeIsNilWhenDisabled(t *testing.T) {
 	if judge := NewJevJudge(JudgeConfig{}); judge != nil {
 		t.Errorf("judge = %v, want nil while the setting is off", judge)
+	}
+}
+
+// The count cap is not the only bound on a batch: a block carries a whole tool
+// result, so the request is capped in bytes too. The oldest blocks that do not
+// fit are folded — the summarizer can compress what the judge never saw.
+func TestJevJudgeFoldsWhatItCannotFitInTheStateBudget(t *testing.T) {
+	var asked map[string]json.RawMessage
+	var requests atomic.Int32
+	server := answerServer(t, `{"answers":{}}`, &asked, &requests)
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, MaxBlocks: 64, PruneThreshold: 0.85})
+	blocks := []Block{
+		{Key: "old", Text: strings.Repeat("x", defaultMaxState/2)},
+		{Key: "mid", Text: strings.Repeat("x", defaultMaxState/2)},
+		{Key: "new", Text: "a small recent turn"},
+	}
+
+	verdicts, err := judge.Classify(t.Context(), "the task", blocks)
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if verdicts[0].Decision != Ledger {
+		t.Errorf("overflow verdict = %v, want the block that overran the budget folded", verdicts[0].Decision)
+	}
+	if len(asked) != 2 {
+		t.Errorf("questions = %d, want the two blocks the state budget fits", len(asked))
+	}
+}
+
+// A single block heavier than the whole budget is still asked about. Folding it
+// would hand the summarizer a turn the judge never saw while the call asked
+// nothing at all — the one way a byte cap could silently disable the judge.
+func TestJevJudgeAlwaysAsksAboutTheNewestBlock(t *testing.T) {
+	var asked map[string]json.RawMessage
+	var requests atomic.Int32
+	server := answerServer(t, `{"answers":{}}`, &asked, &requests)
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, PruneThreshold: 0.85})
+	blocks := []Block{{Key: "huge", Text: strings.Repeat("x", defaultMaxState*2)}}
+
+	verdicts, err := judge.Classify(t.Context(), "the task", blocks)
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if len(asked) != 1 {
+		t.Errorf("questions = %d, want the newest block asked about whatever it weighs", len(asked))
+	}
+	if verdicts[0].Decision != Keep {
+		t.Errorf("verdict = %v, want the answer for the one block that was asked", verdicts[0].Decision)
+	}
+}
+
+// The versioned id and bill of the model that answered are kept. The configured
+// model defaults to the vendor's drifting alias and the thresholds are tuned
+// against one build behind it, so the id has to be readable before it can be
+// pinned.
+func TestJevJudgeReportsTheModelThatAnswered(t *testing.T) {
+	var asked map[string]json.RawMessage
+	var requests atomic.Int32
+	server := answerServer(t, `{"model":"jev-1.13.0","answers":{},"usage":{"input_tokens":1200,"output_tokens":0}}`, &asked, &requests)
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, PruneThreshold: 0.85})
+	conv := judgeSample()
+
+	if _, err := judge.Classify(t.Context(), "the task", Blocks(conv, judgePlan(conv))); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+
+	reporter, ok := judge.(Reporter)
+	if !ok {
+		t.Fatal("the judge does not report what answered it, so nothing can pin the model")
+	}
+	if answer := reporter.LastAnswer(); answer.Model != "jev-1.13.0" || answer.InputTokens != 1200 {
+		t.Errorf("LastAnswer = %+v, want the version that answered and what it billed", answer)
+	}
+}
+
+// A failed call leaves the last answer standing rather than blanking it: the
+// version a reader is about to pin should not vanish because one pass hit a 429.
+func TestJevJudgeKeepsTheLastAnswerAcrossAFailure(t *testing.T) {
+	fail := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fail {
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+			return
+		}
+		if _, err := w.Write([]byte(`{"model":"jev-1.13.0","answers":{},"usage":{"input_tokens":1200}}`)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, PruneThreshold: 0.85})
+	conv := judgeSample()
+	blocks := Blocks(conv, judgePlan(conv))
+	if _, err := judge.Classify(t.Context(), "the task", blocks); err != nil {
+		t.Fatalf("first Classify: %v", err)
+	}
+
+	fail = true
+	if _, err := judge.Classify(t.Context(), "the task", blocks); err == nil {
+		t.Fatal("second Classify: nil error, want the rate limit reported")
+	}
+
+	if answer := judge.(Reporter).LastAnswer(); answer.Model != "jev-1.13.0" {
+		t.Errorf("LastAnswer = %+v after a failed pass, want the previous version kept", answer)
 	}
 }

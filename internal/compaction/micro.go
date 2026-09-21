@@ -1,7 +1,6 @@
 package compaction
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/FacileStudio/nacelle"
@@ -13,6 +12,14 @@ const (
 	// usually load-bearing: an id, a path, a diff header.
 	MinResult = 1024
 
+	// MinCleared is the least a whole tombstone pass must free before it is worth
+	// running at all. Clearing a result rewrites the messages after it, which is
+	// exactly the prefix the provider had already cached, so a pass that trades
+	// that re-write for a few hundred tokens costs more than it saves. MinResult
+	// is the floor under one result; this is the floor under the pass, and eight
+	// results' worth is the point where the freed context pays for the cache.
+	MinCleared = 8 * MinResult
+
 	// DroppedNotice opens the text a tombstoned result is replaced with. The
 	// pass skips a result already opening with it, so a second pass never pays a
 	// placeholder twice or counts it as savings.
@@ -23,14 +30,13 @@ const (
 	// to dominate a request that carries dozens of blocks. callText is the only
 	// reader.
 	maxBlockInput = 200
-)
 
-// MicroStats is what a tombstone pass did: how many tool results it replaced,
-// and the bytes it took out of the conversation.
-type MicroStats struct {
-	Results int
-	Bytes   int
-}
+	// maxBlockText bounds one history block's rendered text, so a block holding a
+	// whole tool result cannot dominate the request it is one of. The block is what
+	// the judge decides on, so the head of the result is kept and the tail cut with
+	// a marker rather than the block being dropped.
+	maxBlockText = 16 * 1024
+)
 
 // EstTokens is the bytes-to-tokens estimate the whole package uses: four bytes
 // per token is the rough English rate, and it is only ever compared against
@@ -83,60 +89,6 @@ func measure(conv, out []nacelle.Message, summarized int) Stats {
 	}
 }
 
-// Tombstone replaces oversized tool results in the given spans with
-// placeholders, keeping the call/result pairing intact. It is deterministic,
-// needs no backend, and is idempotent: a stub already in place is never
-// re-stubbed or counted again. It mutates conv in place, which is safe because
-// the caller owns the conversation on its own thread.
-//
-// Tool results are the whole of it, because they are the only history weight
-// that reaches the backend. Reasoning is deliberately left alone: it is recorded
-// and displayed but never sent back, since every backend drops it when it builds
-// a request (nacelle's anthropic blocksOf and the shared oairunner sift both
-// switch on Text, ToolCall and ToolResult and nothing else — Anthropic accepts a
-// thinking block only with the signature it was issued with, and the stream
-// never carries one). A tombstone on it would therefore free no context at all
-// while editing a transcript the reader can still scroll back to, and the pass
-// would report the savings as if it had bought something.
-func Tombstone(conv []nacelle.Message, spans []Span) MicroStats {
-	var stats MicroStats
-	for _, span := range spans {
-		if span.Zone != ZoneHistory {
-			continue
-		}
-		for i := span.Start; i < span.End && i < len(conv); i++ {
-			partial := tombstoneResults(&conv[i])
-			stats.Results += partial.Results
-			stats.Bytes += partial.Bytes
-		}
-	}
-	return stats
-}
-
-// tombstoneResults replaces the oversized results in one message. A result that
-// already opens with the notice is left alone, which is what makes a second pass
-// free. A result is a user turn's part, and scanning every message rather than
-// only the user's is deliberate: the pairing is a property of the ids, not of the
-// role, so nothing here has to trust the role to find one.
-func tombstoneResults(msg *nacelle.Message) MicroStats {
-	var stats MicroStats
-	for i, part := range msg.Parts {
-		result, ok := part.(nacelle.ToolResult)
-		if !ok || len(result.Result) < MinResult || strings.HasPrefix(result.Result, DroppedNotice) {
-			continue
-		}
-		stats.Bytes += len(result.Result)
-		msg.Parts[i] = nacelle.ToolResult{
-			ID:     result.ID,
-			Name:   result.Name,
-			Failed: result.Failed,
-			Result: fmt.Sprintf("%s%d bytes%s", DroppedNotice, len(result.Result), ". Re-run the tool if the detail matters."),
-		}
-		stats.Results++
-	}
-	return stats
-}
-
 // callText is one tool call as the text a judge is shown: the tool's name and
 // its own arguments, abbreviated to at most n bytes. The arguments are the point
 // — a block judged on "tool call read" alone cannot tell two reads of different
@@ -145,12 +97,19 @@ func tombstoneResults(msg *nacelle.Message) MicroStats {
 // this text lands in a JSON body.
 func callText(call nacelle.ToolCall, n int) string {
 	args := strings.TrimSpace(string(call.Input))
-	switch {
-	case args == "":
+	if args == "" {
 		return call.Name
-	case len(args) <= n:
-		return call.Name + " " + args
-	default:
-		return call.Name + " " + strings.ToValidUTF8(args[:n], "") + "…"
 	}
+	return call.Name + " " + clampText(args, n)
+}
+
+// clampText cuts text to at most n bytes and marks the cut with an ellipsis, so a
+// reader can tell an abbreviated block from a complete one. A cut through a
+// multi-byte rune is trimmed rather than emitted broken: this text lands in a
+// JSON body, both as a judge's block and as a tool call's arguments.
+func clampText(text string, n int) string {
+	if n <= 0 || len(text) <= n {
+		return text
+	}
+	return strings.ToValidUTF8(text[:n], "") + "…"
 }

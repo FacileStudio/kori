@@ -1,0 +1,91 @@
+{
+  "note": "Labeled history blocks for the judge calibration harness (calibration_test.go). Each case is one atomic history block with the verdict a careful operator would give it, and the labels are the corpus's whole value: extend this file with blocks from real traces, keep the labels honest, and the two thresholds stop being guesses. Add a case rather than editing one when you disagree with a label, so the disagreement stays visible. Labels are keep (live state the agent is still working from), ledger (a decision, constraint, artifact or dead end worth keeping compressed) and prune (superseded output with no lasting value).",
+  "goal": "Add ratio-based context compaction to kori: a soft tier that tombstones old tool results, a mid tier that classifies each history block, and a state ledger the fold writes into. Package layout, the filet ceilings and the invariant list are fixed.",
+  "cases": [
+    {
+      "id": "superseded-listing",
+      "label": "prune",
+      "text": "tool call list_directory {\"path\":\"internal/compaction\"}\nabsorb_test.go apply.go apply_test.go blocks.go blocks_test.go helpers_test.go\nassistant: I can see the package has split into one file per concern."
+    },
+    {
+      "id": "superseded-read",
+      "label": "prune",
+      "text": "tool call read_file {\"path\":\"internal/tui/compact_mask.go\"}\npackage tui\n\nimport \"github.com/FacileStudio/kori/internal/compaction\"\n\nconst (\n\tcompactMinResult = compaction.MinResult\n)\n... 84 more lines ...\nassistant: The mask aliases the package constants."
+    },
+    {
+      "id": "failed-command-typo",
+      "label": "prune",
+      "text": "tool call run_command {\"command\":\"go test ./internal/compaction/... -race -count=1\"}\nFAIL github.com/FacileStudio/kori/internal/compaction [build failed]\n# github.com/FacileStudio/kori/internal/compaction\n./micro.go:133:17: undefined: DroppedNotic\nassistant: Typo. Fixing and re-running."
+    },
+    {
+      "id": "duplicate-build-check",
+      "label": "prune",
+      "text": "tool call run_command {\"command\":\"go build ./...\"}\n(no output)\nassistant: Still clean."
+    },
+    {
+      "id": "abandoned-approach",
+      "label": "ledger",
+      "text": "assistant: I will add a separate CompactAt field to SessionConfig and leave Policy alone.\ntool call edit_file {\"path\":\"internal/tui/types.go\"}\n+ CompactAt int64\nassistant: That pushes SessionConfig to 17 fields and filet caps structFields at 16. Reverting; Policy.Ceiling already carries the resolved absolute."
+    },
+    {
+      "id": "dead-end-no-value",
+      "label": "prune",
+      "text": "tool call search_content {\"pattern\":\"func trimThinking\"}\nNo matches found.\nassistant: Nothing there, the tombstone only ever touched tool results."
+    },
+    {
+      "id": "formatting-fix",
+      "label": "prune",
+      "text": "tool call run_command {\"command\":\"gofmt -l internal/compaction\"}\ninternal/compaction/micro.go\nassistant: gofmt it."
+    },
+    {
+      "id": "decision-package-layout",
+      "label": "ledger",
+      "text": "assistant: Policy goes in a new internal/compaction package and the network client in internal/jev. Logic must not grow in internal/tui, because filet caps those files at 250 lines and 8 functions, and a compaction policy buried in the TUI is what made the old single-threshold design hard to test."
+    },
+    {
+      "id": "constraint-min-result",
+      "label": "ledger",
+      "text": "assistant: MinResult is 1024 bytes on purpose. Under that the placeholder costs nearly what the result did, and a result that small is usually load-bearing — an id, a path, a diff header."
+    },
+    {
+      "id": "artifact-apply-go",
+      "label": "ledger",
+      "text": "tool call write_file {\"path\":\"internal/compaction/apply.go\"}\nCreated internal/compaction/apply.go (176 lines).\nassistant: Apply is the deterministic half of a pass: anchor verbatim, one ledger message, the surviving history blocks, the active window untouched."
+    },
+    {
+      "id": "interface-contract-judge",
+      "label": "ledger",
+      "text": "assistant: The Judge interface returns one Verdict per block, in the order the blocks were given. A missing or short answer defaults to Keep, so a provider that answers about fewer blocks than it was asked can never cause a prune."
+    },
+    {
+      "id": "invariant-pairing",
+      "label": "ledger",
+      "text": "assistant: Invariant I1: every ToolResult in the outgoing conversation is preceded by the assistant message carrying the matching ToolCall. Prune removes whole atomic blocks only, which is what keeps that true."
+    },
+    {
+      "id": "privacy-decision",
+      "label": "ledger",
+      "text": "assistant: The judge stays off by default. Enabling it sends conversation history — source code, possibly secrets — to a third party, so it is an explicit opt-in and never a shipped default."
+    },
+    {
+      "id": "unresolved-failure",
+      "label": "keep",
+      "text": "tool call run_command {\"command\":\"go test ./internal/compaction/... -run TestApplyNeverGrowsTheConversation\"}\n--- FAIL: TestApplyNeverGrowsTheConversation (0.00s)\n    apply_test.go:96: stats = {Before:3 After:3206 Refused:false}, want a refused pass of true\nassistant: I am looking at this now — Apply installs a rebuild it never weighed against the conversation it replaces."
+    },
+    {
+      "id": "file-under-edit",
+      "label": "keep",
+      "text": "tool call read_file {\"path\":\"internal/compaction/policy.go\"}\nfunc activeStart(conv []nacelle.Message, n, anchor, keep int) int {\n\twant := clamp(n-keep, anchor, n)\n\tif want <= anchor {\n\t\treturn want\n\t}\n\tcut := max(AlignedCut(conv, want), anchor)\n\tif cut < want && IsLedger(conv[cut]) {\n\t\treturn want\n\t}\n\treturn cut\n}\nassistant: This is the function I am editing right now."
+    },
+    {
+      "id": "active-diagnosis",
+      "label": "keep",
+      "text": "assistant: The active boundary is being pulled back onto the ledger, which swallows it. The ledger is not dropped with the cut and it carries the very call the result answers, so the result should open the window instead. I have not fixed this yet."
+    },
+    {
+      "id": "open-question-pending",
+      "label": "keep",
+      "text": "assistant: Still unresolved: whether Reasoning should be tombstoned at all. It is recorded and displayed but every backend drops it when it builds a request, so stubbing it would free nothing while editing a transcript the reader can still scroll back to. I need to confirm that in nacelle before deciding."
+    }
+  ]
+}

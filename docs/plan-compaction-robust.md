@@ -43,10 +43,12 @@ plan was written against is gone.
 | `internal/compaction/blocks.go` | `Block`, `Blocks`, atomic pairing (`blockEnd`/`opensToolPair`/`foldOrphanResults`), `renderBlock` |
 | `internal/compaction/pair.go` | `AlignedCut`, `Covers`, `toolResultIDs`, `toolCallIDs` |
 | `internal/compaction/ledger.go` | `Sentinel`, `IsLedger`, `Body`, `BuildLedger`, `ExtraParts`, `fold` |
-| `internal/compaction/micro.go` | `EstTokens`, `Bytes`/`MsgBytes`/`PartBytes`, `measure`, `Tombstone`, `MicroStats`, `MinResult`, `DroppedNotice`, `abbreviate` |
+| `internal/compaction/micro.go` | the package's numbers (`MinResult`/`MinCleared`, `DroppedNotice`, `maxBlockInput`/`maxBlockText`), `EstTokens`, `Bytes`/`MsgBytes`/`PartBytes`, `measure`, `callText`/`clampText` |
+| `internal/compaction/tombstone.go` | `MicroStats`, `droppable`, `DroppableBytes`/`spanDroppableBytes`, `Tombstone`, `tombstoneResults` |
 | `internal/compaction/macro.go` | `Fold`, `Classify`, `JudgeRequest`, `GoalText`, `foldVerdicts` |
-| `internal/compaction/judge.go` | `Decision`, `Verdict`, `Judge`, `JudgeConfig`, `ConfidenceFloor`, `decide`, `keepAll` |
-| `internal/compaction/jevjudge.go` | `NewJevJudge` (the System One adapter), `state`, `questions`, `choiceQuestion` |
+| `internal/compaction/judge.go` | `Decision`, `Verdict`, `Judge`, `Reporter`/`Answer`, `JudgeConfig`, `ConfidenceFloor`, `decide`, `keepAll` |
+| `internal/compaction/jevjudge.go` | `NewJevJudge` (the System One adapter), `overflow`, `record`/`LastAnswer`, `defaultMaxState` |
+| `internal/compaction/jevquestion.go` | `state`, `questions`, `choiceQuestion` |
 | `internal/compaction/apply.go` | `Stats`, `Apply`, `ledgerCarry`, `following`, `ledgerRole`, `alternateFrom`, `measure` |
 | `internal/jev/` | the HTTP client (`client.go`), wire types (`types.go`), typed errors (`errors.go`) |
 | `internal/agent/compact.go` | `Budget`, `ResolveBudget` (replaces `resolveCompactAt` and its `==100000` hack) |
@@ -57,16 +59,23 @@ plan was written against is gone.
 | `internal/tui/compact_mask.go` | the package aliases and `maskHistory`/`applyMaskFallback`, `compactSlack=20000` |
 | `internal/tui/compact_summary.go` | `compacted`, `compactOutcome`, `compactReport`, `compactPrompt`, `compactSystem`/`compactAsk`, `summarizeInto`, `compactTimeout=120s`, `compactJudgeTimeout=30s` |
 | `internal/tui/compact_idle.go` | `shouldCompactIdle`, `maybeCompactIdle`, `compactCmd` (`/compact`) |
-| `internal/tui/compact_pair.go` | `alignedEvictCut` — the one-line delegate to `compaction.AlignedCut` |
+| `internal/tui/compact_pass.go` | `compactPass` and `Model.pass` — the snapshot one pass goroutine runs on |
 | `internal/tui/account.go` | the `account` struct (`size`/`trimmed`/`compactBegan`) and `sized` |
-| `internal/tui/context_line.go` | `contextLoad` and `Model.compactionLines` — the footer and `/status` |
+| `internal/tui/context_line.go` | `contextLoad`, `Model.compactionLines`, `judgeModelLine`, `lastAnswer` — the footer and `/status` |
 | `internal/tui/types.go` | `policy`, `judge`, `compacting`, `compactAt`, `last`, `thrashCount` on `transcript` |
+| `internal/compaction/calibration_test.go` | the opt-in calibration harness: the corpus loader and the threshold sweep |
+| `internal/compaction/calibration_{score,report}_test.go` | classification, scoring and the report the harness prints |
+| `internal/compaction/testdata/judge_labels.json` | the labeled corpus — the file a human reviews and extends |
 | tests | `internal/compaction/*_test.go`, `internal/jev/client_test.go`, `internal/tui/compact*_test.go`, `internal/tui/context_line_test.go`, `internal/agent/compact_test.go`, `internal/settings/compaction_test.go` |
 
 ### 1.2 The three triggers, as wired today
 
-- **Pre-send** — `internal/tui/run.go` (`send`): `m.agent.CountTokens(ctx, m.conversation)`; if
-  `count > m.policy.Trigger()+compactSlack` and not thrashed, `m.compactTiered(ctx)` runs.
+- **Pre-send** — `internal/tui/compact_idle.go` (`compactBeforeSend`, called from `send` in
+  `run.go`): the measure is `m.agent.CountTokens(ctx, m.conversation)` when the backend offers one
+  and the last usage-reported `m.size` when it does not; if
+  `size > m.policy.Trigger()+compactSlack` and not thrashed, `m.compactTiered(ctx)` runs. The
+  fallback is load-bearing: `CountTokens` returns an `*Unsupported` error on the
+  OpenAI-compatible runner, and a guard written as `err == nil && …` silently does nothing there.
 - **Post-turn** — `internal/tui/settle.go` calls `maybeCompactIdle()`; it fires only when idle, no
   queued line, not compacting, not thrashed, and `m.compactAt > 0 && m.size > m.policy.Trigger()`.
 - **Manual** — `/compact` → `compactCmd` in `internal/tui/compact_idle.go` (registered in
@@ -85,7 +94,9 @@ and sends back a `compactOutcome`. `settleCompaction` installs it with `compacti
 anchor + rebuilt one-message ledger + surviving blocks + active window), falls back to the
 synchronous mask on any error, then runs `checkThrash`. `checkThrash` counts consecutive passes that
 fail to land under the threshold; at 3 the automatic triggers stand down. The `m.size` debit the
-mask applies is an estimate the next `sized()` overwrites (G6).
+mask applies is an estimate the next `sized()` overwrites (G6) — and a `sized()` that reports no
+input at all is ignored rather than written through, because `m.size` is the only measure both
+automatic triggers read and a zero would erase it.
 
 `compaction.Tombstone` replaces oversized history `ToolResult`s (≥ 1024 bytes) with
 `[dropped N bytes…]` stubs, keeping `ID`/`Name`; it is idempotent and mutates the conversation in
@@ -100,7 +111,9 @@ message — see the Phase 4 note.
   not called: the hard tier already lands at anchor+ledger+active through `Apply` (see the review
   follow-ups), so nothing is left for it to trim.
 - `Agent.CountTokens(ctx, conversation) (int64, error)` — real request size (system + tools + MCP +
-  messages). `nacelle/stream.go`.
+  messages). `nacelle/stream.go`. **Not every backend implements it**: `Capabilities.TokenCounting
+  == false` means the call returns an `*Unsupported` error rather than a guess, so anything
+  branching on it must have an answer for the error and not merely for the count.
 - `Agent.CompactConversation(...)` + `BeforeCompact`/`AfterCompact` hooks — binary-search trim to a
   budget, hooks fire with pre/post token counts as strings. `nacelle/stream.go`, `nacelle/hooks.go`.
 - `Backend.Capabilities().ContextWindow int64` — total window; **may be 0** for some backends.
@@ -120,7 +133,7 @@ message — see the Phase 4 note.
 | G2 | Micro-cleanup is neither continuous nor turn-aware — it runs only inside a triggered pass. | `compact_mask.go:81-105` |
 | G3 | The first user turn is evictable; the root task can be summarized away. | `compact.go:122-129`, `compact_summary.go:52-65` |
 | G4 | The summary replaces the middle; a second pass re-summarizes it → summary-of-summary decay. | `compact_summary.go:52-96` |
-| G5 | Pairing safety covers only the one computed cut; there is no per-block delete. | `compact_pair.go:11-30` |
+| G5 | Pairing safety covers only the one computed cut; there is no per-block delete. | `internal/tui/compact_pair.go:11-30`, since deleted — the cut now lives in `internal/compaction/pair.go` |
 | G6 | Threshold decisions mix authoritative `CountTokens` with a `bytes/4` debit, so local state drifts until the next `sized()`. | `run.go:126`, `compact_mask.go:99-104`, `compact.go:113-115` |
 | G7 | No semantic classification exists at all: whole-middle-or-nothing. | the whole `compact*` set |
 
@@ -259,7 +272,7 @@ type Judge struct {
 Add a field named `Compaction` (YAML key `compaction`) to the `Limits` struct.
 
 **Step 0.2 — defaults** (`internal/settings/defaults.go`): soft `0.65`, mid `0.80`, hard `0.90`,
-`keep_turns: 3`, `anchor_messages: 1`, `prune_threshold: 0.85`, `max_blocks_per_call: 64`, judge
+`keep_turns: 3`, `anchor_messages: 1`, `prune_threshold: 0.75`, `max_blocks_per_call: 64`, judge
 `enabled: false`. Leave `DefaultCompactAt` at 75 000 untouched.
 
 **Step 0.3 — precedence chain** (`merge.go`, `env.go`, `setters.go`, `flags.go`, `scaffold.go`):
@@ -580,6 +593,53 @@ I1–I7 hold as before, and two of these close holes *inside* them.
 
 `nacelle.Trim` remains unused, for the reason recorded in the first round.
 
+### Review follow-ups, third round (2026-09-21)
+
+A third review — this one asking whether the design matches published practice rather than whether
+its own invariants hold — found two things this plan had asserted and never checked. The calibration
+harness built to check them found a third within minutes of being pointed at the live endpoint, and
+a fourth once the judge started answering at all.
+
+1. **The judge had never worked.** TypeSafe takes a choice's `criteria` as an object keyed by option;
+   `choiceQuestion` sent a list of sentences. The endpoint answers 422, `InvalidRequestError` is
+   correctly non-retryable, and the pass fell back to the mask — so the whole judge, the one setting
+   that ships conversation history to a third party, had classified nothing since it shipped. Every
+   test passed because every test talks to a stub, and a stub accepts any shape. The criteria are a
+   map now, and `TestChoiceQuestionCriteriaEncodeAsAnObject` pins the *encoded* shape, which is the
+   assertion a stub cannot make on your behalf.
+2. **Every question was the same question.** A batch is one shared state and one question per block,
+   and the questions were byte-identical: nothing said which block a given question was about. The
+   model answered `keep` for all seventeen blocks at 0.9 confidence, which reads as a decisive verdict
+   over a whole history and is really the absence of one. Each question now names its block;
+   agreement with the labels went from 24% to 65%.
+3. **The criteria overlapped, so confidence collapsed.** "A dead end worth keeping in compressed
+   form" (ledger) and "a dead end with no lasting value" (prune) describe the same block — exactly
+   the ambiguity `ConfidenceFloor` exists to refuse. Confidences sat at 0.2–0.3, under the 0.6 floor,
+   so no verdict was ever acted on and the mid tier was decorative. Disjoint descriptions took them
+   to 0.8–0.9.
+4. **`prune_threshold` had never been measured.** With the judge answering, the sweep gives a curve:
+   0.85 recovers 17% of the prunable blocks a careful operator would drop, 0.75 recovers 50% at the
+   same zero false prunes, and agreement goes 65% → 76%. The default moves to 0.75 with the
+   measurement in the constant's own comment. `ConfidenceFloor` stays at 0.6 on the bands' evidence:
+   every verdict at or above it was right, and every one below it was wrong.
+5. **The soft tier had no `clear_at_least`.** Anthropic's context-editing guidance for its own
+   tool-result clearing is explicit that clearing invalidates the cached prompt prefix and should be
+   held to a minimum tokens-cleared budget. The tombstone ran on any one result over `MinResult`
+   (1 KB). `MinCleared` is now the floor under the pass and `DroppableBytes` is the pre-flight that
+   measures it, so a marginal overshoot waits until the history is worth clearing.
+6. **The judge's request was unbounded.** `max_blocks_per_call` bounds the block count and
+   `maxBlockInput` bounds one call's arguments, but each block carries a whole tool result and the
+   state concatenates them — so a handful of large results is a multi-hundred-KB request to a small
+   decision model, billed, with no ceiling. `maxBlockText` cuts one block, `defaultMaxState` bounds
+   the batch, and the newest block is always admitted, so a byte cap can never silently disable the
+   judge.
+7. **Two smaller ones.** The answering model id was decoded and discarded while the setting defaults
+   to the drifting `jev-latest` alias the vendor says to log and then pin, so `Reporter`/`LastAnswer`
+   carry it and `/status` shows it with the bill. And a pass read the conversation off the update
+   loop's goroutine under an invariant that held but was invisible at the point it mattered; it now
+   runs on a `compactPass` snapshot, so the read safety is local. `alignedEvictCut` went with it — its
+   only caller in the repository was its own test — and so did the superseded `compaction-upgrade.md`.
+
 ---
 
 ## 7. Test & validation matrix
@@ -609,6 +669,11 @@ I1–I7 hold as before, and two of these close holes *inside* them.
 | A stale plan is refused, not indexed | `Covers` is exact; `Apply` reports `Stale` with the original | `internal/compaction/apply_test.go`, `policy_test.go` |
 | The judge sees what a call did | a block carries the call's arguments, abbreviated | `internal/compaction/blocks_test.go`, `micro_test.go` |
 | A gateway failure is transient | 502 retried like a 429 | `internal/jev/client_test.go` |
+| A question is one the live endpoint accepts | the criteria encode as an object, and every question names its own block | `internal/compaction/jevquestion_test.go` |
+| The judge request is bounded in bytes | a block is cut to `maxBlockText`, the batch to `defaultMaxState`, and the newest block is always asked about | `internal/compaction/jevjudge_test.go` |
+| The answering model is reportable | `LastAnswer` carries the version and the bill, and survives a failed pass | `internal/compaction/jevjudge_test.go`, `internal/tui/context_line_test.go` |
+| The soft tier does not clear for a cache-invalidating few bytes | a pass under `MinCleared` is skipped and reports nothing | `internal/tui/compact_light_test.go`, `internal/compaction/micro_test.go` |
+| The thresholds are measured, not asserted | one live call over the labeled corpus, swept offline; no `keep` block pruned, accuracy over the floor | `internal/compaction/calibration_test.go` |
 
 **Gate, every phase:**
 ```
@@ -619,6 +684,14 @@ filet check
 ```
 All four clean. filet is `failOn: info`, so a style warning fails the gate; fix the code, never the
 config.
+
+**Gate, whenever a judge threshold moves** (opt-in, needs a key, so it is not part of the four
+above — but it is the only evidence those two numbers have):
+```
+TYPESAFE_API_KEY=... go test ./internal/compaction -run JudgeCalibration -v
+```
+It fails when a block labeled `keep` is pruned at the shipped threshold, or when agreement with the
+labels drops under `minCalibrationAccuracy`. Raise the corpus before raising the number.
 
 ---
 
@@ -638,7 +711,7 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""             # prefer the TYPESAFE_API_KEY env var
-      prune_threshold: 0.85
+      prune_threshold: 0.75
       max_blocks_per_call: 64
 ```
 Env: `KORI_COMPACTION_*` for the scalars, `TYPESAFE_API_KEY` for the key.
@@ -718,6 +791,8 @@ Env: `KORI_COMPACTION_*` for the scalars, `TYPESAFE_API_KEY` for the key.
 
 ### 12.3 Source spec
 
-`compaction-upgrade.md` (the TS-shaped original) is superseded by this document. Its useful ideas —
-micro/macro duality, anchors, the state ledger, the asymmetric confidence gate — are kept; its file
-layout, its 85/95 ladder, and its assumption that JEV produces summaries are not.
+The TS-shaped original this document supersedes was `compaction-upgrade.md` at the repository root.
+It was deleted rather than kept, because it named `src/context/*.ts` paths that do not and will not
+exist here and nothing in it said so. Its useful ideas — micro/macro duality, anchors, the state
+ledger, the asymmetric confidence gate — are kept in the code; its file layout, its 85/95 ladder, and
+its assumption that JEV produces summaries are not.

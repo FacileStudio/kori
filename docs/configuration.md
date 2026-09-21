@@ -148,7 +148,7 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""
-      prune_threshold: 0.85
+      prune_threshold: 0.75
       max_blocks_per_call: 64
 session:
   root: .
@@ -400,7 +400,7 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""            # empty is fine: export TYPESAFE_API_KEY instead
-      prune_threshold: 0.85  # a block is pruned at this probability and over
+      prune_threshold: 0.75  # a block is pruned at this probability and over
       max_blocks_per_call: 64
 ```
 
@@ -408,6 +408,29 @@ A missing key is not a startup error, because `base_url` may point at a proxy th
 first pass is what reports it: it fails with `typesafe: unauthorized (401)`, prunes nothing, and
 falls back to the deterministic mask, so a misconfigured judge costs an attempt and never a broken
 conversation.
+
+`/status` names the model version that actually answered the last call, because `model` defaults to
+the vendor's drifting `jev-latest` alias and the thresholds were tuned against one build behind it.
+Once the ladder behaves the way you want, pin `model` to that versioned id so the tuning survives
+the next release.
+
+### Tuning the judge thresholds
+
+`prune_threshold` and the confidence floor are the two numbers that decide whether a block is
+deleted, and both are shipped defaults rather than measured ones. The calibration harness is how you
+check them against the model: it classifies a corpus of labeled history blocks in one call, re-scores
+the answers across a sweep of thresholds, and prints where the model's confidence and its accuracy
+part company.
+
+```sh
+TYPESAFE_API_KEY=... go test ./internal/compaction -run JudgeCalibration -v
+```
+
+It skips without a key, so it stays out of CI. The corpus is
+`internal/compaction/testdata/judge_labels.json` — a seed of seventeen cases with the verdict a careful
+operator would give each one. Extend it with blocks from your own traces before trusting the numbers;
+the harness fails when a block labeled `keep` is pruned at the shipped threshold, and when agreement
+with the labels drops under its floor.
 
 The ladder is visible while it fills: the status line shows the live load against the window with
 its ratio and the tier that load has reached (`↕120k/200k · 0.60 · soft`), and `/status` adds the

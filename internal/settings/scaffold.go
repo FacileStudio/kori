@@ -62,7 +62,7 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""
-      prune_threshold: 0.85
+      prune_threshold: 0.75
       max_blocks_per_call: 64
 
 tools:

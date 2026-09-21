@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/FacileStudio/kori/internal/compaction"
+	"github.com/FacileStudio/nacelle"
 )
 
 // windowedPolicy is a policy whose ratios can be measured: soft at 130k, mid at
@@ -96,6 +97,67 @@ func TestSoftTierTombstonesWithoutAModelCall(t *testing.T) {
 	}
 }
 
+// The soft tier is free to run but not free of consequences: clearing a history
+// result rewrites the messages after it, which is the prefix the provider had
+// already cached. Below the clear floor the pass would trade that re-write for a
+// few hundred bytes, so it stays quiet instead of trimming on a marginal
+// overshoot.
+func TestSoftTierSkipsAPassBelowTheClearFloor(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.size = 140_000
+	m.conversation = []nacelle.Message{
+		nacelle.UserText("the task"),
+		{Role: nacelle.RoleUser, Parts: []nacelle.Part{
+			nacelle.ToolResult{ID: "small", Name: "read", Result: strings.Repeat("x", compaction.MinCleared-1)},
+		}},
+		nacelle.AssistantText("an answer"),
+		nacelle.UserText("a newer turn"),
+		nacelle.AssistantText("the newest turn"),
+	}
+
+	cmd := m.compactTiered(context.Background())
+
+	if cmd != nil {
+		t.Error("compactTiered = a Cmd, want nil")
+	}
+	if m.trimmed != 0 {
+		t.Errorf("trimmed = %d, want nothing tombstoned under the clear floor", m.trimmed)
+	}
+	if m.size != 140_000 {
+		t.Errorf("size = %d, want it untouched by a pass that did not run", m.size)
+	}
+	if said := strings.Join(spoken(m), " "); said != "" {
+		t.Errorf("said = %q, want no report for a pass that did not run", said)
+	}
+}
+
+// Just over the floor the same pass does run, so the gate is a floor and not a
+// change of policy: the tier still trims as soon as trimming is worth it.
+func TestSoftTierRunsOnceThePassClearsTheFloor(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.size = 140_000
+	m.conversation = []nacelle.Message{
+		nacelle.UserText("the task"),
+		{Role: nacelle.RoleUser, Parts: []nacelle.Part{
+			nacelle.ToolResult{ID: "big", Name: "read", Result: strings.Repeat("x", compaction.MinCleared)},
+		}},
+		nacelle.AssistantText("an answer"),
+		nacelle.UserText("a newer turn"),
+		nacelle.AssistantText("the newest turn"),
+	}
+
+	cmd := m.compactTiered(context.Background())
+
+	if cmd != nil {
+		t.Error("compactTiered = a Cmd, want nil so no pass waits")
+	}
+	if m.trimmed != 1 {
+		t.Errorf("trimmed = %d, want the one result over the floor tombstoned", m.trimmed)
+	}
+}
+
 func TestCheckThrashCountsNearMissesAndWarnsOnlyAtTheLimit(t *testing.T) {
 	m := sized()
 	m.size = m.compactAt + compactSlack + 1
@@ -132,5 +194,42 @@ func TestCheckThrashResetsTheCounterWhenUnder(t *testing.T) {
 	}
 	if m.thrashed() {
 		t.Error("thrashed = true after a pass landed under, want it cleared")
+	}
+}
+
+// The pre-send guard's headroom is tuned to the ladder, and this is the
+// arithmetic that ties them together. The smallest size the guard acts on —
+// Trigger() + compactSlack + 1 — must already be past the mid ratio, so what it
+// dispatches is a summarizing pass rather than a free tombstone that would free
+// nothing on a context only a summary can shrink and leave the send to overshoot
+// anyway. A compactSlack below (mid - soft) × the window inverts that: the guard
+// would fire into the soft tier and become the do-nothing check it was fixed
+// from being.
+//
+// It lives here, in the package that owns compactSlack, because it is the one
+// place both halves are visible. The window is the 128k the OpenAI backend
+// reports, which makes the ceiling ResolveBudget derives 0.65 × 128000 — the
+// 83.2k the ladder is calibrated against.
+func TestThePreSendGuardFiresIntoASummarizingTier(t *testing.T) {
+	const window = 128_000
+
+	policy := compaction.Policy{
+		Ratios: compaction.Ratios{
+			Soft: compaction.DefaultSoftRatio,
+			Mid:  compaction.DefaultMidRatio,
+			Hard: compaction.DefaultHardRatio,
+		},
+		Window:         window,
+		Ceiling:        int64(compaction.DefaultSoftRatio * window),
+		KeepTurns:      compaction.DefaultKeepTurns,
+		AnchorMessages: compaction.DefaultAnchorMessages,
+	}
+
+	fires := policy.Trigger() + compactSlack + 1
+
+	switch tier := policy.Tier(fires); tier {
+	case compaction.Mid, compaction.Hard:
+	default:
+		t.Errorf("the guard acts from %d, tier = %s, want a summarizing tier — a soft pass there could not land the context under", fires, tier)
 	}
 }

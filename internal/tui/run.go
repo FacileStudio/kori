@@ -132,11 +132,8 @@ func (m *Model) send(text string) tea.Cmd {
 
 	herdr.Report(m.herdrClient, herdr.Working)
 
-	if count, err := m.agent.CountTokens(ctx, m.conversation); err == nil && m.compactAt > 0 && !m.thrashed() && count > m.policy.Trigger()+compactSlack {
-		m.size = count
-		if waiting := m.compactTiered(ctx); waiting != nil {
-			return waiting
-		}
+	if waiting := m.compactBeforeSend(ctx); waiting != nil {
+		return waiting
 	}
 
 	return m.startRun(ctx)

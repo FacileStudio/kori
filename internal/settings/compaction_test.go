@@ -22,8 +22,8 @@ func TestCompactionDefaults(t *testing.T) {
 	if c.Judge.Model != "jev-latest" || c.Judge.BaseURL != "https://api.typesafe.ai" {
 		t.Errorf("judge endpoint = %q %q, want the TypeSafe defaults", c.Judge.Model, c.Judge.BaseURL)
 	}
-	if c.Judge.PruneThreshold == nil || *c.Judge.PruneThreshold != 0.85 {
-		t.Errorf("prune_threshold = %v, want 0.85", c.Judge.PruneThreshold)
+	if c.Judge.PruneThreshold == nil || *c.Judge.PruneThreshold != DefaultPruneThreshold {
+		t.Errorf("prune_threshold = %v, want the shipped %v", c.Judge.PruneThreshold, DefaultPruneThreshold)
 	}
 	if c.Judge.MaxBlocks == nil || *c.Judge.MaxBlocks != 64 {
 		t.Errorf("max_blocks_per_call = %v, want 64", c.Judge.MaxBlocks)

@@ -53,6 +53,29 @@ func TestTheLiveEstimateIsReplacedAtTheTurnBoundary(t *testing.T) {
 	}
 }
 
+// The size both automatic triggers read is only ever written from a usage
+// event, so a usage that reports no input at all must not erase it: that is what
+// a backend which reports usage on some events but not others looks like, and
+// writing the zero through would switch compaction off silently — the same
+// stand-down the pre-send guard had when it read an uncountable backend as
+// nothing to do. The last real reading is kept until a real one replaces it.
+func TestAZeroUsageDoesNotEraseTheMeasuredSize(t *testing.T) {
+	m := sized()
+	m.size = 130_000
+
+	m.sized(nacelle.Usage{})
+
+	if m.size != 130_000 {
+		t.Errorf("size = %d, want the last real reading kept", m.size)
+	}
+
+	m.sized(nacelle.Usage{InputTokens: 125_000})
+
+	if m.size != 125_000 {
+		t.Errorf("size = %d, want a real reading to replace it", m.size)
+	}
+}
+
 // The dollar figure is live too, on the same honesty as the token counter: no
 // turn has reported a Cost yet means no price at all; the first turn's real
 // Cost seeds a realised rate (Cost per total billed token); and while the next

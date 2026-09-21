@@ -85,6 +85,19 @@ type account struct {
 // Cache reads and cache creations are billed input like any other, and both
 // backends report them here, so leaving either out would understate the
 // conversation by most of an agentic session's real size.
+//
+// A usage that reports no input at all is left as it stands rather than written
+// through. Zero input is what a backend that does not report usage on every
+// event looks like, and taking it at face value would erase the one measure both
+// automatic triggers read — compaction would stand down silently, which is the
+// same failure the pre-send guard had when it treated an uncountable backend as
+// nothing to do. A conversation of any size never bills zero input tokens, so
+// the guard cannot hide a real reading: it only refuses to remember a number
+// that means "unknown" as if it meant "empty".
 func (m *Model) sized(usage nacelle.Usage) {
-	m.size = usage.InputTokens + usage.CacheReadTokens + usage.CacheCreationTokens
+	spent := usage.InputTokens + usage.CacheReadTokens + usage.CacheCreationTokens
+	if spent <= 0 {
+		return
+	}
+	m.size = spent
 }

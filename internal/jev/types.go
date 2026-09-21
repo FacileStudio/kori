@@ -8,9 +8,13 @@
 // surface as a broken conversation. See internal/compaction's judge.
 package jev
 
-// Question is one typed ask. Instructions and Criteria are `any` on purpose:
-// the API takes a string or a list for each, and this client does not narrow a
-// shape the vendor owns.
+// Question is one typed ask. Instructions and Criteria are `any` on purpose: the
+// API takes a string or a list of strings for instructions, and a criteria's
+// shape follows the question type — a choice takes an object keyed by option and
+// holding what belongs to it, where a score takes a list of the level
+// descriptions. Narrowing either here would mean this client owning a shape the
+// vendor defines, and a criteria that encodes as the wrong shape is a 422 the
+// endpoint reports and a stub server does not.
 type Question struct {
 	Type         string   `json:"type"`
 	Instructions any      `json:"instructions"`

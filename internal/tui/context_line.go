@@ -34,6 +34,11 @@ func contextLoad(size int64, policy compaction.Policy) string {
 // reader who opted in months ago has nothing to remind them that every pass
 // ships the history somewhere. It sits with the ladder because it is part of it —
 // the judge is what decides which turns the fold is allowed to take.
+//
+// A second line names the model version that actually answered and what it billed,
+// once one has. The setting defaults to the vendor's drifting `jev-latest` alias,
+// and the thresholds are tuned against a specific version behind it, so the id has
+// to be readable before it can be pinned.
 func (m *Model) compactionLines() []string {
 	var lines []string
 	if m.size > 0 {
@@ -48,6 +53,31 @@ func (m *Model) compactionLines() []string {
 	}
 	if m.judge != nil {
 		lines = append(lines, "judge · on — each pass sends the history off the machine")
+		if answer := lastAnswer(m.judge); answer.Model != "" {
+			lines = append(lines, judgeModelLine(answer))
+		}
 	}
 	return lines
+}
+
+// judgeModelLine names the version that answered and what it billed, so a reader
+// can pin limits.compaction.judge.model to it instead of leaving the alias in
+// place. The bill is left off when the vendor reported none.
+func judgeModelLine(answer compaction.Answer) string {
+	line := "judge model · " + answer.Model
+	if answer.InputTokens > 0 {
+		line += " · " + shortTokens(int64(answer.InputTokens)) + " tokens in"
+	}
+	return line
+}
+
+// lastAnswer reads the model version and the bill of a judge's most recent call
+// when the judge reports them. A judge backed by a versioned remote service
+// implements compaction.Reporter; one that decides locally — a test's stub — has
+// no answer to give and contributes no line.
+func lastAnswer(judge compaction.Judge) compaction.Answer {
+	if reporter, ok := judge.(compaction.Reporter); ok {
+		return reporter.LastAnswer()
+	}
+	return compaction.Answer{}
 }

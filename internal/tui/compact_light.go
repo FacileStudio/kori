@@ -80,8 +80,17 @@ func (m *Model) maskOnlyPass(plan []compaction.Span) tea.Cmd {
 // model call and no goroutine. It reports only when it actually freed something,
 // and it does not count toward the thrash guard — it is free, so repeating it
 // costs nothing.
+//
+// It fires only when the pass is worth the cache it invalidates. Clearing a
+// history result rewrites the messages after it, which is the prefix the provider
+// had already cached, so below compaction.MinCleared the pass would trade a
+// re-write for a few hundred bytes: the tier stays quiet and waits for the
+// history to be worth clearing rather than trimming on every marginal overshoot.
 func (m *Model) softPass() tea.Cmd {
 	plan := m.plan()
+	if compaction.DroppableBytes(m.conversation, plan) < compaction.MinCleared {
+		return nil
+	}
 	before := m.size
 	stats := m.maskHistory(plan)
 	if stats.Results == 0 {
