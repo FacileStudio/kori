@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.71.0] - 2026-09-21
 
 ### Added
 - feat(compaction): ratio-based context compaction with a soft/mid/hard ladder, a pinned anchor and a persistent `[state ledger]` that folds new facts into itself instead of re-summarizing (`limits.compaction`, `KORI_COMPACTION_*`)
