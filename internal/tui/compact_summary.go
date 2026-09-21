@@ -54,6 +54,17 @@ func (o compactOutcome) failedAt() string {
 	return "summary"
 }
 
+// installs reports whether a finished pass may replace the conversation at all.
+// An empty summary is a failure whenever the judge tagged turns for the ledger:
+// the fold would drop those turns and install no ledger, so the reader would lose
+// silently what the pass was meant to keep in compressed form. It is the same
+// fallback the unjudged path already takes, reached by the same test. A judged
+// pass that tagged nothing has nothing to summarize and still installs the keeps
+// and the prunes it decided on.
+func (o compactOutcome) installs() bool {
+	return o.summary != "" || (o.judged && o.fold.LedgerSize() == 0)
+}
+
 // compactReport is how the client says a pass went: the context size it carried
 // before and after, the share kept verbatim, what the mask and the summary did,
 // and the tier that ran. A short block, so it reads as a visible milestone in the

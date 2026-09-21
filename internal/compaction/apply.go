@@ -2,53 +2,73 @@ package compaction
 
 import "github.com/FacileStudio/nacelle"
 
-// Stats is what one pass did, in the two units a report speaks: estimated tokens
-// before and after, how many messages were tombstoned, dropped from the history,
-// and the tier that ran.
+// Stats is what one pass did, in the units a report speaks: estimated tokens
+// before and after, how many history turns the rebuild dropped, and whether the
+// rebuild was refused. Tombstoning is not counted here — the mask reports its own
+// numbers back to the caller that ran it.
 type Stats struct {
 	Before, After int64
-	Masked        int
 	Summarized    int
-	Tier          Tier
+	// Refused reports that the assembly came out heavier than the conversation it
+	// would have replaced, so the original was handed back untouched. It is I5 in
+	// the one place the estimate can move the wrong way: a judged pass can fold a
+	// two-byte turn and get a verbose ledger back, and a pass that adds weight is
+	// not a pass. A refused pass reports Before == After and no work.
+	Refused bool
 }
 
 // Apply reassembles a conversation after a pass: the pinned anchor verbatim, one
 // ledger message in place of what was folded, the surviving history blocks, and
 // the active window untouched. It is the deterministic half of a pass, so a test
 // can drive it without a model. The anchor is copied byte for byte (I2), roles
-// alternate in the result (I4), and the estimate never grows (I5).
+// alternate in the result (I4), and a rebuild that would grow the conversation is
+// refused outright (I5), handing the original back with Stats.Refused set.
 //
 // keep selects the history indices that survive in place; nil drops the whole
-// history, which is what an unclassified pass does. A degenerate call with
-// neither a new ledger nor a previous one and nothing surviving hands the ends
-// back untouched rather than merging an active turn into the anchor to close a
-// boundary no pass created.
+// history, which is what an unclassified pass does. A call that changes nothing —
+// no history to drop, nothing kept, no ledger text and no previous ledger — is
+// handed back untouched rather than rewritten to close a boundary it never
+// created.
+//
+// Every other call installs a ledger, even with no word to put in one, because
+// that message is the buffer that keeps the pinned head and whatever follows it
+// role-legal: the head's last turn and the next turn can share a role, and the
+// only ways out of that are merging the next turn into the head — which would
+// rewrite the anchor (I2) — or standing a ledger between them even when it has
+// nothing to say.
 func Apply(conv []nacelle.Message, policy Policy, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
 	anchor := Section(conv, plan, ZoneAnchor)
 	active := Section(conv, plan, ZoneActive)
 	surviving := survivingHistory(conv, plan, keep)
+	dropped := len(HistoryMessages(conv, plan)) - len(surviving)
 	previous := LedgerText(conv, plan)
 	carryParts, carryMsgs := ledgerCarry(conv, plan)
-	hasLedger := ledger != "" || previous != "" || len(carryParts) > 0 || len(carryMsgs) > 0
+
+	if dropped == 0 && len(surviving) == 0 && ledger == "" && previous == "" && len(carryParts) == 0 && len(carryMsgs) == 0 {
+		out := make([]nacelle.Message, 0, len(anchor)+len(active))
+		out = append(out, anchor...)
+		out = append(out, active...)
+		return out, measure(conv, out, 0)
+	}
+
+	built := BuildLedger(previous, ledger)
+	built.Parts = append(built.Parts, carryParts...)
+	built.Role = ledgerRole(anchor, following(carryMsgs, surviving, active))
 
 	out := make([]nacelle.Message, 0, len(anchor)+len(carryMsgs)+len(surviving)+len(active)+1)
 	out = append(out, anchor...)
-	if !hasLedger && len(surviving) == 0 {
-		out = append(out, active...)
-		return out, measure(conv, out, policy, 0)
-	}
-	if hasLedger {
-		built := BuildLedger(previous, ledger)
-		built.Parts = append(built.Parts, carryParts...)
-		built.Role = ledgerRole(anchor, following(carryMsgs, surviving, active))
-		out = append(out, built)
-	}
+	out = append(out, built)
 	out = append(out, carryMsgs...)
 	out = append(out, surviving...)
 	out = append(out, active...)
 
 	out = alternateFrom(out, len(anchor))
-	return out, measure(conv, out, policy, len(HistoryMessages(conv, plan))-len(surviving))
+
+	stats := measure(conv, out, dropped)
+	if stats.After > stats.Before {
+		return conv, Stats{Before: stats.Before, After: stats.Before, Refused: true}
+	}
+	return out, stats
 }
 
 // ledgerCarry is what the ledger zone holds beyond its own text: the extra parts
@@ -124,8 +144,10 @@ func opposite(role nacelle.Role) nacelle.Role {
 
 // alternateFrom folds any same-role neighbours starting at index from, moving
 // the later message's parts into the earlier one. Starting at from keeps the
-// anchor untouched whatever the ledger looks like, which is what makes the fold
-// safe: only the ledger, the surviving blocks and the active window can merge.
+// anchor untouched, and the ledger is what makes that hold: its role is chosen
+// opposite the anchor's last turn, so the boundary above the anchor can never
+// collide and only the ledger, the surviving blocks and the active window can
+// merge with each other.
 func alternateFrom(msgs []nacelle.Message, from int) []nacelle.Message {
 	out := make([]nacelle.Message, 0, len(msgs))
 	out = append(out, msgs[:from]...)
@@ -140,12 +162,10 @@ func alternateFrom(msgs []nacelle.Message, from int) []nacelle.Message {
 	return out
 }
 
-func measure(conv, out []nacelle.Message, policy Policy, summarized int) Stats {
-	before := EstTokens(Bytes(conv))
+func measure(conv, out []nacelle.Message, summarized int) Stats {
 	return Stats{
-		Before:     before,
+		Before:     EstTokens(Bytes(conv)),
 		After:      EstTokens(Bytes(out)),
 		Summarized: summarized,
-		Tier:       policy.Tier(before),
 	}
 }

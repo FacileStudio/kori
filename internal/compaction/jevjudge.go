@@ -71,6 +71,13 @@ func (j *jevJudge) overflow(blocks []Block, verdicts []Verdict) int {
 // state renders the goal and the blocks into the text every question is asked
 // against. The goal is the pinned task, so a block is judged by whether the
 // original task still needs it rather than by how recent it looks.
+//
+// The block text is untrusted — it is tool output and file contents, and a block
+// can argue for its own verdict. That is why the only destructive decision is
+// gated twice in decide (the prune probability and the calibrated confidence),
+// and why anything unclear falls back to Keep. Widening what is sent here, or
+// what one verdict is allowed to do, means revisiting that gate rather than this
+// function.
 func state(goal string, blocks []Block) string {
 	var b strings.Builder
 	b.WriteString("GOAL:\n")

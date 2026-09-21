@@ -26,7 +26,7 @@ The switch must stay session-scoped in v1. It affects only the current interacti
 3. `m.sink`: rebuilt as `usage.NewSink(m.run.root, newModel)` so future usage events log the correct model name.
 4. `m.backend` and `m.model`: stored on `m.core` so `/status` and the UI reflect the active model without unsafe interface assertions.
 5. `m.banner`: updated so `/clear` echoes the new model name.
-6. `m.compactAt`: re-resolved using `agent.ResolveBudget` if the new model has a different context window.
+6. `m.policy` and `m.compactAt`: re-resolved wholesale with `agent.Policy` if the new model has a different context window. Updating `m.compactAt` alone is not enough — it is only the gate; `Policy.Tier` and `Policy.Trigger` read `m.policy.Window` and its ratios, so a stale window would tier every later pass against the previous model's denominator and print the wrong ratio in the footer.
 7. `m.session`: left untouched on disk. `sessions.OpenSession` generates a new timestamped file and breaks Herdr tracking. The single existing session file continues logging questions and answers for the entire run.
 
 ### Invariants
@@ -43,7 +43,7 @@ The switch must stay session-scoped in v1. It affects only the current interacti
 
 Modify `internal/agent/agent.go` and `internal/agent/compact.go`:
 
-- `internal/agent/compact.go` already exports `ResolveBudget(compactAt *int64, c settings.Compaction, backend nacelle.Backend) Budget`; the swap re-runs it and takes `.Ceiling`.
+- `internal/agent/compact.go` already exports `ResolveBudget(compactAt *int64, c settings.Compaction, backend nacelle.Backend) Budget`, and `internal/agent/policy.go` folds that budget plus the two end sizes into a `compaction.Policy`; the swap re-runs both, assigns `m.policy`, and takes `m.compactAt = m.policy.Ceiling` from it.
 - In `internal/agent/agent.go`, define `SwapResult`:
   ```go
   type SwapResult struct {
@@ -78,7 +78,7 @@ Create `internal/tui/model_swap.go` to keep `command.go` under the filet functio
   - On success, reassign `m.agent = res.Agent`, `m.delegate = res.Config`, `m.model = targetModel`.
   - Rebuild `m.sink = usage.NewSink(m.run.root, targetModel)`.
   - Update `m.banner` to show the new model.
-  - Re-run `agent.ResolveBudget` against `res.Backend` with the session's resolved compaction settings and update `m.compactAt` from `.Ceiling`, so the ratio ladder is re-derived from the new model's window.
+  - Re-run `agent.ResolveBudget` against `res.Backend` with the session's resolved compaction settings, rebuild the policy with `agent.Policy(budget, m.policy.KeepTurns, m.policy.AnchorMessages)`, and assign it to `m.policy` (taking `m.compactAt = m.policy.Ceiling`), so the ratios, the window and the ceiling all move together and the ladder re-derives from the new model's window.
   - Print confirmation card: `→ switched to <backend>/<model> · context re-reads cold from here (no prompt-cache hits)`.
 
 ### 4. Implement interactive picker in `internal/tui/model_picker.go`
@@ -123,7 +123,7 @@ Create unit tests covering:
 
 | File | Action | Purpose |
 |---|---|---|
-| `internal/agent/compact.go` | Reference | Re-run the exported `ResolveBudget` for the new backend |
+| `internal/agent/compact.go`, `internal/agent/policy.go` | Reference | Re-run the exported `ResolveBudget` and `Policy` for the new backend |
 | `internal/agent/agent.go` | Modify | Add `SwapResult` and `Swap` |
 | `internal/tui/types.go` | Modify | Add `backend` and `model` fields to `core` |
 | `internal/tui/model.go` | Modify | Set initial `backend` and `model` |

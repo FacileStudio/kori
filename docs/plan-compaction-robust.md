@@ -1,7 +1,8 @@
 # Plan: robust compaction & automatic context management (JEV-assisted)
 
 **Status:** Phases 0–4 implemented 2026-09-21 — see the notes at the end of each for the
-deviations. Written 2026-09-21 for a cold-start handoff.
+deviations. A review of the resulting commit closed four more invariant holes the same day:
+see *Review follow-ups* at the end. Written 2026-09-21 for a cold-start handoff.
 **Audience:** an implementer agent with no prior conversation. Everything needed is below;
 nothing here depends on the conversation that produced it.
 **Repos:** `github.com/FacileStudio/kori` (this repo, the harness) and its pinned dependency
@@ -95,7 +96,9 @@ message — see the Phase 4 note.
 ### 1.4 Ground truth from nacelle (do not duplicate it)
 
 - `nacelle.Trim(conversation, keep) (kept []Message, dropped int)` — boundary-safe truncation; never
-  returns a slice whose first message opens with a `ToolResult`. `nacelle/trim.go`.
+  returns a slice whose first message opens with a `ToolResult`. `nacelle/trim.go`. It exists and is
+  not called: the hard tier already lands at anchor+ledger+active through `Apply` (see the review
+  follow-ups), so nothing is left for it to trim.
 - `Agent.CountTokens(ctx, conversation) (int64, error)` — real request size (system + tools + MCP +
   messages). `nacelle/stream.go`.
 - `Agent.CompactConversation(...)` + `BeforeCompact`/`AfterCompact` hooks — binary-search trim to a
@@ -132,7 +135,8 @@ The conversation is partitioned **by index** into spans, in this order:
 1. **Anchor** — the pinned head. The **system prompt is already outside the conversation**
    (`nacelle.Config.System`; `m.delegate.System`) — nothing to move, only to state as an invariant.
    The pinned in-conversation anchor is the **first user turn**, i.e. `anchor_messages` messages
-   from the front. Never rewritten, never summarized, never pruned.
+   from the front. Never rewritten, never summarized, never pruned. A head that carries a tool call
+   is extended over the reply answering it (`anchorEnd`), so the pinned boundary never splits a pair.
 2. **Ledger** — exactly one message carrying the `[state ledger]` sentinel. It is *rebuilt*, never
    re-summarized: a later pass folds new facts into the existing ledger. The zone may also own the
    tool replies answering calls the ledger absorbed (`LedgerEnd`), which keeps such a pair atomic;
@@ -149,7 +153,7 @@ The conversation is partitioned **by index** into spans, in this order:
 |---|---|---|---|
 | **Soft** | `size ≥ soft_ratio × window` | Deterministic `Tombstone` of history tool results / reasoning older than the active window. | 0 |
 | **Mid** | `size ≥ mid_ratio × window` | Tombstone **+** one batched JEV `Classify` over history blocks → prune (atomic) + ledger blocks. | 1 JEV call + 1 LLM call (ledger) |
-| **Hard** | `size ≥ hard_ratio × window` | Mid, **plus** force-summarize the whole history (ignore `Keep` verdicts), and if still over, `nacelle.Trim` down to anchor+ledger+active. | 1 JEV + 1 LLM |
+| **Hard** | `size ≥ hard_ratio × window` | Mid, **plus** force-summarize the whole history (ignore `Keep` verdicts). Every `Keep` becomes a fold and every `Prune` still drops, so the rebuild lands at anchor+ledger+active by construction; there is no separate trim step to take. | 1 JEV + 1 LLM |
 
 Defaults (locked in §5): soft `0.65`, mid `0.80`, hard `0.90`. Absolute `compact_at`, when set,
 wins over the ratios and remains the fallback when `ContextWindow == 0`.
@@ -502,6 +506,36 @@ tests pin it — `TestApplyKeepsAnAbsorbedToolPairWhole`, `TestApplyCarriesWhatT
 `TestPlanExtendsTheLedgerOverItsReplies`, `TestPlanDoesNotSwallowTheLedgerIntoTheActiveWindow` — and
 all four fail against the pre-sweep code.
 
+### Review follow-ups (2026-09-21)
+
+A review of the unpushed commit found four more holes, all closed in the same commit. Recorded here
+per §0.5.
+
+1. **An empty summary with the judge on deleted history and reported it as a summary.**
+   `settleCompaction` installed on `outcome.judged` alone, so a pass whose summarizer streamed no text
+   (a failure mode measured in this repo) dropped the turns the judge had tagged for the ledger and
+   built no ledger at all, while the card claimed "summarized N turns". The condition is now
+   `outcome.installs()`: a non-empty summary, or a judged pass that tagged nothing and so had nothing
+   to summarize. An empty summary falls back to the mask the unjudged path already used.
+2. **I5 was asserted, not enforced.** `Apply` measured its own rebuild and installed it regardless,
+   and a judged pass folding a two-byte turn into a verbose ledger does grow the conversation
+   (measured: 3 → 3206 estimated tokens). A rebuild heavier than the conversation it replaces is now
+   refused — `Stats.Refused`, the original stands, the card says the context is unchanged.
+3. **The pinned head could split a tool pair, and with no ledger the assembly could not stay
+   role-legal.** `Plan` extends the head over the replies answering the calls it carries (`anchorEnd`,
+   the rule `LedgerEnd` already applied to the ledger). `Apply` now installs a ledger on *every* pass
+   that changes anything, even with no text to fold, because that message is the buffer that keeps
+   the head and the turn after it from colliding: without it the only options were merging a kept
+   turn into the anchor (I2 broken) or emitting two same-role messages (I4 broken), and nacelle does
+   not merge roles on the way out (`anthropic/conversation.go` passes every message through as-is).
+   A call that changes nothing is still handed back untouched.
+4. **`nacelle.Trim` is not used.** §3.2 and §12.1 promised it as the hard tier's last resort; the
+   force path already lands at anchor+ledger+active, so the text is corrected rather than the code.
+
+Also folded in: `/status` names an opted-in judge, so the one setting that ships history off the
+machine is visible where the reader already looks for the ladder; and the JEV client retries a dropped
+connection or a per-attempt timeout as well as a 429/529, bounded by the caller's own context.
+
 ---
 
 ## 7. Test & validation matrix
@@ -513,7 +547,10 @@ all four fail against the pre-sweep code.
 | I2 anchor preserved | first `anchor_messages` byte-identical after 5 passes | `internal/compaction/apply_test.go` |
 | I3 ledger monotonic | re-pass does not re-summarize; ledger only grows | `internal/compaction/ledger_test.go` |
 | I4 role alternation | assembled slice has no same-role neighbours | `internal/compaction/apply_test.go` |
-| I5 never grow | `After ≤ Before` for every tier | `internal/compaction/apply_test.go` |
+| I5 never grow | `After ≤ Before` for every tier, and a rebuild that would grow is refused with the original handed back | `internal/compaction/apply_test.go` |
+| I1 the pinned head never splits a pair | a head that is a `ToolCall` claims its reply; history never opens on an orphan result | `internal/compaction/policy_test.go` |
+| I4 both ends legal without a ledger | a pass that folds nothing still stands a ledger buffer between the head and the active window | `internal/compaction/apply_test.go` |
+| I7 empty summary with the judge on | masks instead of folding turns it cannot summarize | `internal/tui/compact_test.go` |
 | I6 idle-only + queued delivery | existing `compact_idle_test.go` cases still pass | `internal/tui` |
 | I7 degrade safely | 429 / timeout / malformed ⇒ nothing pruned | `internal/jev/client_test.go`, `judge_test.go` |
 | Tier boundaries | `Tier(size)` at 0.649/0.65/0.799/0.80/0.899/0.90 of a known window | `internal/compaction/policy_test.go` |
@@ -543,7 +580,7 @@ limits:
   compaction:
     soft_ratio: 0.65          # tombstone only, no model call
     mid_ratio: 0.80           # + one batched JEV pass + one ledger summary
-    hard_ratio: 0.90          # + force-summarize history, then nacelle.Trim
+    hard_ratio: 0.90          # + force-summarize history; lands at anchor+ledger+active
     keep_turns: 3             # active window, in messages
     anchor_messages: 1        # pinned head (the first user turn)
     judge:

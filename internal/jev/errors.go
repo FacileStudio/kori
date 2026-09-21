@@ -48,11 +48,20 @@ func statusError(status int, detail string) error {
 }
 
 // retryable reports whether an error is the transient kind the client backs off
-// and retries: a rate limit or an overloaded backend.
+// and retries. Two kinds are: a rate limit or an overloaded backend, and a
+// transport that never produced an answer at all — a dropped connection or a
+// per-attempt timeout, which is exactly the blip a second attempt clears. Two are
+// not: a typed 401 or 422 cannot succeed unchanged, and a 4xx or 5xx with a body
+// is the endpoint speaking, not the network failing.
 func retryable(err error) bool {
-	var httpErr *HTTPError
-	if !errors.As(err, &httpErr) {
+	var unauthorized *UnauthorizedError
+	var invalid *InvalidRequestError
+	if errors.As(err, &unauthorized) || errors.As(err, &invalid) {
 		return false
 	}
-	return httpErr.Status == http.StatusTooManyRequests || httpErr.Status == 529
+	var httpErr *HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.Status == http.StatusTooManyRequests || httpErr.Status == 529
+	}
+	return true
 }

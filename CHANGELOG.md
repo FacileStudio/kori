@@ -5,13 +5,17 @@
 ### Added
 - feat(compaction): ratio-based context compaction with a soft/mid/hard ladder, a pinned anchor and a persistent `[state ledger]` that folds new facts into itself instead of re-summarizing (`limits.compaction`, `KORI_COMPACTION_*`)
 - feat(compaction): an opt-in TypeSafe System One judge (`limits.compaction.judge`, `TYPESAFE_API_KEY`) that classifies each history block keep/prune/ledger before the ledger is written; off by default because enabling it sends conversation history to a third party
-- feat(tui): the status line shows the live context ratio and tier (`↕120k/200k · 0.60 · soft`), and `/status` reports the accumulated ledger's size and the last pass's tier
+- feat(tui): the status line shows the live context ratio and tier (`↕120k/200k · 0.60 · soft`), and `/status` reports the accumulated ledger's size, the last pass's tier, and whether the judge is on — the one setting that sends history off the machine is otherwise invisible once enabled
 
 ### Changed
 - feat(settings): `limits.compact_at` is unset by default and the ceiling now derives from the compaction ratios against the backend's context window; an absolute value still overrides and `0` still disables compaction
 
 ### Fixed
 - fix(compaction): a pass can no longer orphan a tool pair the ledger absorbed — the ledger zone claims the replies to its own calls and carries an absorbed block forward, so a later prune cannot split a call from its result and a later rebuild cannot shed what a fold put in (`internal/compaction`)
+- fix(compaction): a judged pass that comes back with an empty summary masks instead of folding away the turns the judge tagged for the ledger, so a provider that streams no text can no longer drop history silently and call it a summary
+- fix(compaction): a rebuild heavier than the conversation it replaces is refused and the context left unchanged, so a pass never grows the context it exists to shrink (folding a two-byte turn can no longer install a verbose ledger)
+- fix(compaction): the pinned head is extended over the replies answering the calls it carries, and a pass that folds nothing still stands a ledger between the head and the active window — the two cases where the assembly could merge a kept turn into the anchor or emit two messages of one role
+- fix(jev): a transport error (a dropped connection or a per-attempt timeout) is retried like a 429/529, bounded by the caller's context rather than spending the attempt budget on requests that are already out of time
 
 ## [0.70.2] - 2026-09-20
 

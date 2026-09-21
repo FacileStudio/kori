@@ -24,9 +24,16 @@ func contextLoad(size int64, policy compaction.Policy) string {
 }
 
 // compactionLines is what /status adds about the ladder beyond the footer's own
-// figure: the size against the window with the tier it has reached, and the
-// accumulated ledger with the tier of the last pass that wrote it. A session
-// with nothing to say — no size measured, no ledger yet — adds no lines.
+// figure: the size against the window with the tier it has reached, the
+// accumulated ledger with the tier of the last pass that wrote it, and the judge
+// when it is on. A session with nothing to say — no size measured, no ledger yet,
+// no judge — adds no lines.
+//
+// The judge gets a line of its own because it is the one setting that sends the
+// conversation off the machine, and it is otherwise invisible once enabled: a
+// reader who opted in months ago has nothing to remind them that every pass
+// ships the history somewhere. It sits with the ladder because it is part of it —
+// the judge is what decides which turns the fold is allowed to take.
 func (m *Model) compactionLines() []string {
 	var lines []string
 	if m.size > 0 {
@@ -38,6 +45,9 @@ func (m *Model) compactionLines() []string {
 			line += " · last pass " + m.last.tier.String()
 		}
 		lines = append(lines, line)
+	}
+	if m.judge != nil {
+		lines = append(lines, "judge · on — each pass sends the history off the machine")
 	}
 	return lines
 }

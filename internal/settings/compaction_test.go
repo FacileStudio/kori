@@ -51,6 +51,32 @@ func TestCompactionFileLeavesUnmentionedRatiosAlone(t *testing.T) {
 	}
 }
 
+// The judge's key can live in the file like any other setting: an environment
+// that mentions neither vendor variable must not clear it, and the vendor's own
+// variable must still win over it when it is set.
+func TestJudgeKeyComesFromTheFileUnlessTheEnvironmentOverrides(t *testing.T) {
+	t.Setenv("TYPESAFE_API_KEY", "")
+	t.Setenv(EnvPrefix+"COMPACTION_JUDGE_API_KEY", "")
+	written(t, "limits:\n  compaction:\n    judge:\n      enabled: true\n      api_key: from-file\n")
+
+	c, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if c.Compaction.Judge.APIKey != "from-file" {
+		t.Errorf("judge key = %q, want the file's own", c.Compaction.Judge.APIKey)
+	}
+
+	t.Setenv("TYPESAFE_API_KEY", "from-env")
+	c, err = settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if c.Compaction.Judge.APIKey != "from-env" {
+		t.Errorf("judge key = %q, want the environment to win", c.Compaction.Judge.APIKey)
+	}
+}
+
 // TYPESAFE_API_KEY is the vendor's own name and wins over the namespaced
 // setting, so a key already exported for TypeSafe needs no second copy.
 func TestJudgeKeyPrefersTheTypesafeVariable(t *testing.T) {

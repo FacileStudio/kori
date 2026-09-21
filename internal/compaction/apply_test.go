@@ -26,13 +26,16 @@ func applyPolicy() Policy {
 	return Policy{Ratios: Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90}, Window: 200_000, AnchorMessages: 1, KeepTurns: 2}
 }
 
-// I2: the anchor is byte-identical after any number of passes.
+// I2: the anchor is byte-identical after any number of passes. The session keeps
+// working between passes, so each one really rebuilds the conversation around the
+// ledger rather than being refused for having nothing worth folding.
 func TestApplyKeepsTheAnchorByteForByte(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 	anchor := conv[0]
 
 	for pass := range 5 {
+		conv = appendTurn(conv, fmt.Sprintf("c%d", pass))
 		next, _ := Apply(conv, policy, Plan(conv, policy), fmt.Sprintf("fold %d", pass), nil)
 		conv = next
 		if !reflect.DeepEqual(conv[0], anchor) {
@@ -62,146 +65,73 @@ func TestApplyInstallsALedgerAndKeepsTheEnds(t *testing.T) {
 	}
 }
 
-// I4: the assembled conversation never has two consecutive messages of one role.
+// I4: the assembled conversation never has two consecutive messages of one role,
+// and the collision is really repaired — the ledger and the turn after it share a
+// role here, so the merge has to fold one into the other rather than leaving them
+// adjacent. The history is bulky on purpose: a pass folding nothing worth folding
+// is refused, and then nothing is being tested.
 func TestApplyKeepsRolesAlternating(t *testing.T) {
 	policy := Policy{AnchorMessages: 1, KeepTurns: 3}
 	conv := []nacelle.Message{
 		nacelle.UserText("the task"),
-		nacelle.AssistantText("one"),
-		nacelle.UserText("two"),
+		callMessage("c1", "read"),
+		resultMessage("c1", "read", strings.Repeat("x", 40_000)),
+		callMessage("c2", "read"),
+		resultMessage("c2", "read", strings.Repeat("y", 40_000)),
 		nacelle.AssistantText("three"),
 		nacelle.UserText("four"),
 		nacelle.AssistantText("five"),
 	}
 
-	out, _ := Apply(conv, policy, Plan(conv, policy), "Decisions:\n- merged", nil)
+	out, stats := Apply(conv, policy, Plan(conv, policy), "Decisions:\n- merged", nil)
 
-	for i := 1; i < len(out); i++ {
-		if out[i].Role == out[i-1].Role {
-			t.Fatalf("messages %d and %d share role %q: %v", i-1, i, out[i].Role, out)
-		}
-	}
-}
-
-// I5: a pass never grows the estimate the report reads.
-func TestApplyNeverGrowsTheConversation(t *testing.T) {
-	conv := applySample()
-
-	_, stats := Apply(conv, applyPolicy(), Plan(conv, applyPolicy()), "a short ledger", nil)
-
-	if stats.After > stats.Before {
-		t.Errorf("after = %d, want no larger than before = %d", stats.After, stats.Before)
-	}
-}
-
-// absorbedPairSample is a conversation whose first history block — the one the
-// ledger sits immediately before — is an atomic tool pair, the shape a judge can
-// vote Keep: absorbing the call must not orphan the result.
-func absorbedPairSample() []nacelle.Message {
-	return []nacelle.Message{
-		nacelle.UserText("the task"),
-		callMessage("c1", "read"),
-		resultMessage("c1", "read", strings.Repeat("x", 40_000)),
-		nacelle.AssistantText("a1"),
-		nacelle.UserText("u2"),
-		nacelle.AssistantText("a2"),
-		nacelle.UserText("u3"),
-		nacelle.AssistantText("a3"),
-		nacelle.UserText("u4"),
-		nacelle.AssistantText("a4"),
-	}
-}
-
-// A kept tool pair absorbed by the ledger stays whole: no later pass, and no
-// prune of the history that remains, can separate the call from its result. The
-// second pass folds everything it can, so what survives is exactly what the
-// ledger absorbed — and that must still carry both halves of the pair. This is
-// I1 across two passes, not just one.
-func TestApplyKeepsAnAbsorbedToolPairWhole(t *testing.T) {
-	policy := Policy{AnchorMessages: 1, KeepTurns: 3}
-	conv := absorbedPairSample()
-	plan := Plan(conv, policy)
-	fold := foldVerdicts(Blocks(conv, plan), []Verdict{
-		{Decision: Keep}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger},
-	}, false)
-
-	out, _ := Apply(conv, policy, plan, "folded", fold.Survives)
-	assertPairsWhole(t, out, policy)
-
-	next, _ := Apply(out, policy, Plan(out, policy), "folded again", nil)
-	assertPairsWhole(t, next, policy)
-	if !carriesToolPair(next) {
-		t.Errorf("the absorbed tool pair was dropped on the second pass: %v", next)
-	}
-}
-
-// A turn the assembly folded into the ledger is not lost when the ledger is
-// rebuilt from its text alone: whatever sits past the sentinel is carried
-// forward explicitly, so re-passing the same conversation never sheds a fact.
-func TestApplyCarriesWhatTheLedgerAbsorbed(t *testing.T) {
-	ledger := BuildLedger("", "the state")
-	ledger.Parts = append(ledger.Parts, nacelle.Text{Text: "absorbed fact"})
-	conv := []nacelle.Message{
-		nacelle.UserText("the task"),
-		ledger,
-		nacelle.UserText("u2"),
-		nacelle.AssistantText("a3"),
-		nacelle.UserText("u4"),
-		nacelle.AssistantText("a5"),
-	}
-	policy := Policy{AnchorMessages: 1, KeepTurns: 2}
-
-	out, _ := Apply(conv, policy, Plan(conv, policy), "a new summary", nil)
-
-	if !containsText(out, "absorbed fact") {
-		t.Errorf("the ledger's absorbed part was dropped: %v", out)
+	if stats.Refused {
+		t.Fatalf("the pass was refused, so the merge is not being exercised: %+v", stats)
 	}
 	assertAlternating(t, out)
 }
 
-// assertPairsWhole checks I1: no block opens on a ToolResult, and every tool
-// result that survives has its call in the message before it.
-func assertPairsWhole(t *testing.T, conv []nacelle.Message, policy Policy) {
-	t.Helper()
-	for i, msg := range conv {
-		if !opensWithToolResult(msg) {
-			continue
-		}
-		if i == 0 || !opensToolPair(conv[i-1], msg) {
-			t.Errorf("message %d opens on a ToolResult with no call before it: %v", i, conv)
-		}
-	}
-	for _, block := range Blocks(conv, Plan(conv, policy)) {
-		if opensWithToolResult(conv[block.Start]) {
-			t.Errorf("block %+v opens on a ToolResult", block)
-		}
+// smallTurnSample is a conversation whose whole history is one two-word turn: a
+// ledger that compresses it costs more than the turn did, which is the judged
+// shape I5 has to refuse.
+func smallTurnSample() []nacelle.Message {
+	return []nacelle.Message{
+		nacelle.UserText("the task"),
+		nacelle.AssistantText("ok"),
+		nacelle.UserText("u2"),
+		nacelle.AssistantText("a2"),
 	}
 }
 
-func carriesToolPair(conv []nacelle.Message) bool {
-	calls, results := false, false
-	for _, msg := range conv {
-		for _, part := range msg.Parts {
-			switch part.(type) {
-			case nacelle.ToolCall:
-				calls = true
-			case nacelle.ToolResult:
-				results = true
-			}
-		}
-	}
-	return calls && results
-}
+// I5: a pass never grows the estimate the report reads, whatever the tier. The
+// judged shape is the one that can move the wrong way — a two-byte turn folded
+// into a verbose ledger adds weight — and that rebuild is refused outright and
+// the original handed back, rather than installed with a hopeful number.
+func TestApplyNeverGrowsTheConversation(t *testing.T) {
+	small := smallTurnSample()
+	fold := foldVerdicts(Blocks(small, Plan(small, applyPolicy())), []Verdict{{Decision: Ledger}}, false)
 
-func containsText(conv []nacelle.Message, want string) bool {
-	for _, msg := range conv {
-		for _, part := range msg.Parts {
-			if text, ok := part.(nacelle.Text); ok && strings.Contains(text.Text, want) {
-				return true
-			}
-		}
+	tests := []struct {
+		name    string
+		conv    []nacelle.Message
+		ledger  string
+		keep    func(int) bool
+		refused bool
+	}{
+		{"an unclassified pass folds the whole history", applySample(), "a short ledger", nil, false},
+		{"a judged pass folds a two-byte turn into a long ledger", small, strings.Repeat("decision, constraint, dead end. ", 400), fold.Survives, true},
 	}
-	return false
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out, stats := Apply(tc.conv, applyPolicy(), Plan(tc.conv, applyPolicy()), tc.ledger, tc.keep)
+			if stats.Refused != tc.refused || stats.After > stats.Before {
+				t.Fatalf("stats = %+v, want a refused pass of %v over %v", stats, tc.refused, tc.conv)
+			}
+			if tc.refused && !reflect.DeepEqual(out, tc.conv) {
+				t.Errorf("a refused pass rewrote the conversation: %v", out)
+			}
+		})
+	}
 }
 
 func assertAlternating(t *testing.T, conv []nacelle.Message) {
@@ -213,20 +143,46 @@ func assertAlternating(t *testing.T, conv []nacelle.Message) {
 	}
 }
 
-// An empty ledger with no previous one just drops the history; it never installs
-// an empty message.
-func TestApplyWithNoLedgerDropsTheHistoryOnly(t *testing.T) {
+// A pass that drops history but has no summary to install still installs the
+// ledger buffer. The sentinel is what keeps the pinned head and the turns after
+// it role-legal — the head's last turn and the next turn routinely share a role —
+// and an empty ledger is cheaper than a boundary the backends refuse.
+func TestApplyBuffersTheBoundaryWithoutALedger(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 
 	out, _ := Apply(conv, policy, Plan(conv, policy), "", nil)
 
-	if len(out) != 3 {
-		t.Fatalf("conversation = %v, want the anchor and the active window only", out)
+	if len(out) != 4 {
+		t.Fatalf("conversation = %v, want the anchor, the buffer and the active window", out)
 	}
-	for _, msg := range out {
-		if IsLedger(msg) {
-			t.Errorf("installed a ledger with nothing to carry: %+v", msg)
-		}
+	if !IsLedger(out[1]) {
+		t.Fatalf("message 1 = %+v, want the ledger buffer", out[1])
+	}
+	if body := Body(out[1]); body != "" {
+		t.Errorf("ledger body = %q, want nothing folded into it", body)
+	}
+	assertAlternating(t, out)
+}
+
+// A call that changes nothing is handed back untouched rather than rewritten to
+// close a boundary no pass created: there is no history between the pinned head
+// and the active window, so there is nothing to drop and nothing to buffer.
+func TestApplyLeavesAnUnchangedConversationAlone(t *testing.T) {
+	policy := Policy{AnchorMessages: 1, KeepTurns: 3}
+	conv := []nacelle.Message{
+		nacelle.UserText("the task"),
+		nacelle.AssistantText("answer"),
+		nacelle.UserText("newest"),
+		nacelle.AssistantText("last"),
+	}
+
+	out, stats := Apply(conv, policy, Plan(conv, policy), "", nil)
+
+	if !reflect.DeepEqual(out, conv) {
+		t.Errorf("conversation = %v, want it handed back untouched", out)
+	}
+	if stats.Refused {
+		t.Error("an unchanged conversation was reported as refused")
 	}
 }

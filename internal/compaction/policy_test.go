@@ -181,3 +181,37 @@ func TestPlanAlignsTheActiveBoundary(t *testing.T) {
 		t.Errorf("active window = %v, want a boundary clear of the tool result", active)
 	}
 }
+
+// A conversation whose head is an assistant ToolCall must not leave the matching
+// ToolResult as the first history block: that orphan block could be folded or
+// pruned away while its call stayed pinned in the anchor, and the provider
+// rejects a call with no answer. The head is extended over its own replies, the
+// same way a ledger claims its own.
+func TestPlanNeverStartsHistoryOnAnOrphanResult(t *testing.T) {
+	conv := []nacelle.Message{
+		{Role: nacelle.RoleAssistant, Parts: []nacelle.Part{nacelle.ToolCall{ID: "c1", Name: "read", Finished: true}}},
+		resultMessage("c1", "read", "contents"),
+		nacelle.AssistantText("done"),
+		nacelle.UserText("next"),
+		nacelle.AssistantText("last"),
+	}
+	policy := Policy{AnchorMessages: 1, KeepTurns: 2}
+
+	spans := Plan(conv, policy)
+
+	if anchor := Section(conv, spans, ZoneAnchor); len(anchor) != 2 {
+		t.Fatalf("anchor = %v, want the call and its reply pinned together", anchor)
+	}
+	for _, block := range Blocks(conv, spans) {
+		if opensWithToolResult(conv[block.Start]) {
+			t.Errorf("block %+v opens on a ToolResult the head already carries", block)
+		}
+	}
+
+	out, _ := Apply(conv, policy, spans, "", nil)
+	for i, msg := range out {
+		if opensWithToolResult(msg) && (i == 0 || !opensToolPair(out[i-1], msg)) {
+			t.Errorf("message %d is an orphan ToolResult after the fold: %v", i, out)
+		}
+	}
+}

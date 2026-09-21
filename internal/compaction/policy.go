@@ -138,13 +138,14 @@ func reaches(size int64, ratio float64, window int64) bool {
 
 // Plan partitions the conversation by index into anchor, ledger, history and
 // active spans, in that order. The active boundary is pulled back so it never
-// opens on a ToolResult whose call the cut dropped, and a missing ledger is
-// simply left out — a session has none until its first pass builds one. Spans
-// are contiguous and cover the whole conversation; only the history spans are
-// eligible for a pass.
+// opens on a ToolResult whose call the cut dropped, the pinned head is extended
+// over the replies answering the calls it carries so it never splits a pair
+// either, and a missing ledger is simply left out — a session has none until its
+// first pass builds one. Spans are contiguous and cover the whole conversation;
+// only the history spans are eligible for a pass.
 func Plan(conv []nacelle.Message, p Policy) []Span {
 	n := len(conv)
-	anchor := clamp(p.AnchorMessages, 0, n)
+	anchor := anchorEnd(conv, clamp(p.AnchorMessages, 0, n))
 	active := activeStart(conv, n, anchor, p.KeepTurns)
 	ledger := ledgerIndex(conv, anchor, active)
 
@@ -164,6 +165,24 @@ func Plan(conv []nacelle.Message, p Policy) []Span {
 		spans = append(spans, Span{Zone: ZoneActive, Start: active, End: n})
 	}
 	return spans
+}
+
+// anchorEnd extends the pinned head over the replies answering the tool calls the
+// head itself carries, the same way a ledger claims its own. Without it a
+// conversation whose head is an assistant ToolCall leaves the matching ToolResult
+// as the first history block — an orphan block a later prune or fold would drop
+// while its call stayed pinned in the anchor, which the provider rejects. A head
+// that asked for nothing is returned unchanged.
+func anchorEnd(conv []nacelle.Message, anchor int) int {
+	if anchor <= 0 || anchor >= len(conv) {
+		return anchor
+	}
+	calls := toolCallIDs(conv[anchor-1])
+	end := anchor
+	for end < len(conv) && answersAny(conv[end], calls) {
+		end++
+	}
+	return end
 }
 
 // activeStart is where the verbatim window begins: the newest KeepTurns
@@ -191,11 +210,4 @@ func ledgerIndex(conv []nacelle.Message, anchor, active int) int {
 		}
 	}
 	return -1
-}
-
-func appendHistory(spans []Span, start, end int) []Span {
-	if start >= end {
-		return spans
-	}
-	return append(spans, Span{Zone: ZoneHistory, Start: start, End: end})
 }

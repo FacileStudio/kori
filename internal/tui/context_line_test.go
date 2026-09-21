@@ -1,12 +1,21 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/FacileStudio/kori/internal/compaction"
 	"github.com/FacileStudio/nacelle"
 )
+
+// stubJudge is a Judge with no answers: the tests that only care whether a judge
+// is attached need a non-nil implementation, not a classification.
+type stubJudge struct{}
+
+func (stubJudge) Classify(context.Context, string, []compaction.Block) ([]compaction.Verdict, error) {
+	return nil, nil
+}
 
 // The footer names the context against the window it is measured on, with the
 // ratio and the tier the size has reached, so a reader can see the ladder
@@ -74,7 +83,27 @@ func TestStatusReportsTheLedgerAndTheLastPassTier(t *testing.T) {
 func TestStatusSaysNothingAboutCompactionBeforeTheFirstPass(t *testing.T) {
 	m := sized()
 	m.statusCmd()
-	if got := strings.Join(m.unprinted, "\n"); strings.Contains(got, "ledger ·") {
-		t.Errorf("status = %q, want no ledger line before one exists", got)
+	got := strings.Join(m.unprinted, "\n")
+	for _, want := range []string{"ledger ·", "judge ·"} {
+		if strings.Contains(got, want) {
+			t.Errorf("status = %q, want no %q line with nothing to report", got, want)
+		}
+	}
+}
+
+// The judge is the one setting that sends the conversation off the machine, and
+// once enabled nothing else in the UI says so — a reader who opted in months ago
+// has nothing to remind them that every pass ships the history somewhere. /status
+// is where they already look for the ladder, so the exposure is stated there.
+func TestStatusNamesAnOptedInJudge(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.judge = stubJudge{}
+	m.size = 150_000
+
+	m.statusCmd()
+
+	if got := strings.Join(m.unprinted, "\n"); !strings.Contains(got, "judge · on") {
+		t.Errorf("status = %q, want the judge named while it is on", got)
 	}
 }

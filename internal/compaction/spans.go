@@ -70,6 +70,15 @@ func answersAny(msg nacelle.Message, calls map[string]bool) bool {
 	return false
 }
 
+// appendHistory adds a history span for a range, skipping an empty one so a plan
+// never carries a zero-width span.
+func appendHistory(spans []Span, start, end int) []Span {
+	if start >= end {
+		return spans
+	}
+	return append(spans, Span{Zone: ZoneHistory, Start: start, End: end})
+}
+
 func clamp(n, low, high int) int {
 	return min(max(n, low), high)
 }

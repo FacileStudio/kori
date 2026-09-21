@@ -383,9 +383,29 @@ setting here that leaves the machine. Its key prefers the `TYPESAFE_API_KEY` env
 over `limits.compaction.judge.api_key`. With the judge off, compaction behaves exactly as it did
 before this ladder existed.
 
+Enabling it is one key in `~/.kori.yml`. No flag and no environment variable are required:
+
+```yaml
+limits:
+  compaction:
+    judge:
+      enabled: true          # sends history to TypeSafe on every mid and hard pass
+      model: jev-latest
+      base_url: https://api.typesafe.ai
+      api_key: ""            # empty is fine: export TYPESAFE_API_KEY instead
+      prune_threshold: 0.85  # a block is pruned at this probability and over
+      max_blocks_per_call: 64
+```
+
+A missing key is not a startup error, because `base_url` may point at a proxy that wants none. The
+first pass is what reports it: it fails with `typesafe: unauthorized (401)`, prunes nothing, and
+falls back to the deterministic mask, so a misconfigured judge costs an attempt and never a broken
+conversation.
+
 The ladder is visible while it fills: the status line shows the live load against the window with
 its ratio and the tier that load has reached (`↕120k/200k · 0.60 · soft`), and `/status` adds the
-accumulated ledger's size and the tier of the last pass that wrote it.
+accumulated ledger's size, the tier of the last pass that wrote it, and the judge while it is on —
+the one setting here that leaves the machine is named where a reader already looks.
 
 ## Context and skills
 

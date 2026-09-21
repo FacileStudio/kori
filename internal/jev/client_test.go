@@ -155,6 +155,45 @@ func TestEvaluateRetriesTransientFailures(t *testing.T) {
 	}
 }
 
+// A transport error that never produced a response is transient too — a dropped
+// connection is the blip a second attempt clears — so it is retried rather than
+// reported as a dead endpoint. The drop is simulated by hijacking the socket and
+// closing it unanswered, so the client sees an EOF instead of a status code.
+func TestEvaluateRetriesTransportErrors(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer cannot be hijacked, cannot simulate a transport error")
+				return
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Errorf("hijack: %v", err)
+				return
+			}
+			if err := conn.Close(); err != nil {
+				t.Errorf("close hijacked connection: %v", err)
+			}
+			return
+		}
+		writeBody(t, w, `{"answers":{"a":{"choice":"keep","confidence":0.9,"probabilities":{"keep":1}}}}`)
+	}))
+	defer server.Close()
+
+	response, err := newTestClient(server.URL).Evaluate(t.Context(), "state", map[string]Question{"a": {Type: "choice"}})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if got := requests.Load(); got < 2 {
+		t.Errorf("requests = %d, want the call to retry past the dropped connection", got)
+	}
+	if response.Answers["a"].Choice != "keep" {
+		t.Errorf("answer = %+v, want the retried answer", response.Answers["a"])
+	}
+}
+
 // A rate limit that never lifts gives up after the attempt budget rather than
 // hammering the endpoint forever.
 func TestEvaluateStopsAfterTheAttemptBudget(t *testing.T) {

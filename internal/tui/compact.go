@@ -129,13 +129,12 @@ func (m *Model) settleCompaction(outcome compactOutcome) tea.Cmd {
 	m.compacting = false
 	m.run.compactChan = nil
 
-	switch {
-	case outcome.err != nil:
+	if outcome.err != nil {
 		m.applyMaskFallback(outcome)
 		m.say(fromCompact, "compaction "+outcome.failedAt()+" failed · "+outcome.err.Error()+" — masked instead")
-	case outcome.summary != "" || outcome.judged:
+	} else if outcome.installs() {
 		m.installFold(outcome)
-	default:
+	} else {
 		m.applyMaskFallback(outcome)
 		m.say(fromCompact, "compaction summary came back empty — masked instead")
 	}
@@ -152,11 +151,22 @@ func (m *Model) settleCompaction(outcome compactOutcome) tea.Cmd {
 // blocks and reports the pass. The after size is the authoritative before size
 // adjusted by the two estimates Apply measured, so the report stays anchored to
 // the backend's own count while the pass's own arithmetic never grows it.
+//
+// A refused rebuild leaves everything where it was and says so. It is the one
+// judged shape where folding costs more than it saves — a tiny turn folded into a
+// ledger longer than the turn was — and installing it would grow the context the
+// pass exists to shrink. The conversation and the size are already correct, so
+// the pass only has to be honest about having bought nothing.
 func (m *Model) installFold(outcome compactOutcome) {
 	start, end, _ := compaction.HistoryRange(outcome.plan)
 	kept := len(compaction.Section(m.conversation, outcome.plan, compaction.ZoneActive))
 
 	conv, stats := compaction.Apply(m.conversation, m.policy, outcome.plan, outcome.summary, outcome.fold.Survives)
+	if stats.Refused {
+		m.last = compacted{tier: outcome.tier}
+		m.say(fromCompact, "context unchanged — the ledger would have outweighed the turns it folds")
+		return
+	}
 
 	m.conversation = conv
 	m.size = max(outcome.before-stats.Before+stats.After, 0)

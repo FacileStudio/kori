@@ -87,8 +87,11 @@ func New(c Config) *Client {
 
 // Evaluate sends one state and its questions and returns every answer, all of
 // them computed against the same state in a single call. A transient failure —
-// a 429 or a 529 — is retried with exponential backoff up to Attempts times;
-// anything else comes back as its typed error.
+// a 429, a 529, or a transport that never answered — is retried with exponential
+// backoff up to Attempts times; anything else comes back as its typed error. The
+// caller's context bounds all of it: once it is spent the loop stops rather than
+// spending what is left of the attempt budget on requests that are already out of
+// time.
 func (c *Client) Evaluate(ctx context.Context, state any, questions map[string]Question) (Response, error) {
 	payload, err := json.Marshal(request{State: state, Model: c.model, Questions: questions})
 	if err != nil {
@@ -101,7 +104,7 @@ func (c *Client) Evaluate(ctx context.Context, state any, questions map[string]Q
 			return response, nil
 		}
 		last = err
-		if !retryable(err) || attempt == c.attempts-1 {
+		if !retryable(err) || attempt == c.attempts-1 || ctx.Err() != nil {
 			break
 		}
 		if err := c.pause(ctx, attempt); err != nil {
