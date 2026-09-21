@@ -83,3 +83,23 @@ func TestChoiceQuestionOffersEveryDecision(t *testing.T) {
 		}
 	}
 }
+
+// The goal is part of the request, so it is bounded like the blocks are: it is
+// the anchor's own text, and a session whose first message is a pasted file would
+// otherwise put more into the one call than every block combined — which is the
+// byte cap's whole purpose. The cut is inert on an ordinary task.
+func TestStateBoundsTheGoalLikeABlock(t *testing.T) {
+	goal := strings.Repeat("pasted file contents ", 4000)
+
+	rendered := state(goal, []Block{{Key: "block-1", Text: "a turn"}})
+
+	if len(rendered) > maxBlockText+128 {
+		t.Errorf("state = %d bytes for a %d-byte goal, want it held to the %d-byte block cap", len(rendered), len(goal), maxBlockText)
+	}
+	if !strings.Contains(rendered, "[block-1]") {
+		t.Error("the goal's cut swallowed the blocks, want them after it")
+	}
+	if short := state("add compaction to kori", nil); !strings.Contains(short, "add compaction to kori") {
+		t.Errorf("state = %q, want a goal under the cap left verbatim", short)
+	}
+}

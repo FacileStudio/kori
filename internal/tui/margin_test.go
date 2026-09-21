@@ -1,6 +1,6 @@
 // Package tui's live-region margin tests. Kept out of view_test.go, which sits
 // at the filet per-file line cap (250): the repo's pattern for a capped file is
-// a dedicated test file next to it (compact_pair_test.go, parallel_*_test.go).
+// a dedicated test file next to it (compact_send_test.go, parallel_*_test.go).
 package tui
 
 import (

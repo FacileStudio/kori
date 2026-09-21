@@ -99,7 +99,7 @@ input at all is ignored rather than written through, because `m.size` is the onl
 automatic triggers read and a zero would erase it.
 
 `compaction.Tombstone` replaces oversized history `ToolResult`s (≥ 1024 bytes) with
-`[dropped N bytes…]` stubs, keeping `ID`/`Name`; it is idempotent and mutates the conversation in
+`[dropped N bytes]` stubs that say to re-run the tool, keeping `ID`/`Name`; it is idempotent and mutates the conversation in
 place. Reasoning is deliberately not tombstoned — see the second round of review follow-ups. `LedgerEnd` extends a ledger span over the replies answering the calls the
 ledger carries, and `Apply`'s `ledgerCarry` re-emits them, so the ledger zone can be more than one
 message — see the Phase 4 note.
@@ -630,9 +630,10 @@ a fourth once the judge started answering at all.
 6. **The judge's request was unbounded.** `max_blocks_per_call` bounds the block count and
    `maxBlockInput` bounds one call's arguments, but each block carries a whole tool result and the
    state concatenates them — so a handful of large results is a multi-hundred-KB request to a small
-   decision model, billed, with no ceiling. `maxBlockText` cuts one block, `defaultMaxState` bounds
-   the batch, and the newest block is always admitted, so a byte cap can never silently disable the
-   judge.
+   decision model, billed, with no ceiling. `maxBlockText` cuts one block and the goal — the
+   anchor's own text, which a pasted first message can make larger than every block together —
+   `defaultMaxState` bounds the batch, and the newest block is always admitted, so a byte cap can
+   never silently disable the judge.
 7. **Two smaller ones.** The answering model id was decoded and discarded while the setting defaults
    to the drifting `jev-latest` alias the vendor says to log and then pin, so `Reporter`/`LastAnswer`
    carry it and `/status` shows it with the bill. And a pass read the conversation off the update
@@ -670,7 +671,7 @@ a fourth once the judge started answering at all.
 | The judge sees what a call did | a block carries the call's arguments, abbreviated | `internal/compaction/blocks_test.go`, `micro_test.go` |
 | A gateway failure is transient | 502 retried like a 429 | `internal/jev/client_test.go` |
 | A question is one the live endpoint accepts | the criteria encode as an object, and every question names its own block | `internal/compaction/jevquestion_test.go` |
-| The judge request is bounded in bytes | a block is cut to `maxBlockText`, the batch to `defaultMaxState`, and the newest block is always asked about | `internal/compaction/jevjudge_test.go` |
+| The judge request is bounded in bytes | a block is cut to `maxBlockText`, the goal to the same cap, the batch to `defaultMaxState`, and the newest block is always asked about | `internal/compaction/jevjudge_test.go`, `jevquestion_test.go` |
 | The answering model is reportable | `LastAnswer` carries the version and the bill, and survives a failed pass | `internal/compaction/jevjudge_test.go`, `internal/tui/context_line_test.go` |
 | The soft tier does not clear for a cache-invalidating few bytes | a pass under `MinCleared` is skipped and reports nothing | `internal/tui/compact_light_test.go`, `internal/compaction/micro_test.go` |
 | The thresholds are measured, not asserted | one live call over the labeled corpus, swept offline; no `keep` block pruned, accuracy over the floor | `internal/compaction/calibration_test.go` |

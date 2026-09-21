@@ -17,12 +17,17 @@ import (
 // what one verdict is allowed to do, means revisiting that gate rather than this
 // function.
 //
-// The caller has already bounded what reaches it: each block arrives cut to
-// maxBlockText and the batch to defaultMaxState, so this only has to concatenate.
+// Every piece of text that reaches the request is cut here or before it: each
+// block arrives already cut to maxBlockText and the batch to defaultMaxState, and
+// the goal is cut below — it is the anchor's own text, so a session whose first
+// message is a pasted file would otherwise put more into the request than every
+// block combined, which is the byte cap's whole purpose. One more block's worth is
+// the ceiling, because that is what the goal is: one block of text, and the one
+// the pinned task lives in.
 func state(goal string, blocks []Block) string {
 	var b strings.Builder
 	b.WriteString("GOAL:\n")
-	b.WriteString(goal)
+	b.WriteString(clampText(goal, maxBlockText))
 	b.WriteString("\n\nHISTORY BLOCKS:\n")
 	for _, block := range blocks {
 		b.WriteString("\n[")
