@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.72.0] - 2026-09-22
 
 ### Added
 - feat(compaction): a labeled-example calibration harness for the judge — one batched call over a corpus of labeled history blocks, re-scored across a sweep of prune thresholds, printing where the model's confidence and its accuracy part company (`TYPESAFE_API_KEY=... go test ./internal/compaction -run JudgeCalibration -v`; skipped without a key, so CI never pays for it)
