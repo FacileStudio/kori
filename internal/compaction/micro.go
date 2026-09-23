@@ -38,15 +38,24 @@ const (
 	maxBlockText = 16 * 1024
 )
 
+// bytesPerToken is the one conversion between the two units this package
+// speaks: the byte weight it measures a conversation in, and the token counts a
+// triggering caller measures the same conversation in. Four bytes to the token
+// is the rough English rate EstTokens is built on, so a budget expressed in one
+// unit converts to the other without a second guess.
+const bytesPerToken = 4
+
 // EstTokens is the bytes-to-tokens estimate the whole package uses: four bytes
 // per token is the rough English rate, and it is only ever compared against
 // itself, so its error bars are directionally consistent.
 func EstTokens(bytes int) int64 {
-	return int64(bytes) / 4
+	return int64(bytes) / bytesPerToken
 }
 
-// Bytes is the total byte weight of a conversation, the stand-in for "what is
-// about to be discarded" when estimating what a pass frees.
+// Bytes is the total byte weight of a conversation as a request carries it —
+// the stand-in for "what is about to be discarded" when estimating what a pass
+// frees. Only what a backend is actually sent counts, which is why a turn's
+// reasoning costs nothing here: freeing it frees no context (see PartBytes).
 func Bytes(conv []nacelle.Message) int {
 	total := 0
 	for _, msg := range conv {
@@ -55,8 +64,9 @@ func Bytes(conv []nacelle.Message) int {
 	return total
 }
 
-// MsgBytes is the byte weight of one message: the sum across its parts, which
-// hold the tool output, the thinking and the spoken text.
+// MsgBytes is the byte weight of one message as a request carries it: the sum
+// across its parts — the spoken text, the tool output, and the arguments a tool
+// call was made with.
 func MsgBytes(msg nacelle.Message) int {
 	total := 0
 	for _, part := range msg.Parts {
@@ -65,16 +75,24 @@ func MsgBytes(msg nacelle.Message) int {
 	return total
 }
 
-// PartBytes is the byte weight of a single part: tool results and reasoning
-// dominate a long session, text is the message itself, anything else is zero.
+// PartBytes is the byte weight of a single part as a request carries it: the
+// spoken text, a tool result, and a tool call's own arguments — the last of
+// which is often the largest thing in an edit or a write turn and used to count
+// as nothing.
+//
+// Reasoning weighs nothing on purpose. Every backend drops it when it builds a
+// request (Anthropic accepts a thinking block only with the signature it was
+// issued with, and the stream never carries one), so a long chain of thought
+// costs no context at all — and counting it here would report savings no pass
+// can actually make.
 func PartBytes(part nacelle.Part) int {
 	switch typed := part.(type) {
 	case nacelle.Text:
 		return len(typed.Text)
 	case nacelle.ToolResult:
 		return len(typed.Result)
-	case nacelle.Reasoning:
-		return len(typed.Text)
+	case nacelle.ToolCall:
+		return len(typed.Input)
 	default:
 		return 0
 	}

@@ -2,6 +2,7 @@ package compaction
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,8 +11,9 @@ import (
 
 // A session that keeps reading large files is folded down whenever it crosses
 // the soft ratio, and forty turns later it is still under the hard ratio with
-// its anchor intact and its roles alternating. This is the end-to-end statement
-// the zone model exists to make, with no model call in the loop.
+// its anchor untouched — byte for byte, not merely first and the right role —
+// and its roles alternating. This is the end-to-end statement the zone model
+// exists to make, with no model call in the loop.
 func TestLoadSettlesUnderTheHardRatio(t *testing.T) {
 	window := int64(200_000)
 	policy := Policy{
@@ -26,15 +28,15 @@ func TestLoadSettlesUnderTheHardRatio(t *testing.T) {
 	for turn := range 40 {
 		conv = appendTurn(conv, fmt.Sprintf("c%d", turn))
 		if policy.Tier(EstTokens(Bytes(conv))) >= Soft {
-			conv, _ = Apply(conv, Plan(conv, policy), "Decisions:\n- kept going", nil)
+			conv, _ = Apply(conv, Plan(conv, policy), "Decisions:\n- kept going", nil, false)
 		}
 	}
 
 	if got := EstTokens(Bytes(conv)); got > int64(policy.Ratios.Hard*float64(window)) {
 		t.Errorf("final estimate = %d tokens, want it under the hard ratio", got)
 	}
-	if len(conv) == 0 || conv[0].Role != anchor.Role {
-		t.Errorf("conversation starts with %v, want the anchor first", conv)
+	if len(conv) == 0 || !reflect.DeepEqual(conv[0], anchor) {
+		t.Errorf("conversation starts with %v, want the anchor byte-identical to the one it started from: %v", conv, anchor)
 	}
 	assertLoadShape(t, conv)
 }

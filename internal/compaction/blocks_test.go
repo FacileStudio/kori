@@ -111,6 +111,79 @@ func TestBlocksNeverOpenOnAToolResult(t *testing.T) {
 	}
 }
 
+// A plan is measured against one conversation and read against whatever is in the
+// field, so a history span reaching past the end is trimmed rather than trusted:
+// blocking it walks the plan's own range, and a range the conversation does not
+// have is an index out of range rather than an empty set of blocks.
+func TestBlocksTrimASpanPastTheEnd(t *testing.T) {
+	conv := []nacelle.Message{
+		nacelle.UserText("the task"),
+		callMessage("c1", "read"),
+		resultMessage("c1", "read", "contents"),
+	}
+	spans := []Span{{Zone: ZoneHistory, Start: 1, End: 9}, {Zone: ZoneHistory, Start: 5, End: 9}}
+
+	blocks := Blocks(conv, spans)
+
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %+v, want the one pair the conversation still has", blocks)
+	}
+	if blocks[0].Start != 1 || blocks[0].End != 3 {
+		t.Errorf("block = %+v, want it trimmed to the pair at [1,3)", blocks[0])
+	}
+}
+
+// I1 at the one boundary the random conversations cannot reach: a block opening
+// on a ToolResult whose ToolCall sits outside the span it was blocked from. No
+// well-formed conversation produces that shape — the anchor claims the replies to
+// its own calls, so a history span never opens on one — but history a malformed
+// or hand-edited plan blocks still can, and a block opening on an answer is the
+// one shape a prune of whole blocks could strand without its question. The fold
+// merges it back into the block before it, which is why it is the only thing
+// standing between that shape and a judge shown a result with no call.
+func TestBlocksFoldAnOrphanResultIntoTheBlockBefore(t *testing.T) {
+	conv := []nacelle.Message{
+		nacelle.UserText("the task"),
+		callMessage("c9", "grep"),
+		nacelle.UserText("wait"),
+		resultMessage("c9", "grep", "matches"),
+		nacelle.AssistantText("answer"),
+	}
+	spans := []Span{{Zone: ZoneAnchor, Start: 0, End: 2}, {Zone: ZoneHistory, Start: 2, End: 5}}
+
+	blocks := Blocks(conv, spans)
+
+	for _, block := range blocks {
+		if opensWithToolResult(conv[block.Start]) {
+			t.Fatalf("block %+v opens on a ToolResult: %+v", block, blocks)
+		}
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("blocks = %+v, want the orphan folded into the block before it", blocks)
+	}
+	if blocks[0].Start != 2 || blocks[0].End != 4 {
+		t.Errorf("block 0 = %+v, want the message and the orphan it is folded into", blocks[0])
+	}
+	if blocks[1].Start != 4 || blocks[1].End != 5 {
+		t.Errorf("block 1 = %+v, want the standalone turn after the orphan", blocks[1])
+	}
+}
+
+// A fold is measured against one conversation and read against whatever is in the
+// field, the same way a plan is: a ledger block reaching past the end is trimmed
+// rather than trusted, so the summarizer is fed the messages that are really
+// there rather than an index out of range.
+func TestFoldLedgerMessagesTrimABlockPastTheEnd(t *testing.T) {
+	conv := []nacelle.Message{nacelle.UserText("the task"), nacelle.AssistantText("one")}
+	fold := Fold{Ledger: []Block{{Start: 1, End: 9}, {Start: 6, End: 8}}}
+
+	got := fold.LedgerMessages(conv)
+
+	if len(got) != 1 || got[0].Role != nacelle.RoleAssistant {
+		t.Fatalf("messages = %v, want only the message the conversation still has", got)
+	}
+}
+
 // randomConversation builds an alternating conversation out of standalone turns
 // and paired tool calls, the two shapes a real transcript holds.
 func randomConversation(rng *rand.Rand) []nacelle.Message {

@@ -80,7 +80,24 @@ func loadExecutableJob(name string) (settings.CronJob, settings.Config, error) {
 	if err := validateDelivery(f.Job.Delivery); err != nil {
 		return settings.CronJob{}, settings.Config{}, err
 	}
-	return f.Job, applyJob(config, f.Job), nil
+	cfg, err := jobConfig(config, f.Job)
+	if err != nil {
+		return settings.CronJob{}, settings.Config{}, err
+	}
+	return f.Job, cfg, nil
+}
+
+// jobConfig applies a job over the resolved config and re-validates the ladder the
+// merge produced. The job's own check ran against the job's ladder filled with
+// defaults, not the one the merge actually yields, so a session's own ratios can
+// turn a usable job into a ladder that cannot tier — and nothing downstream
+// re-reads it.
+func jobConfig(config settings.Config, job settings.CronJob) (settings.Config, error) {
+	cfg := applyJob(config, job)
+	if err := settings.ValidateCompaction(cfg.Compaction, cfg.CompactAt); err != nil {
+		return settings.Config{}, err
+	}
+	return cfg, nil
 }
 
 func runCronJob(name string) error {

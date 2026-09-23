@@ -122,6 +122,7 @@ func (m *Model) send(text string) tea.Cmd {
 	m.run.interrupted = time.Time{}
 	m.run.asked, m.run.answered = nil, nil
 	m.run.reported = false
+	m.run.overflow, m.run.overflowTried = nil, false
 	m.stranded()
 	m.conversation = append(m.conversation, nacelle.UserText(text))
 
@@ -187,6 +188,9 @@ func (m *Model) escaped() (bool, tea.Cmd) {
 func (m *Model) consume(next result) tea.Cmd {
 	if next.err != nil {
 		if !errors.Is(next.err, context.Canceled) {
+			if m.armRecovery(next.err) {
+				return waitFor(m.run.results)
+			}
 			m.flush()
 			m.run.reported = true
 			m.say(fromFailure, next.err.Error())

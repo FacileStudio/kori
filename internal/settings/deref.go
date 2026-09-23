@@ -15,6 +15,14 @@ func DerefInt(n *int) int {
 	return *n
 }
 
+// DerefInt64 is DerefInt in the width a token count is measured in.
+func DerefInt64(n *int64) int64 {
+	if n == nil {
+		return 0
+	}
+	return *n
+}
+
 // DerefFloat reads a pointer out of a float setting, falling back to zero when
 // a layer never mentioned it.
 func DerefFloat(f *float64) float64 {

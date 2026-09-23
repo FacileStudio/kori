@@ -87,17 +87,114 @@ func TestStatusReportsTheLedgerAndTheLastPassTier(t *testing.T) {
 	}
 }
 
+// The denominator the footer prints is the window a turn can actually fill, and
+// /status spells out the raw window it came from with the reserve held back for
+// the answer. Showing the raw window in the footer would print a ratio under
+// mid_ratio while the session was already compacting at mid — the same kind of
+// disagreement the tier suffix exists to prevent.
+func TestStatusNamesTheReserveTheLadderHoldsBack(t *testing.T) {
+	m := sized()
+	m.policy = windowedPolicy()
+	m.policy.Reserve = 40_000
+	m.size = 120_000
+
+	m.statusCmd()
+
+	got := strings.Join(m.unprinted, "\n")
+	for _, want := range []string{
+		"↕120k/160k · 0.75",
+		"window · 200k raw, 160k usable, 40.0k reserved for the answer",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("status missing %q in %q", want, got)
+		}
+	}
+}
+
 // A session that has measured nothing and built no ledger says nothing about
 // compaction, rather than printing a zero line every time /status is asked.
 func TestStatusSaysNothingAboutCompactionBeforeTheFirstPass(t *testing.T) {
 	m := sized()
 	m.statusCmd()
 	got := strings.Join(m.unprinted, "\n")
-	for _, want := range []string{"ledger ·", "judge ·"} {
+	for _, want := range []string{"ledger ·", "judge ·", "window ·"} {
 		if strings.Contains(got, want) {
 			t.Errorf("status = %q, want no %q line with nothing to report", got, want)
 		}
 	}
+}
+
+// windowedAt is the policy the trigger tests measure against: soft at 104k of a
+// 160k usable window, with compact_at pinned wherever a case puts it.
+func windowedAt(ceiling int64) compaction.Policy {
+	return compaction.Policy{
+		Ratios:         compaction.Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Window:         200_000,
+		Reserve:        40_000,
+		Ceiling:        ceiling,
+		KeepTurns:      3,
+		AnchorMessages: 1,
+	}
+}
+
+// The footer can read a share below soft_ratio under a `soft` suffix, because a
+// compact_at pinned under the ratio floors the tier at soft however small the
+// share is. /status names the figure the tier is read against, against the same
+// denominator the footer uses, so a footer of 0.38 over a trigger at 0.31
+// explains itself.
+func TestStatusNamesTheCompactAtTheTierIsReadAgainst(t *testing.T) {
+	m := sized()
+	m.policy, m.compactAt, m.size = windowedAt(50_000), 50_000, 60_000
+
+	if foot := visible(strings.Join(m.footer(), " ")); !strings.Contains(foot, "↕60.0k/160k · 0.38 · soft") {
+		t.Fatalf("footer = %q, want the 0.38 share under a soft suffix, which is the disagreement /status has to explain", foot)
+	}
+
+	m.statusCmd()
+
+	if got := strings.Join(m.unprinted, "\n"); !strings.Contains(got, "compact at · 50.0k · 0.31 of 160k usable") {
+		t.Errorf("status = %q, want the compact_at the footer's tier is read against", got)
+	}
+}
+
+// /status names the trigger in every shape it arrives in: pinned, derived from the
+// soft ratio of the window, alone when there is no window for either figure to be
+// a share of, and not at all when compact_at turned compaction off — where the
+// ratio's own figure is a threshold nothing obeys.
+func TestStatusNamesTheCompactAtInEveryShapeItComesIn(t *testing.T) {
+	tests := []struct {
+		name   string
+		policy compaction.Policy
+		at     int64
+		want   string
+	}{
+		{"pinned under the soft ratio", windowedAt(50_000), 50_000, "compact at · 50.0k · 0.31 of 160k usable"},
+		{"derived from the soft ratio", windowedAt(104_000), 104_000, "compact at · 104k · 0.65 of 160k usable"},
+		{"with no window", compaction.Policy{Ratios: compaction.Ratios{Soft: 0.65}, Ceiling: 100_000}, 100_000, "compact at · 100k"},
+		{"turned off", windowedAt(100_000), 0, ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := sized()
+			m.policy, m.compactAt, m.size = tc.policy, tc.at, 60_000
+
+			m.statusCmd()
+
+			if got := strings.Join(m.unprinted, "\n"); !namesTrigger(got, tc.want) {
+				t.Errorf("status = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// namesTrigger reports whether /status carries the trigger line a case wants, with
+// an empty want meaning the line must not be there at all.
+func namesTrigger(status, want string) bool {
+	if want == "" {
+		return !strings.Contains(status, "compact at")
+	}
+	return strings.Contains(status, want)
 }
 
 // The judge is the one setting that sends the conversation off the machine, and

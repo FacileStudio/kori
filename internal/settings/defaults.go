@@ -25,6 +25,14 @@ const (
 	DefaultPruneThreshold = compaction.DefaultPruneThreshold
 )
 
+// The verbatim tail's shipped bounds, aliased the same way the ratios are: a
+// floor of one message — the live turn, which no summary may stand in for — and
+// a token budget that sizes everything above that floor.
+const (
+	DefaultKeepTurns  = compaction.DefaultKeepTurns
+	DefaultKeepTokens = compaction.DefaultKeepTokens
+)
+
 // Defaults is the bottom layer, and the only one that answers everything.
 func Defaults(system string) Config {
 	bash, thinking, projectContext, skills, trustSkills, approveTools, trustHooks, diffs, tasks, strict :=

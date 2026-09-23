@@ -1,6 +1,10 @@
 package compaction
 
-import "github.com/FacileStudio/nacelle"
+import (
+	"slices"
+
+	"github.com/FacileStudio/nacelle"
+)
 
 // Stats is what one pass did, in the units a report speaks: estimated tokens
 // before and after, how many history turns the rebuild dropped, and whether the
@@ -22,6 +26,18 @@ type Stats struct {
 	// and indexing one conversation with another's spans would either run off its
 	// end or silently replace it with nothing.
 	Stale bool
+	// LedgerReplaced reports that the ledger was rewritten wholesale, which only
+	// a consolidating pass is allowed to do: the body it was asked to rewrite had
+	// outgrown its budget and came back carrying every identifier the old one
+	// named. It is how a ledger that only ever grew gets smaller again.
+	LedgerReplaced bool
+	// LedgerKept reports that a consolidating pass was asked for and refused,
+	// because the rewrite had stopped carrying identifiers the ledger held. The
+	// merge stands instead, so the body grows rather than losing a fact the next
+	// pass could not recover. Growth is the failure mode this leaves open, and it
+	// is the deliberate one: the next pass can attack a longer ledger, nobody can
+	// attack a forgotten one.
+	LedgerKept bool
 }
 
 // Apply reassembles a conversation after a pass: the pinned anchor verbatim, one
@@ -31,17 +47,24 @@ type Stats struct {
 // alternate in the result (I4), and a rebuild that would grow the conversation is
 // refused outright (I5), handing the original back with Stats.Refused set.
 //
+// replace is the one bit of the summarizer's intent the caller has to pass in:
+// a pass that asked for a consolidated ledger may rewrite the body it was
+// written from, a pass that only added to it may not. Even then the rewrite is
+// conditional — NextLedger grants it only when the new body still carries every
+// identifier the old one named — so the flag selects the attempt, never the
+// outcome.
+//
 // The one precondition is that the plan still covers conv: a plan measured
 // against a conversation that is no longer there cannot be applied to it, so it
 // comes back as Stats.Stale with the original untouched. That check lives here,
 // at the boundary, so no caller has to remember it — the assembly below assumes
 // it has already held.
-func Apply(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
+func Apply(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool, replace bool) ([]nacelle.Message, Stats) {
 	if !Covers(conv, plan) {
 		before := EstTokens(Bytes(conv))
 		return conv, Stats{Before: before, After: before, Stale: true}
 	}
-	return assemble(conv, plan, ledger, keep)
+	return assemble(conv, plan, ledger, keep, replace)
 }
 
 // assemble is Apply's body: the plan is known to cover conv. keep selects the
@@ -56,7 +79,7 @@ func Apply(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bo
 // only ways out of that are merging the next turn into the head — which would
 // rewrite the anchor (I2) — or standing a ledger between them even when it has
 // nothing to say.
-func assemble(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool) ([]nacelle.Message, Stats) {
+func assemble(conv []nacelle.Message, plan []Span, ledger string, keep func(int) bool, replace bool) ([]nacelle.Message, Stats) {
 	anchor := Section(conv, plan, ZoneAnchor)
 	active := Section(conv, plan, ZoneActive)
 	surviving := survivingHistory(conv, plan, keep)
@@ -64,14 +87,13 @@ func assemble(conv []nacelle.Message, plan []Span, ledger string, keep func(int)
 	previous := LedgerText(conv, plan)
 	carryParts, carryMsgs := ledgerCarry(conv, plan)
 
-	if dropped == 0 && len(surviving) == 0 && ledger == "" && previous == "" && len(carryParts) == 0 && len(carryMsgs) == 0 {
-		out := make([]nacelle.Message, 0, len(anchor)+len(active))
-		out = append(out, anchor...)
-		out = append(out, active...)
-		return out, measure(conv, out, 0)
+	if dropped == 0 && len(surviving) == 0 && ledger == "" && len(carryParts) == 0 && len(carryMsgs) == 0 &&
+		!slices.ContainsFunc(plan, func(span Span) bool { return span.Zone == ZoneLedger }) {
+		return unchanged(conv, anchor, active)
 	}
 
-	built := BuildLedger(previous, ledger)
+	body, replaced := NextLedger(previous, ledger, replace)
+	built := newLedgerMessage(body)
 	built.Parts = append(built.Parts, carryParts...)
 	built.Role = ledgerRole(anchor, following(carryMsgs, surviving, active))
 
@@ -85,10 +107,22 @@ func assemble(conv []nacelle.Message, plan []Span, ledger string, keep func(int)
 	out = alternateFrom(out, len(anchor))
 
 	stats := measure(conv, out, dropped)
+	stats.LedgerReplaced, stats.LedgerKept = replaced, replace && !replaced && ledger != ""
 	if stats.After > stats.Before {
 		return conv, Stats{Before: stats.Before, After: stats.Before, Refused: true}
 	}
 	return out, stats
+}
+
+// unchanged is the conversation handed back when a call has nothing to do: the
+// pinned head and the active window, with no ledger standing between them. It is
+// the one shape that gets no buffer, and the reason is in assemble's own doc
+// comment — nothing was dropped, so there is no boundary to close.
+func unchanged(conv, anchor, active []nacelle.Message) ([]nacelle.Message, Stats) {
+	out := make([]nacelle.Message, 0, len(anchor)+len(active))
+	out = append(out, anchor...)
+	out = append(out, active...)
+	return out, measure(conv, out, 0)
 }
 
 // ledgerCarry is what the ledger zone holds beyond its own text: the extra parts

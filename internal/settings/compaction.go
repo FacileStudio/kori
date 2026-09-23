@@ -6,17 +6,32 @@ import (
 )
 
 // Compaction is the ratio-based context-management surface: the tier ladder
-// that decides when a session tombstones, prunes or folds history, and the
-// opt-in judge that classifies history blocks before any of that happens.
+// that decides when a session tombstones, prunes or folds history, the two
+// figures that say how much window the ladder is really measured against, and
+// the opt-in judge that classifies history blocks before any of that happens.
 // Every scalar is a pointer, so a layer that mentions one ratio leaves the rest
 // of the policy alone instead of resetting it to zero.
 type Compaction struct {
-	SoftRatio      *float64 `yaml:"soft_ratio"`
-	MidRatio       *float64 `yaml:"mid_ratio"`
-	HardRatio      *float64 `yaml:"hard_ratio"`
-	KeepTurns      *int     `yaml:"keep_turns"`
-	AnchorMessages *int     `yaml:"anchor_messages"`
-	Judge          Judge    `yaml:"judge"`
+	SoftRatio *float64 `yaml:"soft_ratio"`
+	MidRatio  *float64 `yaml:"mid_ratio"`
+	HardRatio *float64 `yaml:"hard_ratio"`
+	// WindowTokens overrides the backend's reported context window, and
+	// ReserveTokens is the part of that window held back for the turn's own
+	// answer. The ratios are read against the window minus the reserve, so the
+	// reserve is what keeps the top rung from leaving the model nothing to answer
+	// with. Both are optional: an unset window is whatever the backend reports, and
+	// an unset reserve is a fifth of that window within the shipped bounds.
+	WindowTokens  *int64 `yaml:"window_tokens"`
+	ReserveTokens *int64 `yaml:"reserve_tokens"`
+	// KeepTurns is a floor in messages the verbatim tail never drops below, and
+	// KeepTokens is the budget that sizes it beyond that floor. The floor is the
+	// smaller guarantee on purpose: a message floor that is generous is the one
+	// bound neither tier can move, because the newest turns are where a session's
+	// largest tool results land and the active window is never touched.
+	KeepTurns      *int   `yaml:"keep_turns"`
+	KeepTokens     *int64 `yaml:"keep_tokens"`
+	AnchorMessages *int   `yaml:"anchor_messages"`
+	Judge          Judge  `yaml:"judge"`
 }
 
 // Judge is the TypeSafe System One classifier that ranks history blocks
@@ -48,8 +63,17 @@ func (c *Compaction) Merge(over Compaction) {
 	if over.HardRatio != nil {
 		c.HardRatio = over.HardRatio
 	}
+	if over.WindowTokens != nil {
+		c.WindowTokens = over.WindowTokens
+	}
+	if over.ReserveTokens != nil {
+		c.ReserveTokens = over.ReserveTokens
+	}
 	if over.KeepTurns != nil {
 		c.KeepTurns = over.KeepTurns
+	}
+	if over.KeepTokens != nil {
+		c.KeepTokens = over.KeepTokens
 	}
 	if over.AnchorMessages != nil {
 		c.AnchorMessages = over.AnchorMessages
@@ -102,13 +126,15 @@ func (c Compaction) Ratios() (soft, mid, hard float64) {
 // off the machine, so a machine nobody opted in on never makes that call.
 func defaultCompaction() Compaction {
 	soft, mid, hard := DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio
-	keepTurns, anchorMessages, maxBlocks := 3, 1, 64
+	keepTurns, anchorMessages, maxBlocks := DefaultKeepTurns, 1, 64
+	keepTokens := int64(DefaultKeepTokens)
 	pruneThreshold, judgeEnabled := DefaultPruneThreshold, false
 	return Compaction{
 		SoftRatio:      &soft,
 		MidRatio:       &mid,
 		HardRatio:      &hard,
 		KeepTurns:      &keepTurns,
+		KeepTokens:     &keepTokens,
 		AnchorMessages: &anchorMessages,
 		Judge: Judge{
 			Enabled:        &judgeEnabled,
@@ -128,7 +154,10 @@ func compactionEnv() Compaction {
 		SoftRatio:      envFloat(EnvPrefix + "COMPACTION_SOFT_RATIO"),
 		MidRatio:       envFloat(EnvPrefix + "COMPACTION_MID_RATIO"),
 		HardRatio:      envFloat(EnvPrefix + "COMPACTION_HARD_RATIO"),
+		WindowTokens:   envInt64(EnvPrefix + "COMPACTION_WINDOW_TOKENS"),
+		ReserveTokens:  envInt64(EnvPrefix + "COMPACTION_RESERVE_TOKENS"),
 		KeepTurns:      envInt(EnvPrefix + "COMPACTION_KEEP_TURNS"),
+		KeepTokens:     envInt64(EnvPrefix + "COMPACTION_KEEP_TOKENS"),
 		AnchorMessages: envInt(EnvPrefix + "COMPACTION_ANCHOR_MESSAGES"),
 		Judge: Judge{
 			Enabled:        envBool(EnvPrefix + "COMPACTION_JUDGE"),
@@ -151,7 +180,7 @@ func judgeKeyEnv() string {
 	return envGet("COMPACTION_JUDGE_API_KEY")
 }
 
-// validateCompaction rejects a tier ladder that cannot work. It runs on the
+// ValidateCompaction rejects a tier ladder that cannot work. It runs on the
 // resolved settings, so a ratio no layer mentioned has already been filled from
 // the defaults and only a value somebody actually wrote down is judged.
 //
@@ -161,21 +190,34 @@ func judgeKeyEnv() string {
 // hard_ratio: 1.5 looks exactly like an enabled compaction that never compacts,
 // and soft_ratio: 0 derives a zero ceiling, which every gate reads as "compaction
 // off". Failing at load is what keeps either from being found out later.
-func validateCompaction(c Compaction) error {
+//
+// Every bound is written in the positive form because NaN compares false against
+// all of them: `x <= 0 || x > 1` admits a ratio that is not a number, and YAML's
+// `.nan` (or an environment "nan") then reaches a ladder whose own
+// `size >= ratio*window` is true at every size, pinning the session at the hard
+// tier. `!(x > 0 && x <= 1)` rejects it with the same message as any other typo.
+func ValidateCompaction(c Compaction, compactAt *int64) error {
+	if compactAt != nil && *compactAt < 0 {
+		return &ParseError{Path: "limits.compact_at", Err: fmt.Errorf(
+			"want 0 (compaction off) or a positive token ceiling, got %d", *compactAt)}
+	}
 	soft, mid, hard := c.Ratios()
 	rungs := []struct {
 		key   string
 		ratio float64
 	}{{"soft_ratio", soft}, {"mid_ratio", mid}, {"hard_ratio", hard}}
 	for _, rung := range rungs {
-		if rung.ratio <= 0 || rung.ratio > 1 {
+		if !(rung.ratio > 0 && rung.ratio <= 1) {
 			return &ParseError{Path: "limits.compaction." + rung.key, Err: fmt.Errorf(
 				"want a ratio in (0,1], got %v — use limits.compact_at: 0 to turn compaction off", rung.ratio)}
 		}
 	}
-	if soft > mid || mid > hard {
+	if !(soft <= mid && mid <= hard) {
 		return &ParseError{Path: "limits.compaction", Err: fmt.Errorf(
 			"want soft_ratio <= mid_ratio <= hard_ratio, got %v/%v/%v", soft, mid, hard)}
+	}
+	if err := validateTail(c); err != nil {
+		return err
 	}
 	return validateJudge(c.Judge)
 }
@@ -188,7 +230,7 @@ func validateJudge(j Judge) error {
 	if j.PruneThreshold == nil {
 		return nil
 	}
-	if *j.PruneThreshold <= 0 || *j.PruneThreshold > 1 {
+	if !(*j.PruneThreshold > 0 && *j.PruneThreshold <= 1) {
 		return &ParseError{Path: "limits.compaction.judge.prune_threshold", Err: fmt.Errorf(
 			"want a probability in (0,1], got %v", *j.PruneThreshold)}
 	}

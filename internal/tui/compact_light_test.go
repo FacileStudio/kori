@@ -11,6 +11,9 @@ import (
 	"github.com/FacileStudio/nacelle"
 )
 
+// compactSlack is a fixture offset above the trigger, used to build the band a pass can stop inside.
+const compactSlack = 20_000
+
 // windowedPolicy is a policy whose ratios can be measured: soft at 130k, mid at
 // 160k and hard at 180k of a 200k window, with compact_at pinned at 100k.
 func windowedPolicy() compaction.Policy {
@@ -44,7 +47,7 @@ func TestBeginCompactionSkipsTheSummarizerWhenEvictionCannotLandUnder(t *testing
 	m.conversation = bigConversation()
 	m.size = int64(1_000_000)
 
-	if cmd := m.beginCompaction(context.Background()); cmd != nil {
+	if cmd := m.beginCompaction(context.Background(), false); cmd != nil {
 		t.Error("beginCompaction = a Cmd, want nil when the history cannot land under the ceiling — no summarizer call")
 	}
 	if m.compacting {
@@ -158,24 +161,41 @@ func TestSoftTierRunsOnceThePassClearsTheFloor(t *testing.T) {
 	}
 }
 
-func TestCheckThrashCountsNearMissesAndWarnsOnlyAtTheLimit(t *testing.T) {
+// A pass that leaves the size over the trigger has not landed, whatever margin it
+// left, so the threshold counted here is the one that fires the next pass. The band
+// that used to read as a landing ran from the trigger to compactSlack above it, and
+// a summarizing pass stopping inside it cleared the count instead of raising it, so
+// the guard never stood down while a fresh full pass fired on every send.
+func TestCheckThrashCountsAPassThatLeavesTheSizeInTheFiringBand(t *testing.T) {
 	m := sized()
-	m.size = m.compactAt + compactSlack + 1
+	m.conversation = []nacelle.Message{
+		nacelle.UserText("the goal"),
+		nacelle.AssistantText("an early answer"),
+		nacelle.UserText("a middle turn"),
+		nacelle.UserText("the newest turn"),
+		nacelle.AssistantText("the live answer"),
+	}
+	m.size = m.policy.Trigger() + compactSlack/2
 
 	for i := range thrashLimit - 1 {
-		m.checkThrash()
+		if cmd := m.beginCompaction(context.Background(), false); cmd != nil {
+			t.Fatalf("pass %d = a Cmd, want the mask-only pass of a history that cannot free the overshoot", i+1)
+		}
+		if m.thrashCount != i+1 {
+			t.Fatalf("thrashCount = %d after %d passes that did not land, want %d", m.thrashCount, i+1, i+1)
+		}
 		if m.thrashed() {
-			t.Errorf("thrashed after %d near-miss passes, want the guard to wait for %d", i+1, thrashLimit)
+			t.Errorf("thrashed after %d passes over the trigger, want the guard to wait for %d", i+1, thrashLimit)
 		}
 		if said := strings.Join(spoken(m), " "); strings.Contains(said, "compaction keeps leaving") {
 			t.Errorf("said = %q, want no stand-down warning before the limit", said)
 		}
 	}
 
-	m.checkThrash()
+	m.beginCompaction(context.Background(), false)
 
 	if !m.thrashed() {
-		t.Errorf("thrashed = false after %d consecutive near-misses, want the guard stood down", thrashLimit)
+		t.Errorf("thrashed = false after %d consecutive passes left the size over the trigger, want the guard stood down", thrashLimit)
 	}
 	if said := strings.Join(spoken(m), " "); !strings.Contains(said, "compaction keeps leaving") {
 		t.Errorf("said = %q, want the stand-down warning at the limit", said)
@@ -185,7 +205,7 @@ func TestCheckThrashCountsNearMissesAndWarnsOnlyAtTheLimit(t *testing.T) {
 func TestCheckThrashResetsTheCounterWhenUnder(t *testing.T) {
 	m := sized()
 	m.thrashCount = thrashLimit - 1
-	m.size = m.compactAt - 1
+	m.size = m.policy.Trigger() - 1
 
 	m.checkThrash()
 
@@ -197,39 +217,31 @@ func TestCheckThrashResetsTheCounterWhenUnder(t *testing.T) {
 	}
 }
 
-// The pre-send guard's headroom is tuned to the ladder, and this is the
-// arithmetic that ties them together. The smallest size the guard acts on —
-// Trigger() + compactSlack + 1 — must already be past the mid ratio, so what it
-// dispatches is a summarizing pass rather than a free tombstone that would free
-// nothing on a context only a summary can shrink and leave the send to overshoot
-// anyway. A compactSlack below (mid - soft) × the window inverts that: the guard
-// would fire into the soft tier and become the do-nothing check it was fixed
-// from being.
+// The pre-send guard acts at the trigger itself, and what it dispatches there has
+// to be a pass that can shrink the conversation. On a backend that reports no
+// window there is no ratio to measure, so the ceiling is the whole ladder and Tier
+// reads Mid at exactly it: the first size the guard acts on, Trigger() + 1, is a
+// summarizing pass already.
 //
-// It lives here, in the package that owns compactSlack, because it is the one
-// place both halves are visible. The window is the 128k the OpenAI backend
-// reports, which makes the ceiling ResolveBudget derives 0.65 × 128000 — the
-// 83.2k the ladder is calibrated against.
-func TestThePreSendGuardFiresIntoASummarizingTier(t *testing.T) {
-	const window = 128_000
+// This drives the guard rather than reading Tier off an assumed firing size. The
+// earlier shape asked about Trigger() + compactSlack + 1, a size the guard stopped
+// acting at when it moved to the trigger, so it proved nothing about the dispatch.
+// A windowed session whose compact_at sits below its own mid ratio fires into the
+// soft tier, and that is accepted: a free tombstone with no model call.
+func TestThePreSendGuardDispatchesASummarizingPassAtTheTrigger(t *testing.T) {
+	m := sized()
+	m.agent = agentOver(t, blind{})
+	m.conversation = heavyHistory()
+	m.size = m.policy.Trigger() + 1
 
-	policy := compaction.Policy{
-		Ratios: compaction.Ratios{
-			Soft: compaction.DefaultSoftRatio,
-			Mid:  compaction.DefaultMidRatio,
-			Hard: compaction.DefaultHardRatio,
-		},
-		Window:         window,
-		Ceiling:        int64(compaction.DefaultSoftRatio * window),
-		KeepTurns:      compaction.DefaultKeepTurns,
-		AnchorMessages: compaction.DefaultAnchorMessages,
+	if tier := m.policy.Tier(m.size); tier != compaction.Mid {
+		t.Fatalf("tier at the trigger = %s, want mid with no window to measure a ratio against", tier)
 	}
-
-	fires := policy.Trigger() + compactSlack + 1
-
-	switch tier := policy.Tier(fires); tier {
-	case compaction.Mid, compaction.Hard:
-	default:
-		t.Errorf("the guard acts from %d, tier = %s, want a summarizing tier — a soft pass there could not land the context under", fires, tier)
+	if cmd := m.compactBeforeSend(context.Background()); cmd == nil {
+		t.Fatal("compactBeforeSend = nil one token past the trigger, want the send held behind a pass")
 	}
+	if !m.compacting {
+		t.Error("compacting = false, want a summarizing pass rather than a tombstone no ceiling needs")
+	}
+	drain(t, m)
 }

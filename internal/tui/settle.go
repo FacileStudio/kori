@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -56,6 +55,18 @@ func (m *Model) settle() tea.Cmd {
 	m.run.turnBegan = time.Time{}
 
 	m.taskReminder()
+	return m.afterRun(spend)
+}
+
+// afterRun is everything a tidied run leads to, in the one order that is safe:
+// recovery first, because a run the provider refused for length is not finished
+// with — the turn is still owed an answer — and delivering a queued line on top
+// of it would start a second run on the context that just failed. Then the
+// continuations, then the queue.
+func (m *Model) afterRun(spend nacelle.Usage) tea.Cmd {
+	if cmd := m.recoverOverflow(); cmd != nil {
+		return cmd
+	}
 	if cmd := m.maybeGrind(spend); cmd != nil {
 		return cmd
 	}
@@ -160,9 +171,11 @@ func (m *Model) nextToSend() int {
 // It runs after closeTurn so that a run which committed something is already
 // committed, and it says nothing when the run was abandoned or cut short: those
 // endings have their own words in cutShort, and two explanations of one silence
-// is worse than none.
+// is worse than none. A run that ended on a context-length rejection is silent
+// here too, because recovery is about to say what it is doing about it and the
+// client does not need to announce the empty screen first.
 func (m *Model) sayNothingCame() {
-	if m.run.reported || cutShort(m.run.stop) != "" {
+	if m.run.reported || m.run.overflow != nil || cutShort(m.run.stop) != "" {
 		return
 	}
 	if m.run.usage.InputTokens == 0 && m.run.usage.OutputTokens == 0 {
@@ -170,56 +183,6 @@ func (m *Model) sayNothingCame() {
 		return
 	}
 	m.say(fromFailure, "no answer · the model stopped without one")
-}
-
-// taskReminder adds a reminder to the conversation when the run ended normally
-// and tasks remain unfinished, so the model sees them on the next turn and
-// either updates their status or adjusts the plan.
-//
-// It runs after closeTurn so the conversation has the finished turn committed
-// before the reminder is inserted. The reminder is a user message with a
-// bracket-prefixed prefix, clearly the client speaking and not the person.
-func (m *Model) taskReminder() {
-	if m.run.stop != nacelle.StopEnd {
-		return
-	}
-	if !m.tasksUnfinished() {
-		return
-	}
-	m.say(fromTool, "\u2606 tasks: "+m.tasksSummary())
-	m.conversation = append(m.conversation, nacelle.UserText(m.tasksSummary()))
-}
-
-// tasksUnfinished returns true when the plan has steps that are not completed.
-func (m *Model) tasksUnfinished() bool {
-	for _, item := range m.tasks {
-		if item.Status != statusDone {
-			return true
-		}
-	}
-	return false
-}
-
-// tasksSummary returns a short description of the plan's state for reminders.
-func (m *Model) tasksSummary() string {
-	total := len(m.tasks)
-	if total == 0 {
-		return ""
-	}
-	done := 0
-	for _, item := range m.tasks {
-		if item.Status == statusDone {
-			done++
-		}
-	}
-	switch done {
-	case total:
-		return ""
-	case 0:
-		return fmt.Sprintf("tasks: %d steps, none done — keep the plan current as you go", total)
-	default:
-		return fmt.Sprintf("tasks: %d/%d steps complete — update the plan before continuing", done, total)
-	}
 }
 
 // reanchor keeps the edit offset naming the same line after a different one

@@ -36,7 +36,7 @@ func TestApplyKeepsTheAnchorByteForByte(t *testing.T) {
 
 	for pass := range 5 {
 		conv = appendTurn(conv, fmt.Sprintf("c%d", pass))
-		next, _ := Apply(conv, Plan(conv, policy), fmt.Sprintf("fold %d", pass), nil)
+		next, _ := Apply(conv, Plan(conv, policy), fmt.Sprintf("fold %d", pass), nil, false)
 		conv = next
 		if !reflect.DeepEqual(conv[0], anchor) {
 			t.Fatalf("pass %d rewrote the anchor: %+v", pass, conv[0])
@@ -49,7 +49,7 @@ func TestApplyInstallsALedgerAndKeepsTheEnds(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 
-	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- done", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- done", nil, false)
 
 	if len(out) != len(conv)-2 {
 		t.Fatalf("conversation = %d messages, want the three history turns replaced by one ledger", len(out))
@@ -83,7 +83,7 @@ func TestApplyKeepsRolesAlternating(t *testing.T) {
 		nacelle.AssistantText("five"),
 	}
 
-	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- merged", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- merged", nil, false)
 
 	if stats.Refused {
 		t.Fatalf("the pass was refused, so the merge is not being exercised: %+v", stats)
@@ -123,7 +123,7 @@ func TestApplyNeverGrowsTheConversation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			out, stats := Apply(tc.conv, Plan(tc.conv, applyPolicy()), tc.ledger, tc.keep)
+			out, stats := Apply(tc.conv, Plan(tc.conv, applyPolicy()), tc.ledger, tc.keep, false)
 			if stats.Refused != tc.refused || stats.After > stats.Before {
 				t.Fatalf("stats = %+v, want a refused pass of %v over %v", stats, tc.refused, tc.conv)
 			}
@@ -153,7 +153,7 @@ func TestApplyRefusesAPlanThatNoLongerCoversTheConversation(t *testing.T) {
 	plan := Plan(applySample(), policy)
 	moved := []nacelle.Message{nacelle.UserText("a different conversation")}
 
-	out, stats := Apply(moved, plan, "a ledger for a conversation that is gone", nil)
+	out, stats := Apply(moved, plan, "a ledger for a conversation that is gone", nil, false)
 
 	if !stats.Stale {
 		t.Fatalf("stats = %+v, want the plan refused as stale", stats)
@@ -174,7 +174,7 @@ func TestApplyBuffersTheBoundaryWithoutALedger(t *testing.T) {
 	policy := applyPolicy()
 	conv := applySample()
 
-	out, _ := Apply(conv, Plan(conv, policy), "", nil)
+	out, _ := Apply(conv, Plan(conv, policy), "", nil, false)
 
 	if len(out) != 4 {
 		t.Fatalf("conversation = %v, want the anchor, the buffer and the active window", out)
@@ -184,6 +184,35 @@ func TestApplyBuffersTheBoundaryWithoutALedger(t *testing.T) {
 	}
 	if body := Body(out[1]); body != "" {
 		t.Errorf("ledger body = %q, want nothing folded into it", body)
+	}
+	assertAlternating(t, out)
+}
+
+// A ledger with an empty body is not the same thing as a conversation with no
+// ledger. The assembly installs the empty one on purpose when a pass dropped
+// history and had no summary to stand in its place, and that message is the
+// buffer keeping the pinned head and the turn after it role-legal — so reading its
+// empty body as "no ledger" hands back the anchor and the active window with the
+// ledger silently dropped and the two roles left colliding.
+func TestApplyKeepsALedgerWithAnEmptyBody(t *testing.T) {
+	policy := Policy{AnchorMessages: 1, KeepTurns: 2}
+	conv := []nacelle.Message{
+		nacelle.UserText("the task"),
+		BuildLedger("", ""),
+		nacelle.UserText("follow up"),
+		nacelle.AssistantText("answer"),
+	}
+
+	out, stats := Apply(conv, Plan(conv, policy), "", nil, false)
+
+	if len(out) != len(conv) {
+		t.Fatalf("conversation = %v, want the ledger kept in place", out)
+	}
+	if !IsLedger(out[1]) {
+		t.Fatalf("message 1 = %+v, want the ledger buffer", out[1])
+	}
+	if stats.Refused {
+		t.Errorf("stats = %+v, want the ledger rebuilt rather than the pass refused", stats)
 	}
 	assertAlternating(t, out)
 }
@@ -200,7 +229,7 @@ func TestApplyLeavesAnUnchangedConversationAlone(t *testing.T) {
 		nacelle.AssistantText("last"),
 	}
 
-	out, stats := Apply(conv, Plan(conv, policy), "", nil)
+	out, stats := Apply(conv, Plan(conv, policy), "", nil, false)
 
 	if !reflect.DeepEqual(out, conv) {
 		t.Errorf("conversation = %v, want it handed back untouched", out)

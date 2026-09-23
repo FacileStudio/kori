@@ -27,22 +27,60 @@ type compactPass struct {
 	tier  compaction.Tier
 	judge compaction.Judge
 	agent *nacelle.Agent
+	// consolidate is whether this pass may rewrite the ledger rather than add
+	// to it, decided here on the update loop from the ledger the conversation
+	// already carries. It is the pass's question and not the assembler's because
+	// it is answered by a size the goroutine cannot measure: the ledger lives in
+	// the conversation, which the pass snapshotted but must not re-derive from.
+	consolidate bool
 }
 
-// pass snapshots the session for one pass. The conversation is cloned so the
-// goroutine owns its own slice header and backing array; the messages it points
-// at stay read-only for the duration, because Tombstone — the one thing here that
-// edits a message in place — runs on the update loop and never inside a pass.
+// pass snapshots the session for one pass. The snapshot owns the conversation it
+// hands the goroutine: the slice is cloned, and so is every message's Parts
+// array. The second clone is the one that matters. Tombstone — the only thing in
+// this package that edits a message in place — writes a stub into a result's slot
+// rather than replacing the array, so a snapshot sharing those arrays would be
+// reading words the mask was rewriting under it, on the update loop, at any
+// moment the two paths overlapped.
+//
+// That sharing was the whole hazard, and cloning the parts is what makes it
+// unrepresentable rather than merely unobserved. It is cheap in the unit that
+// counts here: a parts array copies as a slice of interface headers, so the price
+// is one small allocation per message and never the bytes those parts point at —
+// measured at ~20µs for a 400-message conversation carrying eight kilobytes a
+// message (BenchmarkPassSnapshot), on the update loop, once per pass, next to a
+// summarizer call measured in seconds.
+//
+// What isolation cannot do is keep a future caller honest: the mask still runs on
+// the update loop, and no check here can see whether a pass is live — maskHistory
+// is away from this file and its callers do not ask. compact_pass_test.go pins
+// the shape instead: it snapshots a conversation, masks it the way such a caller
+// would, and fails if the pass's own view moved.
 //
 // The summarizer is built here rather than in the goroutine for the same reason:
 // it reads m.agent, and a pass must not touch the model at all.
 func (m *Model) pass(plan []compaction.Span, tier compaction.Tier) compactPass {
 	return compactPass{
-		conv:  slices.Clone(m.conversation),
-		size:  m.size,
-		plan:  plan,
-		tier:  tier,
-		judge: m.judge,
-		agent: m.summarizer(),
+		conv:        snapshot(m.conversation),
+		size:        m.size,
+		plan:        plan,
+		tier:        tier,
+		judge:       m.judge,
+		agent:       m.summarizer(),
+		consolidate: compaction.LedgerOverBudget(compaction.LedgerText(m.conversation, plan)),
 	}
+}
+
+// snapshot is the pass's own copy of a conversation: its own slice header, its
+// own backing array, and its own Parts slice per message, so nothing the update
+// loop edits in place can be read by the pass's goroutine. The parts ride as a
+// copy of the slice, not of what they hold — every nacelle.Part is read-only, and
+// the one editor here replaces an element of that slice rather than writing
+// through it, which is why copying the slice is the whole of the protection.
+func snapshot(conv []nacelle.Message) []nacelle.Message {
+	out := slices.Clone(conv)
+	for i := range out {
+		out[i].Parts = slices.Clone(out[i].Parts)
+	}
+	return out
 }

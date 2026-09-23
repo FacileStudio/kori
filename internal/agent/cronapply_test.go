@@ -153,6 +153,34 @@ func TestTrustReArmsAfterAnEdit(t *testing.T) {
 	}
 }
 
+// A job file's compaction block merges over the resolved config after the job's
+// own check has run, and that one validates the job's ladder filled with defaults
+// rather than the ladder the merge will produce. A job that is usable alone can
+// therefore combine with the session's ratios into one that cannot tier, and
+// nothing downstream re-reads it. The merge is re-validated for that reason.
+func TestAJobLadderIsValidatedAfterMerging(t *testing.T) {
+	soft, mid, jobMid, sane := 0.85, 0.9, 0.8, 0.88
+	base := settings.Defaults("")
+	base.Compaction.SoftRatio = &soft
+	base.Compaction.MidRatio = &mid
+
+	_, err := jobConfig(base, settings.CronJob{Limits: settings.Limits{
+		Compaction: settings.Compaction{MidRatio: &jobMid},
+	}})
+	if err == nil {
+		t.Fatal("a ladder that cannot tier once merged must be refused")
+	}
+	if !strings.Contains(err.Error(), "limits.compaction") {
+		t.Errorf("error = %q, want it to name the ladder", err)
+	}
+
+	if _, err := jobConfig(base, settings.CronJob{Limits: settings.Limits{
+		Compaction: settings.Compaction{MidRatio: &sane},
+	}}); err != nil {
+		t.Errorf("a merged ladder that can tier must load: %v", err)
+	}
+}
+
 func assertTrusted(t *testing.T, name string) {
 	t.Helper()
 	_, files, err := loadCronState()

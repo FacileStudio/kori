@@ -1,7 +1,8 @@
 package tui
 
-// Tests for the pre-send compaction guard: the measure it acts on, and its
-// refusal to go quiet when the backend cannot count.
+// Tests for the pre-send compaction guard: when it fires, and its refusal to go
+// quiet when the backend cannot count. What the guard measures is next door, in
+// compact_measure_test.go.
 //
 // The guard used to be one condition — `if count, err := CountTokens(...); err
 // == nil && ...` — with a failure mode invisible from the call site: on a backend
@@ -109,60 +110,6 @@ func drain(t *testing.T, m *Model) {
 	}
 }
 
-// The live count wins when the backend offers one: it sees the conversation as
-// it will be sent, not as it last was.
-func TestSendSizePrefersTheBackendCount(t *testing.T) {
-	m := sized()
-	m.agent = agentOver(t, counting{tokens: 123_456})
-	m.size = 90_000
-
-	size, ok := m.sendSize(context.Background())
-
-	if !ok || size != 123_456 {
-		t.Errorf("sendSize = %d, %v, want the backend's own count", size, ok)
-	}
-}
-
-// The regression this file exists for. A backend that cannot count must fall
-// back to the last size the provider reported, not stand the guard down.
-func TestSendSizeFallsBackToTheLastReportedSize(t *testing.T) {
-	m := sized()
-	m.agent = agentOver(t, blind{})
-	m.size = 90_000
-
-	size, ok := m.sendSize(context.Background())
-
-	if !ok || size != 90_000 {
-		t.Errorf("sendSize = %d, %v, want the last usage-reported size", size, ok)
-	}
-}
-
-// Zero from a backend that claims to count is not a measure — it is the shape a
-// stub backend answers with, and reading it as one would make the guard quieter
-// than the unknown it is.
-func TestSendSizeIgnoresAZeroCount(t *testing.T) {
-	m := sized()
-	m.agent = agentOver(t, counting{})
-	m.size = 90_000
-
-	size, ok := m.sendSize(context.Background())
-
-	if !ok || size != 90_000 {
-		t.Errorf("sendSize = %d, %v, want the fallback rather than a zero count", size, ok)
-	}
-}
-
-// With neither a count nor a remembered size there is nothing to measure
-// against, and compacting on a guess would be worse than not compacting.
-func TestSendSizeReportsNoMeasureWhenThereIsNone(t *testing.T) {
-	m := sized()
-	m.agent = agentOver(t, blind{})
-
-	if size, ok := m.sendSize(context.Background()); ok {
-		t.Errorf("sendSize = %d, true, want no measure from an empty session", size)
-	}
-}
-
 // The guard still fires on the soft tier, which is synchronous and free, and it
 // acts on the size it fell back to.
 func TestCompactBeforeSendTombstonesWhenTheBackendCannotCount(t *testing.T) {
@@ -203,18 +150,36 @@ func TestCompactBeforeSendStartsAPassWhenTheBackendCannotCount(t *testing.T) {
 
 // Under the trigger plus the headroom one turn is expected to need, the send is
 // left alone: the guard is for the conversation already past the point of no
-// return, not for every send.
+// return, not for every send. The comparison is the trigger itself and not a
+// slack above it — the trigger is already the soft ratio of the window with the
+// answer's reserve held back underneath, so waiting buys no headroom.
 func TestCompactBeforeSendLeavesAnAffordableSendAlone(t *testing.T) {
 	m := sized()
 	m.agent = agentOver(t, blind{})
 	m.policy.Window = 200_000
 	m.conversation = bigConversation()
-	m.size = compactAt + compactSlack
+	m.size = m.policy.Trigger()
 
 	m.compactBeforeSend(context.Background())
 
 	if m.last.results != 0 || m.compacting {
-		t.Errorf("last = %+v, compacting = %v, want an affordable send left alone", m.last, m.compacting)
+		t.Errorf("last = %+v, compacting = %v, want a send at the trigger left alone", m.last, m.compacting)
+	}
+}
+
+// One token past it and the guard fires, so "at the trigger" is the boundary and
+// not an accidental headroom the old slack used to provide.
+func TestCompactBeforeSendFiresOneTokenPastTheTrigger(t *testing.T) {
+	m := sized()
+	m.agent = agentOver(t, blind{})
+	m.policy.Window = 200_000
+	m.conversation = bigConversation()
+	m.size = m.policy.Trigger() + 1
+
+	m.compactBeforeSend(context.Background())
+
+	if m.last.results == 0 {
+		t.Errorf("last = %+v, want the guard to fire past the trigger", m.last)
 	}
 }
 

@@ -20,6 +20,85 @@ func TestIsLedgerRecognizesTheSentinel(t *testing.T) {
 	}
 }
 
+// The sentinel grants the strongest identity this package hands out: a ledger is
+// folded into and never pruned, so whatever matches it stops being history. A
+// prefix match is cheap to hit by accident — a turn quoting the marker, or a
+// paste that opens with it and sits ahead of the real ledger, whose first match
+// wins — and the message that claimed the identity would take the real ledger's
+// place while the real one read as a prune candidate. Only the whole first line
+// counts.
+func TestIsLedgerRequiresTheSentinelOnItsOwnLine(t *testing.T) {
+	for _, text := range []string{
+		Sentinel + " and here is what I copied out of the docs",
+		Sentinel + " is the marker kori writes",
+		"the ledger opens with " + Sentinel + ", then the facts",
+	} {
+		msg := nacelle.UserText(text)
+		if IsLedger(msg) {
+			t.Errorf("IsLedger(%q) = true, want a text that only opens with the marker refused", text)
+		}
+		if body := Body(msg); body != "" {
+			t.Errorf("Body(%q) = %q, want the marker left in a text that is not the ledger", text, body)
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		text string
+		body string
+	}{
+		{"the sentinel alone", Sentinel, ""},
+		{"the sentinel and a body", Sentinel + "\n\nDecisions:\n- ship it", "Decisions:\n- ship it"},
+		{"the sentinel with room around it", "  " + Sentinel + "  \n\nbody", "body"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := nacelle.AssistantText(tc.text)
+			if !IsLedger(msg) {
+				t.Fatalf("IsLedger(%q) = false, want the sentinel line recognised", tc.text)
+			}
+			if body := Body(msg); body != tc.body {
+				t.Errorf("Body(%q) = %q, want %q", tc.text, body, tc.body)
+			}
+		})
+	}
+}
+
+// The identity is not bound to a role, and it cannot be: assembly picks the
+// ledger's role as the opposite of the anchor's last turn, so a session anchored
+// on an assistant turn is folded into a user-role ledger — and a later pass that
+// failed to recognise it would hand the ledger to the judge as history and prune
+// it. Whatever the package writes has to stay recognisable.
+func TestIsLedgerRecognizesEveryLedgerThePackageWrites(t *testing.T) {
+	if !IsLedger(BuildLedger("", "Decisions:\n- ship it")) {
+		t.Error("IsLedger(BuildLedger(...)) = false, want the assistant-role ledger recognised")
+	}
+
+	conv := []nacelle.Message{
+		nacelle.AssistantText("a session resumed on an assistant turn"),
+		callMessage("c1", "read"),
+		resultMessage("c1", "read", strings.Repeat("x", 40_000)),
+		nacelle.AssistantText("answer one"),
+		nacelle.UserText("follow up"),
+		nacelle.AssistantText("answer two"),
+	}
+	policy := Policy{AnchorMessages: 1, KeepTurns: 2}
+
+	out, stats := Apply(conv, Plan(conv, policy), "Decisions:\n- folded", nil, false)
+
+	if stats.Refused || stats.Stale {
+		t.Fatalf("stats = %+v, want the pass to land", stats)
+	}
+	if len(out) < 2 || out[1].Role != nacelle.RoleUser {
+		t.Fatalf("ledger = %+v, want the user-role ledger an assistant anchor produces", out)
+	}
+	if !IsLedger(out[1]) {
+		t.Fatalf("IsLedger(%+v) = false, want the ledger the package just wrote recognised", out[1])
+	}
+	if body := Body(out[1]); !strings.Contains(body, "folded") {
+		t.Errorf("body = %q, want the pass's own summary read back", body)
+	}
+}
+
 // A ledger built from an earlier one always contains it: a later pass can fold
 // new facts in but can never quietly drop an older one.
 func TestBuildLedgerFoldsMonotonically(t *testing.T) {

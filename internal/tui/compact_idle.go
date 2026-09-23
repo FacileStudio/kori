@@ -11,10 +11,16 @@ import (
 )
 
 // compactBeforeSend is the pre-flight half of the trigger: when the context the
-// next turn is about to inherit is already far enough over the tier trigger that
-// the turn would land past the ceiling, compact first and hold the send until
-// the pass settles. It is the guard that turns the threshold into prevention —
-// without it a single heavy turn is absorbed rather than avoided.
+// next turn is about to inherit has already crossed the tier trigger, compact
+// first and hold the send until the pass settles. It is the guard that turns the
+// threshold into prevention — without it a single heavy turn is absorbed rather
+// than avoided.
+//
+// It fires at the trigger itself and not a slack above it. The ceiling it is
+// compared against is already the soft ratio of the window a turn can fill,
+// with the reserve for the answer held back underneath it, so a conversation
+// past that figure has no runway left to spend: waiting twenty thousand tokens
+// longer only changes which tier answers, and it changes it upward.
 //
 // It must not depend on the backend being able to count tokens. Counting is the
 // accurate measure when it is offered, because it sees the conversation exactly
@@ -30,7 +36,7 @@ func (m *Model) compactBeforeSend(ctx context.Context) tea.Cmd {
 		return nil
 	}
 	size, ok := m.sendSize(ctx)
-	if !ok || size <= m.policy.Trigger()+compactSlack {
+	if !ok || size <= m.policy.Trigger() {
 		return nil
 	}
 	m.size = size
@@ -116,5 +122,5 @@ func (m *Model) compactCmd() tea.Cmd {
 		return nil
 	}
 	m.thrashCount = 0
-	return m.beginCompaction(context.Background())
+	return m.beginCompaction(context.Background(), false)
 }

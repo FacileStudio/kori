@@ -10,13 +10,23 @@ package compaction
 
 import "github.com/FacileStudio/nacelle"
 
-// The shipped tier ladder and the two ends a pass never touches. Settings alias
-// these so the numbers cannot drift between the two layers.
+// The shipped tier ladder, the two ends a pass never touches, and the budget the
+// verbatim tail is measured against. Settings alias these so the numbers cannot
+// drift between the two layers.
+//
+// KeepTurns is a floor in messages and KeepTokens is the budget that does the
+// sizing, and the floor is deliberately the smaller number. A message floor is
+// the one bound that can pin a conversation open however much room the ladder
+// has: the newest turns are exactly where a session's largest tool results land,
+// and neither tier can touch a message the window is holding verbatim. So the
+// shipped floor is one — the live turn alone, which no summary may stand in for
+// — and forty thousand tokens of tail is the budget that sizes the rest.
 const (
 	DefaultSoftRatio      = 0.65
 	DefaultMidRatio       = 0.80
 	DefaultHardRatio      = 0.90
-	DefaultKeepTurns      = 3
+	DefaultKeepTurns      = 1
+	DefaultKeepTokens     = 40_000
 	DefaultAnchorMessages = 1
 )
 
@@ -77,35 +87,61 @@ type Span struct {
 }
 
 // Policy is everything one session needs to decide what to compact: the ratio
-// ladder, the window it is measured against, the absolute ceiling that overrides
-// it, and the two ends a pass never touches. Window is 0 when the backend reports
-// none; Ceiling is the compact_at fallback for exactly that case.
+// ladder, the window it is measured against, the runway held back for the
+// answer, the absolute ceiling that overrides the ladder, and the two ends a
+// pass never touches.
+//
+// Window is the backend's whole context window and Reserve the part of it a turn
+// needs to answer with; the ladder is measured against the difference between
+// them, so the ratios describe a fraction of the window a session can actually
+// fill — see Usable. Window is 0 when the backend reports none, and Ceiling is
+// the compact_at fallback for exactly that case. KeepTurns is a floor in
+// messages the tail never drops below, KeepTokens is the budget that sizes it
+// beyond that floor, and AnchorMessages pins the head.
 type Policy struct {
 	Ratios         Ratios
 	Window         int64
+	Reserve        int64
 	Ceiling        int64
 	KeepTurns      int
+	KeepTokens     int64
 	AnchorMessages int
 }
 
-// Tier is the rung size falls on. With a known window it is a ratio comparison,
-// with compact_at flooring it at the soft tier when a session pins one. With no
-// window the ratios are undefined, so the ceiling is the only trigger and it
-// buys the full pass: a backend that reports no window has no soft ratio to
-// measure a free tombstone against.
-func (p Policy) Tier(size int64) Tier {
+// Usable is the window a tier is measured against: the backend's own window less
+// the runway a turn needs to finish. Reserving it is what stops the top rung
+// from leaving the model nothing to answer with — at hard_ratio 0.90 of the raw
+// window, a tenth of the window is all that is left for the response, and on a
+// model that reasons before it speaks that is a turn cut off mid-thought. Zero
+// means there is no window to measure against, which is the windowless backend
+// the absolute ceiling alone covers.
+func (p Policy) Usable() int64 {
 	if p.Window <= 0 {
+		return 0
+	}
+	return max(p.Window-p.Reserve, 0)
+}
+
+// Tier is the rung size falls on. With a known window it is a ratio comparison
+// against the window a turn can actually fill, with compact_at flooring it at
+// the soft tier when a session pins one. With no window the ratios are
+// undefined, so the ceiling is the only trigger and it buys the full pass: a
+// backend that reports no window has no soft ratio to measure a free tombstone
+// against.
+func (p Policy) Tier(size int64) Tier {
+	usable := p.Usable()
+	if usable <= 0 {
 		if p.Ceiling > 0 && size >= p.Ceiling {
 			return Mid
 		}
 		return Below
 	}
 	switch {
-	case reaches(size, p.Ratios.Hard, p.Window):
+	case reaches(size, p.Ratios.Hard, usable):
 		return Hard
-	case reaches(size, p.Ratios.Mid, p.Window):
+	case reaches(size, p.Ratios.Mid, usable):
 		return Mid
-	case reaches(size, p.Ratios.Soft, p.Window):
+	case reaches(size, p.Ratios.Soft, usable):
 		return Soft
 	case p.Ceiling > 0 && size >= p.Ceiling:
 		return Soft
@@ -115,14 +151,14 @@ func (p Policy) Tier(size int64) Tier {
 }
 
 // Trigger is the size at which this policy asks for a pass: the compact_at
-// ceiling when one is set, otherwise the soft ratio of the window. Zero means
-// there is no threshold to cross.
+// ceiling when one is set, otherwise the soft ratio of the window a turn can
+// fill. Zero means there is no threshold to cross.
 func (p Policy) Trigger() int64 {
 	if p.Ceiling > 0 {
 		return p.Ceiling
 	}
-	if p.Window > 0 {
-		return int64(p.Ratios.Soft * float64(p.Window))
+	if usable := p.Usable(); usable > 0 {
+		return int64(p.Ratios.Soft * float64(usable))
 	}
 	return 0
 }
@@ -146,7 +182,7 @@ func reaches(size int64, ratio float64, window int64) bool {
 func Plan(conv []nacelle.Message, p Policy) []Span {
 	n := len(conv)
 	anchor := anchorEnd(conv, clamp(p.AnchorMessages, 0, n))
-	active := activeStart(conv, n, anchor, p.KeepTurns)
+	active := activeStart(conv, n, anchor, p)
 	ledger := ledgerIndex(conv, anchor, active)
 
 	spans := make([]Span, 0, 5)
@@ -183,24 +219,6 @@ func anchorEnd(conv []nacelle.Message, anchor int) int {
 		end++
 	}
 	return end
-}
-
-// activeStart is where the verbatim window begins: the newest KeepTurns
-// messages, pulled back off a ToolResult boundary and never into the anchor. The
-// pull-back is skipped when it would land on the ledger: the ledger is not
-// dropped with the cut, it carries the very call the result answers, so the pair
-// stays valid with the result opening the active window instead of the ledger
-// being swallowed into it.
-func activeStart(conv []nacelle.Message, n, anchor, keep int) int {
-	want := clamp(n-keep, anchor, n)
-	if want <= anchor {
-		return want
-	}
-	cut := max(AlignedCut(conv, want), anchor)
-	if cut < want && IsLedger(conv[cut]) {
-		return want
-	}
-	return cut
 }
 
 func ledgerIndex(conv []nacelle.Message, anchor, active int) int {

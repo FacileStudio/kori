@@ -120,7 +120,7 @@ func (m *Model) compactTiered(ctx context.Context) tea.Cmd {
 	case compaction.Soft:
 		return m.softPass()
 	case compaction.Mid, compaction.Hard:
-		return m.beginCompaction(ctx)
+		return m.beginCompaction(ctx, false)
 	default:
 		return nil
 	}
@@ -142,8 +142,19 @@ func (m *Model) thrashed() bool {
 // the class a pass cannot clear, and repeating it cannot help. What a reader can
 // act on is named in the notice: /clear, or reading in chunks, then a manual
 // /compact.
+//
+// A pass has landed when the size it left is one the guard would not act on
+// again, so the threshold here is the firing one itself — the trigger the pre-send
+// and post-turn triggers compare against, and not that figure plus compactSlack.
+// A margin between the two makes every pass that stops inside it a silent reset:
+// the count clears on a size the next send will compact again, thrashed stays
+// false, and a full pass fires on every send with nothing said to the reader. The
+// windowless backend is where the band was widest, because with no window to
+// measure a ratio against the ceiling is the whole ladder and Tier reads Mid at
+// exactly it — so every pass in the band was a summarizing one, an LLM call
+// repeated forever. Keep this comparison identical to shouldCompactIdle's.
 func (m *Model) checkThrash() {
-	if m.compactAt > 0 && m.size > m.compactAt+compactSlack {
+	if m.compactAt > 0 && m.size > m.policy.Trigger() {
 		m.thrashCount++
 		if m.thrashCount == thrashLimit {
 			m.say(fromClient, "compaction keeps leaving the context over the threshold — one very large result is likeliest; /clear, read in chunks, then /compact")

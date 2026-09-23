@@ -3,13 +3,14 @@ package compaction
 import "github.com/FacileStudio/nacelle"
 
 // Section returns the messages covered by every span of one zone, in order. A
-// span that reaches past the conversation is trimmed rather than trusted: the
-// plan is measured against one conversation and read against whatever is in the
-// field, and a selector is the wrong place to find out the two disagree.
+// span that reaches past the conversation, or one that ends before it starts, is
+// trimmed rather than trusted: the plan is measured against one conversation and
+// read against whatever is in the field, and a selector is the wrong place to
+// find out the two disagree.
 func Section(conv []nacelle.Message, spans []Span, zone Zone) []nacelle.Message {
 	var out []nacelle.Message
 	for _, span := range spans {
-		if span.Zone != zone || span.Start >= len(conv) {
+		if span.Zone != zone || span.Start >= span.End || span.Start >= len(conv) {
 			continue
 		}
 		out = append(out, conv[span.Start:min(span.End, len(conv))]...)
@@ -56,7 +57,14 @@ func LedgerText(conv []nacelle.Message, spans []Span) string {
 // ToolCall must absorb its ToolResult too, or the result would stand in history
 // as an orphan a later prune could drop while the call stayed behind. The scan
 // stops at the active window, which is never touched either way.
+//
+// An index the conversation does not have is not a ledger, so it has no replies
+// to claim and the end is the index itself: a plan read against a shorter
+// conversation leaves an empty span rather than running off its end.
 func LedgerEnd(conv []nacelle.Message, ledger, active int) int {
+	if ledger < 0 || ledger >= len(conv) {
+		return ledger
+	}
 	calls := toolCallIDs(conv[ledger])
 	end := ledger + 1
 	for end < active && end < len(conv) && answersAny(conv[end], calls) {

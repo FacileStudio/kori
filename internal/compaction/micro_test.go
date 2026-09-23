@@ -194,3 +194,30 @@ func TestTombstoneLeavesHistoryReasoningAlone(t *testing.T) {
 		t.Errorf("assistant text = %q, want it preserved", text.Text)
 	}
 }
+
+// The byte weight is the weight a request carries, so a part counts when it is
+// sent and not when it is not. Reasoning never leaves the client, so counting it
+// would report savings no pass can make; a tool call's own arguments always do,
+// and leaving them out understated every edit and write turn — which is where a
+// long session's bytes mostly are.
+func TestPartBytesCountsWhatARequestCarries(t *testing.T) {
+	call := nacelle.ToolCall{ID: "c1", Name: "edit_file", Input: json.RawMessage(`{"path":"internal/tui/run.go"}`)}
+	tests := []struct {
+		name string
+		part nacelle.Part
+		want int
+	}{
+		{"spoken text is sent", nacelle.Text{Text: "hello"}, 5},
+		{"a tool result is sent", nacelle.ToolResult{Result: "contents"}, 8},
+		{"a tool call's arguments are sent", call, len(call.Input)},
+		{"reasoning is never sent", nacelle.Reasoning{Text: strings.Repeat("t", 5_000)}, 0},
+		{"a finish marker carries nothing", nacelle.Finish{}, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := PartBytes(tc.part); got != tc.want {
+				t.Errorf("PartBytes = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

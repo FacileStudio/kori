@@ -29,11 +29,18 @@ func (f Fold) Survives(index int) bool {
 
 // LedgerMessages is the raw history the summarizer is fed: the ledger-tagged
 // blocks, in order. It is the whole point of the division of labour — the model
-// only ever sees the blocks the judge asked it to compress.
+// only ever sees the blocks the judge asked it to compress. A block reaching past
+// the conversation it is read against is trimmed rather than trusted, the same
+// way a selector reads a span: a fold measured against a longer conversation
+// feeds the summarizer less, not an index out of range.
 func (f Fold) LedgerMessages(conv []nacelle.Message) []nacelle.Message {
 	var out []nacelle.Message
 	for _, block := range f.Ledger {
-		out = append(out, conv[block.Start:block.End]...)
+		start, end := clamp(block.Start, 0, len(conv)), clamp(block.End, 0, len(conv))
+		if start >= end {
+			continue
+		}
+		out = append(out, conv[start:end]...)
 	}
 	return out
 }

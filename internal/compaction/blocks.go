@@ -34,7 +34,15 @@ func Blocks(conv []nacelle.Message, spans []Span) []Block {
 	return blocks
 }
 
+// spanBlocks chunks one range of a conversation into blocks. The range is bounded
+// to the conversation before anything is indexed: a span measured against a longer
+// conversation is trimmed rather than trusted, so a stale plan blocks what is
+// there instead of running off the end of it.
 func spanBlocks(conv []nacelle.Message, start, end int) []Block {
+	start, end = clamp(start, 0, len(conv)), clamp(end, 0, len(conv))
+	if start >= end {
+		return nil
+	}
 	var blocks []Block
 	for i := start; i < end; {
 		next := blockEnd(conv, i, end)

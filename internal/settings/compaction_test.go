@@ -1,20 +1,32 @@
 package settings
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-// The ladder and the judge's own defaults are the shipped policy: the judge is
-// off because enabling it is what sends history off the machine.
+// The ladder, the tail and the judge's own defaults are the shipped policy: the
+// judge is off because enabling it is what sends history off the machine. The
+// window and the reserve are the one pair deliberately left unset — the first is
+// the backend's own window and the second a fifth of whatever that turns out to
+// be, neither of which this layer can know.
 func TestCompactionDefaults(t *testing.T) {
 	c := Defaults("").Compaction
 	soft, mid, hard := c.Ratios()
 	if soft != DefaultSoftRatio || mid != DefaultMidRatio || hard != DefaultHardRatio {
 		t.Errorf("ratios = %v/%v/%v, want %v/%v/%v", soft, mid, hard, DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio)
 	}
-	if c.KeepTurns == nil || *c.KeepTurns != 3 {
-		t.Errorf("keep_turns = %v, want 3", c.KeepTurns)
+	if c.KeepTurns == nil || *c.KeepTurns != 1 {
+		t.Errorf("keep_turns = %v, want the floor of 1", c.KeepTurns)
+	}
+	if c.KeepTokens == nil || *c.KeepTokens != DefaultKeepTokens {
+		t.Errorf("keep_tokens = %v, want the shipped %d", c.KeepTokens, DefaultKeepTokens)
 	}
 	if c.AnchorMessages == nil || *c.AnchorMessages != 1 {
 		t.Errorf("anchor_messages = %v, want 1", c.AnchorMessages)
+	}
+	if c.WindowTokens != nil || c.ReserveTokens != nil {
+		t.Errorf("window/reserve = %v/%v, want both unset", c.WindowTokens, c.ReserveTokens)
 	}
 	if DerefBool(c.Judge.Enabled) {
 		t.Error("judge enabled = true, want the judge off by default")
@@ -57,14 +69,28 @@ func TestCompactionFileLeavesUnmentionedRatiosAlone(t *testing.T) {
 // like an enabled compaction that never compacts, and soft_ratio: 0 derives a
 // zero ceiling, which every gate reads as "compaction off". Both are refused at
 // load rather than discovered later.
+//
+// NaN is the case the range tests used to miss: it compares false against every
+// bound, so `x <= 0 || x > 1` let it through and the ladder's own
+// `size >= ratio*window` was then true at every size, pinning the session at the
+// hard tier while the file still read as an ordinary ladder. YAML's `.nan` is the
+// spelling that reaches it.
 func TestCompactionRejectsAnUnusableLadder(t *testing.T) {
 	tests := map[string]string{
-		"a ratio above one":           "limits:\n  compaction:\n    hard_ratio: 1.5\n",
-		"a zero soft ratio":           "limits:\n  compaction:\n    soft_ratio: 0\n",
-		"a negative ratio":            "limits:\n  compaction:\n    mid_ratio: -0.2\n",
-		"rungs out of order":          "limits:\n  compaction:\n    soft_ratio: 0.9\n",
-		"a zero prune threshold":      "limits:\n  compaction:\n    judge:\n      prune_threshold: 0\n",
-		"a prune threshold above one": "limits:\n  compaction:\n    judge:\n      prune_threshold: 1.2\n",
+		"a ratio above one":                        "limits:\n  compaction:\n    hard_ratio: 1.5\n",
+		"a zero soft ratio":                        "limits:\n  compaction:\n    soft_ratio: 0\n",
+		"a negative ratio":                         "limits:\n  compaction:\n    mid_ratio: -0.2\n",
+		"a NaN soft ratio":                         "limits:\n  compaction:\n    soft_ratio: .nan\n",
+		"a NaN mid ratio":                          "limits:\n  compaction:\n    mid_ratio: .nan\n",
+		"a NaN hard ratio":                         "limits:\n  compaction:\n    hard_ratio: .nan\n",
+		"rungs out of order":                       "limits:\n  compaction:\n    soft_ratio: 0.9\n",
+		"a zero prune threshold":                   "limits:\n  compaction:\n    judge:\n      prune_threshold: 0\n",
+		"a prune threshold above one":              "limits:\n  compaction:\n    judge:\n      prune_threshold: 1.2\n",
+		"a NaN prune threshold":                    "limits:\n  compaction:\n    judge:\n      prune_threshold: .nan\n",
+		"a zero tail budget":                       "limits:\n  compaction:\n    keep_tokens: 0\n",
+		"a negative tail budget":                   "limits:\n  compaction:\n    keep_tokens: -1\n",
+		"a zero message floor":                     "limits:\n  compaction:\n    keep_turns: 0\n",
+		"a reserve that fills the declared window": "limits:\n  compaction:\n    window_tokens: 100000\n    reserve_tokens: 100000\n",
 	}
 	for name, body := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -85,6 +111,55 @@ func TestJobFileCompactionIsValidated(t *testing.T) {
 	}
 	if _, err := decodeJob([]byte("prompt: hi\nlimits:\n  compaction:\n    soft_ratio: 0.5\n"), "job.yml"); err != nil {
 		t.Errorf("decodeJob rejected a usable job ladder: %v", err)
+	}
+}
+
+// A negative compact_at is neither the spelling for off nor a ceiling a session
+// could act on: every gate tests `> 0`, so a negative reads as "compaction off"
+// while the file still shows a configured ceiling, and it takes the overflow
+// recovery with it. 0 is the one way to say off, so a negative is refused rather
+// than reinterpreted.
+func TestCompactionRejectsANegativeCompactAt(t *testing.T) {
+	written(t, "limits:\n  compact_at: -1\n")
+	_, err := settings(Config{})
+	if err == nil {
+		t.Fatal("settings accepted a negative compact_at, want a load error")
+	}
+	if !strings.Contains(err.Error(), "limits.compact_at") {
+		t.Errorf("error = %q, want it to name limits.compact_at", err)
+	}
+	for _, body := range []string{"limits:\n  compact_at: 0\n", "limits:\n  compact_at: 120000\n"} {
+		written(t, body)
+		if _, err := settings(Config{}); err != nil {
+			t.Errorf("settings rejected %q: %v", body, err)
+		}
+	}
+}
+
+// The tail's bounds and the two window figures reach a resolved session the way
+// every other pointer does: the environment can carry them, and each falls back
+// to the shipped default on its own rather than taking the rest with it.
+func TestCompactionCarriesTheTailAndTheWindowOverride(t *testing.T) {
+	written(t, "")
+	t.Setenv(EnvPrefix+"COMPACTION_KEEP_TOKENS", "20000")
+	t.Setenv(EnvPrefix+"COMPACTION_RESERVE_TOKENS", "32000")
+	t.Setenv(EnvPrefix+"COMPACTION_WINDOW_TOKENS", "300000")
+
+	c, err := settings(Config{})
+	if err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if got := DerefInt64(c.Compaction.KeepTokens); got != 20_000 {
+		t.Errorf("keep_tokens = %d, want the environment's 20000", got)
+	}
+	if got := DerefInt64(c.Compaction.ReserveTokens); got != 32_000 {
+		t.Errorf("reserve_tokens = %d, want the environment's 32000", got)
+	}
+	if got := DerefInt64(c.Compaction.WindowTokens); got != 300_000 {
+		t.Errorf("window_tokens = %d, want the environment's 300000", got)
+	}
+	if got := DerefInt(c.Compaction.KeepTurns); got != DefaultKeepTurns {
+		t.Errorf("keep_turns = %d, want the default when the environment is silent", got)
 	}
 }
 
@@ -136,5 +211,21 @@ func TestJudgeKeyPrefersTheTypesafeVariable(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "")
 	if key := FromEnv().Compaction.Judge.APIKey; key != "from-kori" {
 		t.Errorf("judge key = %q, want the namespaced variable when TypeSafe's is empty", key)
+	}
+}
+
+// The environment reaches the same floats through strconv.ParseFloat, which
+// accepts "nan" as readily as YAML accepts ".nan". The guards are written in the
+// positive form precisely so both spellings are refused, so the environment path
+// is pinned rather than assumed to inherit the file's check.
+func TestCompactionRejectsANaNFromTheEnvironment(t *testing.T) {
+	for _, key := range []string{"SOFT_RATIO", "MID_RATIO", "HARD_RATIO", "PRUNE_THRESHOLD"} {
+		t.Run(key, func(t *testing.T) {
+			written(t, "")
+			t.Setenv(EnvPrefix+"COMPACTION_"+key, "nan")
+			if _, err := settings(Config{}); err == nil {
+				t.Errorf("settings accepted a NaN %s from the environment", key)
+			}
+		})
 	}
 }

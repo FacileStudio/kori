@@ -14,14 +14,17 @@ type compactFinished struct{}
 
 // compactMaxTokens is the ceiling a compaction summary is asked to stay under.
 // Small on purpose: the ledger replaces a large history with a stub, so a long
-// summary would buy almost nothing.
-const compactMaxTokens = 2000
+// summary would buy almost nothing. It is the ledger's own budget as well — a
+// body larger than one summary is carrying more than a compression should and is
+// what sends the next pass to consolidation — so the two are one number, aliased
+// rather than repeated, and they cannot drift apart.
+const compactMaxTokens = compaction.MaxLedgerTokens
 
-// resolvedPolicy fills the two ends and the ladder a SessionConfig left out, so
-// a caller that only ever set the ceiling still gets the shipped defaults
-// instead of a zero ratio that would never fire. The ceiling is taken as given:
-// the session config is the layer that already resolved compact_at against the
-// window.
+// resolvedPolicy fills the ladder and the tail a SessionConfig left out, so a
+// caller that only ever set the ceiling still gets the shipped defaults instead
+// of a zero ratio that would never fire, or a zeroed tail that would pin
+// nothing. The window, the reserve and the ceiling are taken as given: the
+// session config is the layer that already resolved compact_at against them.
 func resolvedPolicy(base compaction.Policy) compaction.Policy {
 	policy := base
 	if policy.Ratios == (compaction.Ratios{}) {
@@ -33,6 +36,9 @@ func resolvedPolicy(base compaction.Policy) compaction.Policy {
 	}
 	if policy.KeepTurns <= 0 {
 		policy.KeepTurns = compaction.DefaultKeepTurns
+	}
+	if policy.KeepTokens <= 0 {
+		policy.KeepTokens = compaction.DefaultKeepTokens
 	}
 	if policy.AnchorMessages <= 0 {
 		policy.AnchorMessages = compaction.DefaultAnchorMessages
@@ -55,7 +61,12 @@ func (m *Model) plan() []compaction.Span {
 // plausibly land the conversation under the ceiling, the pass skips the
 // summarizer and tombstones what little old turns hold instead — see
 // evictionCanLandUnder/maskOnlyPass in compact_light.go.
-func (m *Model) beginCompaction(ctx context.Context) tea.Cmd {
+//
+// force is overflow recovery's one lever: a run the provider refused for length
+// is by definition past whatever the ladder last measured, so the retry asks for
+// the hardest pass outright rather than re-deriving a tier from a size that was
+// already wrong once.
+func (m *Model) beginCompaction(ctx context.Context, force bool) tea.Cmd {
 	plan := m.plan()
 	start, end, ok := compaction.HistoryRange(plan)
 	if !ok || m.compacting {
@@ -65,13 +76,18 @@ func (m *Model) beginCompaction(ctx context.Context) tea.Cmd {
 		return m.maskOnlyPass(plan)
 	}
 
+	tier := m.policy.Tier(m.size)
+	if force {
+		tier = compaction.Hard
+	}
+
 	m.compacting = true
 	m.compactBegan = time.Now()
 
 	resultsChan := make(chan compactOutcome)
 	m.run.compactChan = resultsChan
 
-	go runCompaction(ctx, resultsChan, m.pass(plan, m.policy.Tier(m.size)))
+	go runCompaction(ctx, resultsChan, m.pass(plan, tier))
 	return tea.Batch(waitForCompact(resultsChan), m.spin.Tick)
 }
 
@@ -86,7 +102,13 @@ func (m *Model) beginCompaction(ctx context.Context) tea.Cmd {
 // the pass falls back to the mask.
 func runCompaction(ctx context.Context, results chan compactOutcome, pass compactPass) {
 	defer close(results)
-	outcome := compactOutcome{before: pass.size, plan: pass.plan, tier: pass.tier, judged: pass.judge != nil}
+	outcome := compactOutcome{
+		before:      pass.size,
+		plan:        pass.plan,
+		tier:        pass.tier,
+		judged:      pass.judge != nil,
+		consolidate: pass.consolidate,
+	}
 
 	judgeCtx, cancel := context.WithTimeout(ctx, compactJudgeTimeout)
 	fold, err := compaction.Classify(judgeCtx, pass.conv, pass.plan, compaction.JudgeRequest{
@@ -102,7 +124,7 @@ func runCompaction(ctx context.Context, results chan compactOutcome, pass compac
 	outcome.fold = fold
 
 	if len(fold.Ledger) > 0 && pass.agent != nil {
-		summary, err := summarizeInto(ctx, pass.agent, compactPrompt(pass.conv, pass.plan, fold))
+		summary, err := summarizeInto(ctx, pass.agent, compactPrompt(pass.conv, pass.plan, fold, pass.consolidate))
 		if err != nil {
 			outcome.err, outcome.stage = err, "summary"
 		} else {
@@ -158,7 +180,7 @@ func (m *Model) installFold(outcome compactOutcome) {
 	start, end, _ := compaction.HistoryRange(outcome.plan)
 	kept := len(compaction.Section(m.conversation, outcome.plan, compaction.ZoneActive))
 
-	conv, stats := compaction.Apply(m.conversation, outcome.plan, outcome.summary, outcome.fold.Survives)
+	conv, stats := compaction.Apply(m.conversation, outcome.plan, outcome.summary, outcome.fold.Survives, outcome.consolidate)
 	if stats.Stale {
 		m.say(fromCompact, "the conversation changed while the pass ran — nothing was folded")
 		return
@@ -178,6 +200,8 @@ func (m *Model) installFold(outcome compactOutcome) {
 		pruned:   outcome.fold.PrunedSize(),
 		kept:     kept,
 		tier:     outcome.tier,
+		replaced: stats.LedgerReplaced,
+		keptAsIs: stats.LedgerKept,
 	}
 	m.last = outcome.done
 	m.say(fromCompact, compactReport(outcome))

@@ -14,6 +14,13 @@ import (
 // that has come loose, not a ladder that is a point worse than yesterday.
 const minCalibrationAccuracy = 0.7
 
+// calibrationEnv is the deliberate opt-in the live harness is gated behind. It is
+// separate from the API key because the key is not consent: TYPESAFE_API_KEY is
+// exported on a machine that uses the judge at all, so gating on it alone makes
+// every ordinary `go test ./...` pay the vendor for a call and fail whenever the
+// vendor is down or the model has drifted.
+const calibrationEnv = "KORI_CALIBRATION"
+
 // judgeLabels is the labeled corpus the harness classifies, loaded from
 // testdata/judge_labels.json. The file is the artifact a human reviews, so the
 // labels live there rather than in a Go table that only an implementer reads.
@@ -48,13 +55,20 @@ type calibration struct {
 // ConfidenceFloor are the two numbers that decide a deletion, and until this
 // runs they are guesses a reviewer cannot check.
 //
-// It talks to the network, so it is opt-in and skipped without a key:
+// It talks to the network and it bills, so it is opt-in twice over: a key in the
+// environment is not consent, because this machine exports TYPESAFE_API_KEY for
+// the judge itself and a plain `go test ./...` would then spend a real call on
+// every run — and fail on vendor downtime or model drift rather than on a
+// regression here. Set calibrationEnv to ask for it deliberately:
 //
-//	TYPESAFE_API_KEY=... go test ./internal/compaction -run JudgeCalibration -v
+//	TYPESAFE_API_KEY=... KORI_CALIBRATION=1 go test ./internal/compaction -run JudgeCalibration -v
 //
 // One call classifies the whole corpus, so the sweep afterwards costs nothing:
 // the probabilities come back on the verdicts and are re-thresholded offline.
 func TestJudgeCalibrationOnLabeledBlocks(t *testing.T) {
+	if os.Getenv(calibrationEnv) != "1" {
+		t.Skipf("set %s=1 and TYPESAFE_API_KEY to classify the labeled corpus with the live model", calibrationEnv)
+	}
 	key := os.Getenv("TYPESAFE_API_KEY")
 	if key == "" {
 		t.Skip("set TYPESAFE_API_KEY to classify the labeled corpus with the live model")

@@ -32,7 +32,7 @@ func TestSpinnerKeepsTickingWhileCompacting(t *testing.T) {
 func TestCompactionArmsTheSpinnerAndStampsTheTimer(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	if cmd := m.beginCompaction(context.Background()); cmd == nil {
+	if cmd := m.beginCompaction(context.Background(), false); cmd == nil {
 		t.Fatal("beginCompaction returned no command, want the spinner-armed wait")
 	}
 	defer func() { m.compacting = false }()

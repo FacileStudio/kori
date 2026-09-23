@@ -17,9 +17,16 @@ type model = Model
 // testSession is the fixture session config: an absolute 100k ceiling with the
 // shipped ladder and prompt placeholder, which is what every model-building test
 // wants.
+//
+// The tail is pinned to the newest three messages with a one-token budget, so
+// those three are the whole of it. These tests are about what a pass does with
+// the history it is given, and a fixture conversation is a few tens of kilobytes
+// — small enough that the shipped 40k budget swallows all of it, leaving no
+// history to fold and nothing for the assertions below to measure. The budget's
+// own behaviour belongs to package compaction, where it is tested.
 func testSession() SessionConfig {
 	return SessionConfig{
-		Compaction:        CompactionConfig{Policy: compaction.Policy{Ceiling: 100_000}},
+		Compaction:        CompactionConfig{Policy: compaction.Policy{Ceiling: 100_000, KeepTurns: 3, KeepTokens: 1}},
 		PromptPlaceholder: "placeholder",
 	}
 }

@@ -46,6 +46,16 @@ type runControl struct {
 	// bgCtx is the run's background context, kept on the run so a compaction
 	// that finishes before the model starts can pass it back to startRun.
 	bgCtx context.Context
+
+	// overflow is the context-length rejection that ended a run and has not
+	// been answered yet, nil otherwise. It is held rather than reported so the
+	// run can end quietly: settle is the one place that knows whether a pass
+	// can still rescue the turn, and a red failure line the client is about to
+	// fix is worse than no line at all. overflowTried is whether this turn has
+	// already spent its one retry, which is what stops a provider that refuses
+	// even the compacted conversation from looping through passes forever.
+	overflow      error
+	overflowTried bool
 }
 
 // failureCollapse tracks consecutive identical tool failures so they

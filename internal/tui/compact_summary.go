@@ -22,6 +22,14 @@ type compacted struct {
 	pruned   int
 	results  int
 	tier     compaction.Tier
+	// replaced and keptAsIs are what happened to the ledger body itself, which
+	// is the one part of a pass whose size is not the mask's or the fold's: a
+	// pass that consolidated a ledger that had outgrown its budget, and a
+	// consolidating pass that was refused because the rewrite had dropped an
+	// identifier. Both are worth a line, because they are the ledger's economy
+	// and nothing else in the report speaks to it.
+	replaced bool
+	keptAsIs bool
 }
 
 // compactOutcome is what a compaction pass sends back to the update loop. On the
@@ -31,16 +39,17 @@ type compacted struct {
 // rebuilt conversation and the tallies on the UI thread, so the goroutine never
 // races a list it is also reading.
 type compactOutcome struct {
-	before  int64
-	after   int64
-	done    compacted
-	plan    []compaction.Span
-	fold    compaction.Fold
-	tier    compaction.Tier
-	summary string
-	judged  bool
-	stage   string
-	err     error
+	before      int64
+	after       int64
+	done        compacted
+	plan        []compaction.Span
+	fold        compaction.Fold
+	tier        compaction.Tier
+	summary     string
+	judged      bool
+	consolidate bool
+	stage       string
+	err         error
 }
 
 // failedAt names which half of a pass failed, for the notice: the judge that
@@ -86,6 +95,12 @@ func compactReport(outcome compactOutcome) string {
 	if d.pruned > 0 {
 		work = append(work, "pruned "+countedNoun(d.pruned, "message"))
 	}
+	if d.replaced {
+		work = append(work, "consolidated the ledger")
+	}
+	if d.keptAsIs {
+		work = append(work, "kept the ledger as written — the rewrite dropped an identifier")
+	}
 	if len(work) == 0 {
 		work = []string{"kept everything verbatim"}
 	}
@@ -94,77 +109,6 @@ func compactReport(outcome compactOutcome) string {
 		fmt.Sprintf("   kept            %d%% verbatim\n", kept) +
 		"   work            " + strings.Join(work, ", ")
 }
-
-// compactPrompt is what the summarizer is fed: exactly the history the pass may
-// touch, with the ask appended and any earlier ledger folded into that ask so a
-// later pass builds on it instead of re-deriving it. The anchor and the active
-// window are deliberately excluded, so the model cannot leak the present into
-// the past's summary.
-func compactPrompt(conv []nacelle.Message, plan []compaction.Span, fold compaction.Fold) []nacelle.Message {
-	history := fold.LedgerMessages(conv)
-	ask := compactAsk
-	if previous := compaction.LedgerText(conv, plan); previous != "" {
-		ask += "\n\nAn earlier " + compaction.Sentinel + " is shown below. Fold it into the new one:\n" + previous
-	}
-	return withAsk(history, ask)
-}
-
-// withAsk appends the ask as a user turn, folding it into the last history turn
-// when that turn is already the user's — a tool-result reply usually is — so the
-// summarizer is never handed two user messages in a row, which the backends
-// refuse.
-func withAsk(history []nacelle.Message, ask string) []nacelle.Message {
-	if len(history) == 0 || history[len(history)-1].Role != nacelle.RoleUser {
-		return append(history, nacelle.UserText(ask))
-	}
-	last := history[len(history)-1]
-	last.Parts = append(append([]nacelle.Part{}, last.Parts...), nacelle.Text{Text: "\n\n" + ask})
-	history[len(history)-1] = last
-	return history
-}
-
-// compactSystem is the schema the summarizer writes against. Structured on
-// purpose — the research on long-horizon agents is blunt that freeform
-// summaries drop the load-bearing details — decisions, constraints, dead ends
-// and exact state — that stop a model re-treading them. Verbatim identifiers
-// survive so a model can still grep for the file or id a compressed summary
-// names. The scoping lines are load-bearing too: the history is handed over
-// alone, and the newer turns follow the ledger unchanged, so the prompt must
-// stop the model reaching past its chunk.
-const compactSystem = "You are the compaction engine for a long-running coding agent. Your job " +
-	"is to compress the older turns you are shown into a dense block that preserves everything " +
-	"the working model still needs, so it can keep going as if those turns had happened — without " +
-	"re-deriving them and without re-doing work. " +
-	"Compress, do not reduce to a slogan. This is a compressed handoff of working memory, not a " +
-	"prose recap, so keep the sharp edges that cause re-work: " +
-	"the actual decisions made and the reasons, not just the conclusion; " +
-	"constraints that must still hold — invariants, formats, interface contracts, security rules — " +
-	"verbatim when short; " +
-	"the state of the work — what exists, what is in flight, what was verified vs assumed; " +
-	"dead ends and failed approaches, so the model does not re-try them; and " +
-	"load-bearing identifiers verbatim — file paths, package and module names, function, class and " +
-	"variable names, command invocations, tool and call ids, message ids, exact error strings, " +
-	"version pins, and the config keys and values the work depends on. " +
-	"Name the artifacts the work produced or touched, with their paths. " +
-	"Structure the summary as short bullet sections, in exactly this order and only these: " +
-	"Decisions, Constraints, Plan, State, Artifacts, Ruled out, Open questions. " +
-	"Leave a section out if it is empty. Never add prose outside the bullets — no preamble, no " +
-	"closing line. " +
-	"Never invent facts that are not in the source: no guesses, no reconstructed numbers, no " +
-	"unstated intentions. If something is genuinely ambiguous, record it under Open questions " +
-	"instead of assuming. " +
-	"Summarize only the turns shown to you. The newer turns after this chunk are preserved " +
-	"verbatim elsewhere and will follow your summary unchanged, so do not anticipate, reference " +
-	"or restate them — your summary must hand off the past without overlapping the present. " +
-	"Be as short as correctness allows."
-
-// compactAsk is the message tacked onto the history to ask for the summary. It
-// repeats the chunk boundary because the model may lose the system's framing and
-// try to \"recap the whole conversation\".
-const compactAsk = "Above are the older turns to compact, and nothing else. Write the compaction " +
-	"summary of exactly those turns, following your instructions. The conversation after this " +
-	"chunk is kept intact and is not part of this request. Return only the summary block — no " +
-	"preamble, no closing remark."
 
 // compactTimeout bounds one summarizer call. A backend that hangs would
 // otherwise hold the session at \"compacting\" forever, because settleCompaction

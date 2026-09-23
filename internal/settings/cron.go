@@ -139,7 +139,7 @@ func decodeJob(raw []byte, path string) (CronJob, error) {
 	if job.Name == "" {
 		job.Name = strings.TrimSuffix(filepath.Base(path), ".yml")
 	}
-	if err := validateCompaction(job.Limits.Compaction); err != nil {
+	if err := ValidateCompaction(job.Limits.Compaction, job.Limits.CompactAt); err != nil {
 		return CronJob{}, err
 	}
 	return job, nil

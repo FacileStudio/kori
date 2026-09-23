@@ -126,7 +126,7 @@ func TestCompactPromptFeedsExactlyTheHistory(t *testing.T) {
 	history := compaction.HistoryMessages(m.conversation, plan)
 	fold := compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)}
 
-	prompt := compactPrompt(m.conversation, plan, fold)
+	prompt := compactPrompt(m.conversation, plan, fold, false)
 
 	if len(prompt) < len(history) || len(prompt) > len(history)+1 {
 		t.Fatalf("summarizer prompt = %d messages, want the %d history plus at most the ask", len(prompt), len(history))

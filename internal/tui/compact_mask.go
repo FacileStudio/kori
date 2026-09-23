@@ -7,10 +7,6 @@ const (
 	// shape, so the report and the tests read the same strings the pass writes.
 	compactMinResult = compaction.MinResult
 	droppedNotice    = compaction.DroppedNotice
-
-	// compactSlack is how far under the trigger one pass aims to land, so a
-	// session that grows between passes does not trim on every turn.
-	compactSlack = 20_000
 )
 
 // estTokens delegates to the package's bytes-to-tokens estimate, kept as a name

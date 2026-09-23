@@ -1,6 +1,11 @@
 package compaction
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"sync/atomic"
+	"testing"
+)
 
 // The prune gate is asymmetric: a probability over the threshold only prunes
 // when the calibrated confidence also clears the floor. Everything else — under
@@ -53,6 +58,83 @@ func TestDecideCarriesTheNumbers(t *testing.T) {
 	verdict := decide(map[string]float64{optionPrune: 0.9}, optionPrune, 0.95, 0.85)
 	if verdict.PruneProb != 0.9 || verdict.Confidence != 0.95 {
 		t.Errorf("verdict = %+v, want the probability and confidence carried", verdict)
+	}
+}
+
+// A garbage body prunes nothing. An endpoint that answers 200 with something
+// that is not an answer — a truncated one, an answer with no confidence, a choice
+// nobody defined — must not turn into a deletion: the malformed case comes back as
+// an error with all-keep verdicts, so a caller that ignores the error still drops
+// nothing, and the shaped-but-empty cases fall to the confidence floor.
+func TestJevJudgePrunesNothingOnAMalformedAnswer(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{"a truncated body", `{"answers":{"block-1":{"choice":"prune",`, true},
+		{"an answer that is not JSON", "not an answer at all", true},
+		{"an answer with no confidence", `{"answers":{"block-1":{"choice":"prune","probabilities":{"prune":0.99}}}}`, false},
+		{"a choice nobody defined", `{"answers":{"block-1":{"choice":"delete","confidence":0.99,"probabilities":{"delete":0.99}}}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertNoPrune(t, tc.body, tc.wantErr)
+		})
+	}
+}
+
+// assertNoPrune drives a real judge against a stub endpoint answering with the
+// given body and checks that every block the judge was asked about came back
+// keep, whatever the body did to the call.
+func assertNoPrune(t *testing.T, body string, wantErr bool) {
+	t.Helper()
+	var asked map[string]json.RawMessage
+	var requests atomic.Int32
+	server := answerServer(t, body, &asked, &requests)
+
+	judge := NewJevJudge(JudgeConfig{Enabled: true, BaseURL: server.URL, PruneThreshold: 0.85})
+	blocks := Blocks(judgeSample(), judgePlan(judgeSample()))
+
+	verdicts, err := judge.Classify(t.Context(), "the task", blocks)
+	if gotErr := err != nil; gotErr != wantErr {
+		t.Fatalf("Classify error = %v, want an error: %v", err, wantErr)
+	}
+	if len(verdicts) != len(blocks) {
+		t.Fatalf("verdicts = %d, want one per block so a caller can index them", len(verdicts))
+	}
+	for i, verdict := range verdicts {
+		if verdict.Decision != Keep {
+			t.Errorf("verdict %d = %v for a garbage answer, want keep", i, verdict.Decision)
+		}
+	}
+}
+
+// One block cannot dominate the request it travels in. A block holding a whole
+// tool result is cut to maxBlockText and the cut is marked, so a batch of dozens
+// of blocks still reaches the judge whole in count and in shape — and the cut is
+// per block, so the small turns beside it are not touched.
+func TestBlockTextIsClampedToOneCap(t *testing.T) {
+	conv := ledgerSample()
+	plan := judgePlan(conv)
+
+	blocks := Blocks(conv, plan)
+	if len(blocks) != 2 {
+		t.Fatalf("blocks = %d, want the tool pair and the standalone turn", len(blocks))
+	}
+
+	text := blocks[0].Text
+	if want := maxBlockText + len("…"); len(text) != want {
+		t.Errorf("block text = %d bytes for a %d-byte result, want the %d-byte cap plus its marker",
+			len(text), 40_000, want)
+	}
+	if !strings.HasSuffix(text, "…") {
+		t.Errorf("block text ends %q, want the cut marked", text[len(text)-4:])
+	}
+	if !strings.HasPrefix(text, "tool call read") {
+		t.Errorf("block text = %q, want the head of the block kept and only its tail cut", text[:40])
+	}
+	if small := blocks[1].Text; strings.HasSuffix(small, "…") {
+		t.Errorf("small block text = %q, want the cap applied per block", small)
 	}
 }
 

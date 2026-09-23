@@ -208,7 +208,7 @@ func TestPlanNeverStartsHistoryOnAnOrphanResult(t *testing.T) {
 		}
 	}
 
-	out, _ := Apply(conv, spans, "", nil)
+	out, _ := Apply(conv, spans, "", nil, false)
 	for i, msg := range out {
 		if opensWithToolResult(msg) && (i == 0 || !opensToolPair(out[i-1], msg)) {
 			t.Errorf("message %d is an orphan ToolResult after the fold: %v", i, out)

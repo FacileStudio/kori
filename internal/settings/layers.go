@@ -25,7 +25,7 @@ func resolveLayers(system string, file, env, flags Config) (Config, error) {
 	}
 	resolved.merge(env)
 	resolved.merge(flags)
-	if err := validateCompaction(resolved.Compaction); err != nil {
+	if err := ValidateCompaction(resolved.Compaction, resolved.CompactAt); err != nil {
 		return Config{}, err
 	}
 	return resolved, nil
