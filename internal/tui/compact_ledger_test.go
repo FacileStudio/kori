@@ -7,6 +7,7 @@ package tui
 // happened when it did or would not.
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -144,6 +145,44 @@ func TestSettleCompactionKeepsTheLedgerWhenARewriteDropsAnIdentifier(t *testing.
 	}
 	if said := strings.Join(spoken(m), "\n"); !strings.Contains(said, "rewrite dropped an identifier") {
 		t.Errorf("report = %q, want the refusal named", said)
+	}
+}
+
+// A consolidating pass folds the history even when the judge kept every block of
+// it. The rewrite such a pass asks for is only legitimate measured against turns
+// no earlier pass compressed (I3b), and those turns are what carry the earlier
+// ledger into the ask, so a keep-heavy classification used to leave the pass with
+// nothing to fold: the summarizer was never called, the consolidating addendum
+// never went out, and the body stayed over budget for the rest of the session.
+func TestAConsolidatingPassFoldsTheHistoryTheJudgeKept(t *testing.T) {
+	backend := &recorder{}
+	m := sized()
+	m.agent = agentOver(t, backend)
+	m.judge = stubJudge{}
+	m.conversation = overdueLedger()
+	m.size = 130_000
+
+	pass := m.pass(m.plan(), compaction.Mid)
+	if !pass.consolidate {
+		t.Fatal("the fixture ledger is not past its budget, so the pass is not consolidating")
+	}
+	unforced, _ := compaction.Classify(context.Background(), pass.conv, pass.plan, compaction.JudgeRequest{}, stubJudge{})
+	if len(unforced.Ledger) > 0 {
+		t.Fatal("the judge tagged a block for the ledger, so this pass has material without folding and the stall is not what is being tested")
+	}
+
+	results := make(chan compactOutcome, 1)
+	runCompaction(context.Background(), results, pass)
+	outcome := <-results
+
+	if outcome.summary == "" {
+		t.Fatalf("the consolidating pass asked for no summary (%v), so the ledger can never come back down", outcome.err)
+	}
+	if !promptText(backend.last.Messages, "rewritten rather than added to") {
+		t.Error("the call does not ask for a rewrite, so this pass cannot consolidate the ledger")
+	}
+	if !promptText(backend.last.Messages, longLedgerBody()[:40]) {
+		t.Error("the call carries no earlier ledger, so the rewrite it asks for has nothing to rewrite")
 	}
 }
 

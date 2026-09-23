@@ -7,6 +7,7 @@
 ### Changed
 
 ### Fixed
+- fix(compaction): a consolidating pass now folds the history instead of trusting the judge's keep verdicts, so the rewrite it asks for is measured against turns no earlier pass compressed. A keep-heavy classification used to leave the pass with no ledger block to fold, and those turns are what carry the earlier ledger into the ask: the summarizer was never called, the consolidating addendum never reached the model, and a body past `MaxLedgerTokens` stayed over budget for the rest of the session (`internal/tui`)
 
 ## [0.73.0] - 2026-09-23
 

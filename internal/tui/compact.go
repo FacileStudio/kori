@@ -96,6 +96,16 @@ func (m *Model) beginCompaction(ctx context.Context, force bool) tea.Cmd {
 // conversation, and it never touches the Model at all — everything it reads
 // arrives on the compactPass the update loop snapshotted for it.
 //
+// A consolidating pass folds the history whether or not the judge tagged any of
+// it, which is the same lever the hard tier pulls. The rewrite such a pass asks
+// for is legitimate only when it is measured against turns no earlier pass
+// compressed (I3b), and those turns are what carry the earlier ledger into the
+// ask: with the fold empty there is no turn to carry it, so compactPrompt drops
+// the ledger, the consolidating addendum never reaches the model, and a summary
+// of nothing comes back to replace a body that was over budget. Forcing here is
+// what makes the trigger the ledger's own size rather than the judge's verdicts,
+// which is the one reading under which consolidation can actually happen.
+//
 // The summarizer runs inside a deadline set by summarizeInto, so a wedged
 // backend cannot hold the session at "compacting" forever: whichever way the
 // stream winds down once the deadline fires, the outcome still arrives and
@@ -113,7 +123,7 @@ func runCompaction(ctx context.Context, results chan compactOutcome, pass compac
 	judgeCtx, cancel := context.WithTimeout(ctx, compactJudgeTimeout)
 	fold, err := compaction.Classify(judgeCtx, pass.conv, pass.plan, compaction.JudgeRequest{
 		Goal:  compaction.GoalText(pass.conv, pass.plan),
-		Force: pass.tier == compaction.Hard,
+		Force: pass.tier == compaction.Hard || pass.consolidate,
 	}, pass.judge)
 	cancel()
 	if err != nil {

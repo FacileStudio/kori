@@ -740,7 +740,10 @@ What changed:
    ledger's budget and the summarizer's own ceiling are one number) is the size above which a pass
    consolidates: `beginCompaction` decides it on the update loop from the ledger the conversation
    actually holds (`LedgerOverBudget`), `compactPass.consolidate` carries it to the goroutine, and
-   `consolidateAsk` asks for one rewritten block instead of an addition.
+   `consolidateAsk` asks for one rewritten block instead of an addition. A consolidating pass also
+   forces the fold, the way the hard tier does, because the turns it folds are what carry the earlier
+   ledger into the ask: a keep-heavy judge used to leave the pass with no ledger block at all, so the
+   summarizer was never called and the body stayed over budget.
 4. **The rewrite is gated.** `NextLedger` grants a replacement only when `MissingIdentifiers` is
    empty — a lexical check over backticked spans and path/flag/extension-shaped tokens. A rewrite
    that would lose one is refused and the merge stands, which costs growth rather than a fact. The

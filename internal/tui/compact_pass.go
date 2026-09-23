@@ -32,6 +32,9 @@ type compactPass struct {
 	// already carries. It is the pass's question and not the assembler's because
 	// it is answered by a size the goroutine cannot measure: the ledger lives in
 	// the conversation, which the pass snapshotted but must not re-derive from.
+	// It also decides the fold: a consolidating pass folds the history rather
+	// than trusting the judge's keeps, so the rewrite it asks for has turns to
+	// be measured against — see runCompaction.
 	consolidate bool
 }
 

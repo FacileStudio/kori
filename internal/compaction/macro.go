@@ -57,8 +57,9 @@ func (f Fold) PrunedSize() int {
 
 // JudgeRequest is everything one classification needs beyond the conversation:
 // the task to judge against and whether the pass must fold the whole history
-// (the hard tier, which overrides keep verdicts). The prune threshold lives on
-// the judge itself, where the adapters that read it are built.
+// (the hard tier, and every consolidating pass, both of which override keep
+// verdicts). The prune threshold lives on the judge itself, where the adapters
+// that read it are built.
 type JudgeRequest struct {
 	Goal  string
 	Force bool
