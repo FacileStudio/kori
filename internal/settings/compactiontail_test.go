@@ -43,3 +43,47 @@ func TestValidateTailRefusesAReserveThatStarvesTheWindow(t *testing.T) {
 		})
 	}
 }
+
+// The message floor is the one bound no pass can move: activeStart lays it down
+// before the token budget widens anything, and it is enough to hold the tail over
+// the half-cap however small the budget is. That is the wedge the cap exists to
+// close, and it is closed here rather than at run time — refusing a floor is a
+// check on a config, where dropping the floor or re-expressing a count of turns as
+// a byte budget would both mean touching a window no tier may rewrite.
+//
+// What the floor costs is estimated from the package's own bound for one turn,
+// because a count of turns a session has not taken cannot be measured. Only a
+// window or a ceiling written down here bounds the cap, so the last two cases are
+// the ones the check has to leave alone: a backend's own window is one this layer
+// cannot see, and refusing a config over it would be worse than the floor. It is
+// checked through the real loader, so the file and the environment are refused the
+// same way, and the shipped floor is judged with everything else.
+func TestValidateTailRefusesAMessageFloorOverTheHalfCap(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		valid bool
+	}{
+		{"a floor over what the ceiling leaves", "limits:\n  compaction:\n    window_tokens: 200000\n    keep_turns: 5\n  compact_at: 40000\n", false},
+		{"a floor the ceiling alone refuses", "limits:\n  compaction:\n    keep_turns: 3\n  compact_at: 20000\n", false},
+		{"a floor that fits the same ceiling", "limits:\n  compaction:\n    window_tokens: 200000\n    keep_turns: 4\n  compact_at: 40000\n", true},
+		{"the shipped floor under the same cap", "limits:\n  compaction:\n    window_tokens: 200000\n    keep_turns: 1\n  compact_at: 40000\n", true},
+		{"a floor of five the window can afford", "limits:\n  compaction:\n    window_tokens: 200000\n    keep_turns: 5\n", true},
+		{"a floor with no window and no ceiling", "limits:\n  compaction:\n    keep_turns: 5\n", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			written(t, tc.body)
+			_, err := settings(Config{})
+			if err == nil && !tc.valid {
+				t.Fatal("settings accepted a message floor over the half of a pass it may fill")
+			}
+			if err != nil && tc.valid {
+				t.Errorf("settings rejected a usable message floor: %v", err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "limits.compaction.keep_turns") {
+				t.Errorf("error %q does not name limits.compaction.keep_turns", err)
+			}
+		})
+	}
+}

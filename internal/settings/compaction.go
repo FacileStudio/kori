@@ -216,7 +216,7 @@ func ValidateCompaction(c Compaction, compactAt *int64) error {
 		return &ParseError{Path: "limits.compaction", Err: fmt.Errorf(
 			"want soft_ratio <= mid_ratio <= hard_ratio, got %v/%v/%v", soft, mid, hard)}
 	}
-	if err := validateTail(c); err != nil {
+	if err := validateTail(c, compactAt); err != nil {
 		return err
 	}
 	return validateJudge(c.Judge)
