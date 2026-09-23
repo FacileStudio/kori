@@ -63,6 +63,54 @@ func TestIsLedgerRequiresTheSentinelOnItsOwnLine(t *testing.T) {
 	}
 }
 
+// typedSentinel is the marker as a reader meets it: the words a document prints
+// and a person types, with the codepoint the package writes left off, because no
+// keyboard produces one.
+const typedSentinel = "[state ledger]"
+
+// The marker has to be one a reader cannot produce. Identity is the strongest
+// claim this package hands out: a ledger is folded into and never pruned. The
+// text it is read from is text a reader supplies, so a turn that spells the
+// marker the way a document prints it has to read as the ordinary history it is.
+func TestIsLedgerRefusesTheMarkerAsAReaderTypesIt(t *testing.T) {
+	pasted := nacelle.UserText(typedSentinel + "\n\n- a constraint I copied out of the handoff")
+	if IsLedger(pasted) {
+		t.Errorf("IsLedger(%q…) = true, want a turn that only types the marker left as history", typedSentinel)
+	}
+	if body := Body(pasted); body != "" {
+		t.Errorf("Body(...) = %q, want the marker left in the turn that carries it", body)
+	}
+	if !IsLedger(BuildLedger("", "Decisions:\n- ship it")) {
+		t.Error("IsLedger(BuildLedger(...)) = false, want the marker this package writes recognised")
+	}
+}
+
+// The zone follows the marker the package writes and not the first turn that
+// merely types it. `ledgerIndex` takes the first match in the anchor..active
+// range, so a paste sitting ahead of the real ledger would take the ledger's zone
+// if it matched, and the ledger behind it would read as history a prune may drop
+// (I3a).
+func TestALedgerOutranksAPasteAheadOfIt(t *testing.T) {
+	conv := []nacelle.Message{
+		nacelle.UserText("the question"),
+		nacelle.UserText(typedSentinel + "\n\n- copied out of a document"),
+		BuildLedger("", "Decisions:\n- the facts"),
+		nacelle.UserText("a follow-up"),
+	}
+	plan := Plan(conv, Policy{AnchorMessages: 1, KeepTurns: 1})
+
+	ledgers := Section(conv, plan, ZoneLedger)
+	if len(ledgers) != 1 {
+		t.Fatalf("ledger zone holds %d messages, want the one the package wrote", len(ledgers))
+	}
+	if body := Body(ledgers[0]); body != "Decisions:\n- the facts" {
+		t.Errorf("ledger body = %q, want the ledger the package wrote claimed as the zone", body)
+	}
+	if !IsLedger(ledgers[0]) {
+		t.Error("IsLedger(ledger zone) = false, want the package's own ledger recognised")
+	}
+}
+
 // The identity is not bound to a role, and it cannot be: assembly picks the
 // ledger's role as the opposite of the anchor's last turn, so a session anchored
 // on an assistant turn is folded into a user-role ledger — and a later pass that

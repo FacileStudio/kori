@@ -9,17 +9,27 @@ import (
 // Sentinel opens the one message that accumulates what a pass must not forget.
 // It is the ledger's identity: IsLedger reads it, and a later pass folds into
 // the message carrying it rather than ever summarizing it again.
-const Sentinel = "[state ledger]"
+//
+// It ends in the private-use codepoint U+E000, and that codepoint is the whole
+// discriminator. The identity it grants is the strongest this package hands out:
+// a ledger is folded into and never pruned. The text it is read from is text a
+// reader supplies, so a turn that spells the marker the way a document prints it,
+// or the way a person types it, has to read as the ordinary history it is. No
+// keyboard produces a private-use character, so an accidental paste and a quoted
+// marker both fail to carry one. That is the bar this meets, and no text marker
+// can meet a higher one: a reader who copies this constant out of the source can
+// forge the identity, which is a deliberate act rather than the paste the marker
+// exists to refuse.
+const Sentinel = "[state ledger]\uE000"
 
 // sentinelLine splits a text that opens with the sentinel from the body behind
 // it, with ok false for a text that does not. The sentinel has to be the whole
-// first line rather than a prefix of it. The identity it grants is the strongest
-// one this package has — a ledger is what a pass folds into and never prunes —
-// and a prefix is cheap to hit by accident: a turn quoting the marker, or a
-// paste that happens to open with it, would claim the identity, and the ledger
-// behind it would then read as history and become a prune candidate. The marker
-// itself never changes, so nothing the package writes stops matching: every
-// ledger it builds opens with the sentinel alone on its first line.
+// first line and it has to be the one this package writes, codepoint included:
+// a ledger is what a pass folds into and never prunes, so whatever matches the
+// marker stops being history, and a turn quoting it, or a paste opening with the
+// typed form of it, would take that identity and leave the real ledger behind it
+// reading as a prune candidate. Nothing the package writes stops matching, since
+// every ledger it builds opens with the sentinel alone on its first line.
 func sentinelLine(text string) (string, bool) {
 	line, body, _ := strings.Cut(strings.TrimSpace(text), "\n")
 	if strings.TrimSpace(line) != Sentinel {
@@ -29,10 +39,14 @@ func sentinelLine(text string) (string, bool) {
 }
 
 // ledgerBody is the first sentinel-bearing text part's body, with ok false for a
-// message that carries no ledger. The role is not part of the identity:
-// assembly picks the ledger's role as the opposite of its neighbour, so a
-// conversation anchored on an assistant turn is folded into a user-role ledger
-// and a later pass has to recognise that one too.
+// message that carries no ledger. The marker is the whole identity and nothing
+// else is: the role is not part of it, because assembly picks the ledger's role
+// as the opposite of its neighbour, so a conversation anchored on an assistant
+// turn is folded into a user-role ledger and a later pass has to recognise that
+// one too. Nor can the identity be recorded outside the text, which is why the
+// marker is what a reader cannot type: nacelle.Message is a role and a list of
+// parts, and Part cannot be joined from this package, so there is no field to
+// carry a marker on and no part type to carry one in.
 func ledgerBody(m nacelle.Message) (string, bool) {
 	for _, part := range m.Parts {
 		text, ok := part.(nacelle.Text)
