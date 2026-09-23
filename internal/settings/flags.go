@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"go.yaml.in/yaml/v4"
 )
@@ -175,11 +176,25 @@ func resolveGates(resolved Config, path string) (Config, error) {
 	return resolved, nil
 }
 
+// processFlags declares kori's flags on the process's command line the first
+// time it is asked and returns that same declaration every time after: the flag
+// package holds one CommandLine for the process and panics when a name is
+// declared on it twice, which is what a test binary running these tests twice —
+// go test -count=2 — did. The first caller's fallback seeds the flag defaults.
+var processFlags = func() func(Config) declared {
+	var once sync.Once
+	var first declared
+	return func(fallback Config) declared {
+		once.Do(func() { first = declareFlags(fallback) })
+		return first
+	}
+}()
+
 // FromFlags is the settings layer the command line supplies.
 //
 // Only the flags actually typed are collected. It calls flag.Parse internally.
 func FromFlags(fallback Config) Config {
-	f := declareFlags(fallback)
+	f := processFlags(fallback)
 	flag.Parse()
 	typed := typedSetters(f)
 
