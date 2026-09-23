@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.73.0] - 2026-09-23
+
+### Added
 - feat(compaction): a run the provider refuses for context length now compacts and retries once, instead of failing with the request still too long. The refusal is recognised across the providers' own wording (`internal/overflow`), held quietly rather than printed, and answered by a *forced hard* pass followed by the run being started again on the compacted conversation — once per turn, and not at all with `compact_at: 0` (`internal/tui`)
 - feat(compaction): a ledger body past its budget (2000 tokens, the same ceiling one summary is written under) is *consolidated* — one rewritten block instead of an addition — which is the only thing that lets a ledger that otherwise only ever grows get smaller again (`internal/compaction`, `internal/tui`)
 - feat(compaction): `limits.compaction.keep_tokens` — the verbatim tail is now sized by a token budget (40k by default) instead of a count of messages, so two heavy file reads can no longer hold the window open just by being the newest turns. `keep_turns` drops to 1 and becomes the *floor* under that budget: the live turn alone, the one turn no summary may stand in for. Neither bound may take more than half of what a pass may fill, since a tail that size could not land under the trigger it fires (`internal/compaction`)
@@ -16,6 +24,17 @@
 - feat(compaction): the pre-send guard now compacts at the trigger itself rather than `compactSlack` above it. The trigger is already the soft ratio of the window a turn can fill, so waiting no longer bought headroom — it only changed which tier answered, and upward. The thrash guard's "did the pass land" test moved to that same figure: a margin between the two reset the count on a size the next send compacts again, so a session in that band fired a full pass on every send with nothing said. `compactSlack` is now a fixture offset in the tests only (`internal/tui`)
 - fix(compaction): the byte measure counts what a request actually carries. A tool call's own arguments — often the largest thing in an edit or write turn — counted as nothing, and a `Reasoning` block counted in full although every backend drops it when it builds a request. Both fed the freed-token report, the never-grow check and `evictionCanLandUnder` (`internal/compaction`)
 - feat(settings): `keep_turns`, `keep_tokens`, `reserve_tokens` and `window_tokens` are validated at load, and the last three are threaded through the environment as `KORI_COMPACTION_KEEP_TOKENS`, `KORI_COMPACTION_RESERVE_TOKENS` and `KORI_COMPACTION_WINDOW_TOKENS`
+
+### Fixed
+- fix(settings): the `limits.compaction` guards were written as range tests, which are false for NaN, and `strconv.ParseFloat` accepts `nan` while the YAML resolver accepts `.nan` — so `hard_ratio: .nan` loaded clean and, through `int64(NaN*window+0.5)`, pinned every message at the hard tier: a judge call and a summarizer call on every turn, forever, with the config reading as valid. The guards now reject NaN. A negative `compact_at` is refused too, rather than silently read as "off" by every gate that tests for a positive ceiling, which took overflow recovery with it (`internal/settings`, `internal/agent`)
+- fix(compaction): the thrash guard counted a pass as "did not land" only above the trigger plus a margin, while the guard that fires a pass acts at the trigger itself — so a pass stopping between the two cleared the count, the guard never stood down, and a full pass fired on every send with nothing said. Both now compare against the same figure (`internal/tui`)
+- fix(compaction): the ledger sentinel was matched by prefix, so a message that merely opened with the marker was read as the ledger and the real one became a prune candidate, breaking I3a. It is now matched as a whole first line, and the package's own ledger identity is pinned by a test either way (`internal/compaction`)
+- fix(compaction): the selectors trusted a span that reached past the conversation, which is a process-killing panic the moment a plan and a conversation disagree; they now trim instead. An empty-body ledger — a shape the package installs on purpose — is no longer dropped in place of a role repair (`internal/compaction`)
+- fix(compaction): `foldOrphanResults` was untested, so the guard that keeps a tool pair whole at the history boundary could have been deleted with the suite staying green; it now has a test on the shape it exists for, and so do I3a and I3b (`internal/compaction`, `internal/tui`)
+- fix(compaction): a job's `compaction` block was validated before it merged over the session's, so a usable job could combine into a ladder that cannot tier with nothing re-reading the merged result (`internal/agent`)
+- fix(compaction): the judge calibration harness ran a live, billed call inside `go test ./...` whenever a credential happened to be in the environment. It is now behind an explicit `KORI_CALIBRATION=1` opt-in as well as the key (`internal/compaction`)
+- fix(tui): overflow recovery ignored an aborted turn and could retry and answer it anyway; and the pass snapshot shared the `Parts` arrays it read, leaving its isolation resting on a comment rather than on the code (`internal/tui`)
+- fix(settings): `FromFlags` declared its names on the process's flag set on every call, so `go test -count=N` died on a redefined-flag panic and only `-count=1` passed. The declaration is now memoized once per process (`internal/settings`)
 
 ## [0.72.0] - 2026-09-22
 
