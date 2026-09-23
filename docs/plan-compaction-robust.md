@@ -1,8 +1,11 @@
 # Plan: robust compaction & automatic context management (JEV-assisted)
 
 **Status:** Phases 0–4 implemented 2026-09-21 — see the notes at the end of each for the
-deviations. A review of the resulting commit closed four more invariant holes the same day:
-see *Review follow-ups* at the end. Written 2026-09-21 for a cold-start handoff.
+deviations. Three review rounds followed the same day, recorded at the end as *Review
+follow-ups*: the first closed four holes, the second six, the third seven (answered by the
+calibration harness the earlier rounds' claims were checked with). Two sections dated
+2026-09-22 — *Tail budget and reserve* and *Ledger growth and duplication* — close what those
+reviews left open. Written 2026-09-21 for a cold-start handoff.
 **Audience:** an implementer agent with no prior conversation. Everything needed is below;
 nothing here depends on the conversation that produced it.
 **Repos:** `github.com/FacileStudio/kori` (this repo, the harness) and its pinned dependency
@@ -42,22 +45,29 @@ plan was written against is gone.
 | `internal/compaction/spans.go` | `Section`, `HistoryMessages`, `HistoryRange`, `LedgerText`, `LedgerEnd`, `answersAny`, `clamp` |
 | `internal/compaction/blocks.go` | `Block`, `Blocks`, atomic pairing (`blockEnd`/`opensToolPair`/`foldOrphanResults`), `renderBlock` |
 | `internal/compaction/pair.go` | `AlignedCut`, `Covers`, `toolResultIDs`, `toolCallIDs` |
-| `internal/compaction/ledger.go` | `Sentinel`, `IsLedger`, `Body`, `BuildLedger`, `ExtraParts`, `fold` |
+| `internal/compaction/ledger.go` | `Sentinel`, `IsLedger`, `Body`, `BuildLedger`, `ExtraParts`, `opposite` |
+| `internal/compaction/ledgerbody.go` | `MaxLedgerTokens`, `MergeLedger`, `LedgerOverBudget`, `NextLedger`, `newLedgerMessage` |
+| `internal/compaction/ledgersection.go` | `section`, `sections`, `sectionNames`/`isHead`, `mergeSections`, `appendUnique`, `render`, `normalize` |
+| `internal/compaction/ledgerident.go` | `Identifiers`, `MissingIdentifiers`, `isPathLike`, `identTrim`, `dedupe` |
 | `internal/compaction/micro.go` | the package's numbers (`MinResult`/`MinCleared`, `DroppedNotice`, `maxBlockInput`/`maxBlockText`), `EstTokens`, `Bytes`/`MsgBytes`/`PartBytes`, `measure`, `callText`/`clampText` |
 | `internal/compaction/tombstone.go` | `MicroStats`, `droppable`, `DroppableBytes`/`spanDroppableBytes`, `Tombstone`, `tombstoneResults` |
 | `internal/compaction/macro.go` | `Fold`, `Classify`, `JudgeRequest`, `GoalText`, `foldVerdicts` |
 | `internal/compaction/judge.go` | `Decision`, `Verdict`, `Judge`, `Reporter`/`Answer`, `JudgeConfig`, `ConfidenceFloor`, `decide`, `keepAll` |
 | `internal/compaction/jevjudge.go` | `NewJevJudge` (the System One adapter), `overflow`, `record`/`LastAnswer`, `defaultMaxState` |
 | `internal/compaction/jevquestion.go` | `state`, `questions`, `choiceQuestion` |
-| `internal/compaction/apply.go` | `Stats`, `Apply`, `ledgerCarry`, `following`, `ledgerRole`, `alternateFrom`, `measure` |
+| `internal/compaction/apply.go` | `Stats`, `Apply`, `assemble`, `unchanged`, `ledgerCarry`, `following`, `ledgerRole`, `alternateFrom` |
 | `internal/jev/` | the HTTP client (`client.go`), wire types (`types.go`), typed errors (`errors.go`) |
 | `internal/agent/compact.go` | `Budget`, `ResolveBudget` (replaces `resolveCompactAt` and its `==100000` hack) |
 | `internal/agent/policy.go` | `Policy`, `CompactionConfig`, `Judge` — settings → the TUI's policy/judge |
 | `internal/settings/compaction.go` | `Compaction`, `Judge`, their merge, `compactionEnv` |
 | `internal/tui/compact.go` | `beginCompaction`, `runCompaction`, `settleCompaction`, `installFold`, `waitForCompact`, `resolvedPolicy`, `plan` |
 | `internal/tui/compact_light.go` | `compactTiered`, `softPass`, `maskOnlyPass`, `evictionCanLandUnder`, `summarizer`, `thrashed`/`checkThrash`, `thrashLimit=3` |
-| `internal/tui/compact_mask.go` | the package aliases and `maskHistory`/`applyMaskFallback`, `compactSlack=20000` |
-| `internal/tui/compact_summary.go` | `compacted`, `compactOutcome`, `compactReport`, `compactPrompt`, `compactSystem`/`compactAsk`, `summarizeInto`, `compactTimeout=120s`, `compactJudgeTimeout=30s` |
+| `internal/tui/compact_mask.go` | the package aliases and `maskHistory`/`applyMaskFallback` |
+| `internal/tui/compact_summary.go` | `compacted`, `compactOutcome`, `installs`, `compactReport`, `summarizeInto`, `compactTimeout=120s`, `compactJudgeTimeout=30s` |
+| `internal/tui/compact_prompt.go` | `compactPrompt`, `compactAskWith`, `withAsk`, `compactSystem`/`compactAsk`/`keepAsk`/`consolidateAsk` |
+| `internal/tui/overflow.go` | `armRecovery`, `recoverOverflow`, `retryRun` — context-overflow recovery |
+| `internal/overflow/` | `Detect` — the provider context-length refusal classifier |
+| `internal/tui/settle_tasks.go` | `taskReminder`, `tasksUnfinished`, `tasksSummary` |
 | `internal/tui/compact_idle.go` | `shouldCompactIdle`, `maybeCompactIdle`, `compactCmd` (`/compact`) |
 | `internal/tui/compact_pass.go` | `compactPass` and `Model.pass` — the snapshot one pass goroutine runs on |
 | `internal/tui/account.go` | the `account` struct (`size`/`trimmed`/`compactBegan`) and `sized` |
@@ -73,13 +83,18 @@ plan was written against is gone.
 - **Pre-send** — `internal/tui/compact_idle.go` (`compactBeforeSend`, called from `send` in
   `run.go`): the measure is `m.agent.CountTokens(ctx, m.conversation)` when the backend offers one
   and the last usage-reported `m.size` when it does not; if
-  `size > m.policy.Trigger()+compactSlack` and not thrashed, `m.compactTiered(ctx)` runs. The
+  `size > m.policy.Trigger()` and not thrashed, `m.compactTiered(ctx)` runs. The
   fallback is load-bearing: `CountTokens` returns an `*Unsupported` error on the
   OpenAI-compatible runner, and a guard written as `err == nil && …` silently does nothing there.
 - **Post-turn** — `internal/tui/settle.go` calls `maybeCompactIdle()`; it fires only when idle, no
   queued line, not compacting, not thrashed, and `m.compactAt > 0 && m.size > m.policy.Trigger()`.
 - **Manual** — `/compact` → `compactCmd` in `internal/tui/compact_idle.go` (registered in
   `command.go`).
+- **Recovery** — `internal/tui/overflow.go`, called from `consume`/`settle`. The ladder is measured
+  against an estimate, so a provider can still refuse a request: `armRecovery` holds a
+  context-length rejection (`internal/overflow.Detect`) instead of printing it, and `settle` answers
+  it with `recoverOverflow` → a *forced hard* pass → `retryRun`, which starts the run again on the
+  compacted conversation. Once per turn, and not at all when `compact_at` is 0.
 
 ### 1.3 The pass, as it behaves today
 
@@ -97,6 +112,13 @@ fail to land under the threshold; at 3 the automatic triggers stand down. The `m
 mask applies is an estimate the next `sized()` overwrites (G6) — and a `sized()` that reports no
 input at all is ignored rather than written through, because `m.size` is the only measure both
 automatic triggers read and a zero would erase it.
+
+Two refinements landed after Phase 4. A pass whose ledger body is past `MaxLedgerTokens` is a
+*consolidating* pass: it asks for one rewritten block (`consolidateAsk`) and `Apply` replaces the
+body rather than merging into it, provided the rewrite still names every identifier the old body
+named. And a run the provider refuses for context length compacts once and retries, as above — the
+retry is the only caller of `beginCompaction` that forces the hard tier, because a size the ladder
+would have caught cannot be what the provider just refused.
 
 `compaction.Tombstone` replaces oversized history `ToolResult`s (≥ 1024 bytes) with
 `[dropped N bytes]` stubs that say to re-run the tool, keeping `ID`/`Name`; it is idempotent and mutates the conversation in
@@ -150,13 +172,19 @@ The conversation is partitioned **by index** into spans, in this order:
    The pinned in-conversation anchor is the **first user turn**, i.e. `anchor_messages` messages
    from the front. Never rewritten, never summarized, never pruned. A head that carries a tool call
    is extended over the reply answering it (`anchorEnd`), so the pinned boundary never splits a pair.
-2. **Ledger** — exactly one message carrying the `[state ledger]` sentinel. It is *rebuilt*, never
-   re-summarized: a later pass folds new facts into the existing ledger. The zone may also own the
-   tool replies answering calls the ledger absorbed (`LedgerEnd`), which keeps such a pair atomic;
-   the sentinel itself still rides exactly one message.
+2. **Ledger** — exactly one message carrying the `[state ledger]` sentinel. It is *rebuilt* across
+   passes, and it is rebuilt by *merging*: a later pass folds new facts into the existing ledger
+   line by line, so a summarizer that restates what the ledger already holds adds nothing
+   (`MergeLedger`). The one exception is a consolidation: a body past `MaxLedgerTokens` is rewritten
+   by a call that also carries turns no earlier pass had, and only when the rewrite still names
+   every identifier the old body named (`NextLedger`, `MissingIdentifiers`). The zone may also own
+   the tool replies answering calls the ledger absorbed (`LedgerEnd`), which keeps such a pair
+   atomic; the sentinel itself still rides exactly one message.
 3. **History** — everything between the ledger and the active window. The **only** region eligible
    for tombstoning and for JEV classification.
-4. **Active** — the newest `keep_turns` messages. Kept verbatim, always.
+4. **Active** — the newest turns, sized by `keep_tokens` and floored at `keep_turns`
+   messages. Kept verbatim, always. (Superseded 2026-09-22: it began as a count of
+   messages, which is the one bound no tier can move — see the note at the end of §6.)
 
 `Plan(conv, policy) []Span` computes the partition; `Apply` reassembles it.
 
@@ -164,9 +192,9 @@ The conversation is partitioned **by index** into spans, in this order:
 
 | Tier | Trigger | Action | Model calls |
 |---|---|---|---|
-| **Soft** | `size ≥ soft_ratio × window` | Deterministic `Tombstone` of oversized history tool results older than the active window. | 0 |
-| **Mid** | `size ≥ mid_ratio × window` | One batched JEV `Classify` over history blocks → prune (atomic) + ledger blocks + keep the rest. | 1 JEV call + 1 LLM call (ledger) |
-| **Hard** | `size ≥ hard_ratio × window` | Mid, **plus** force-summarize the whole history (ignore `Keep` verdicts). Every `Keep` becomes a fold and every `Prune` still drops, so the rebuild lands at anchor+ledger+active by construction; there is no separate trim step to take. | 1 JEV + 1 LLM |
+| **Soft** | `size ≥ soft_ratio × usable window` | Deterministic `Tombstone` of oversized history tool results older than the active window. | 0 |
+| **Mid** | `size ≥ mid_ratio × usable window` | One batched JEV `Classify` over history blocks → prune (atomic) + ledger blocks + keep the rest. | 1 JEV call + 1 LLM call (ledger) |
+| **Hard** | `size ≥ hard_ratio × usable window` | Mid, **plus** force-summarize the whole history (ignore `Keep` verdicts). Every `Keep` becomes a fold and every `Prune` still drops, so the rebuild lands at anchor+ledger+active by construction; there is no separate trim step to take. | 1 JEV + 1 LLM |
 
 Defaults (locked in §5): soft `0.65`, mid `0.80`, hard `0.90`. Absolute `compact_at`, when set,
 wins over the ratios and remains the fallback when `ContextWindow == 0`.
@@ -176,8 +204,23 @@ wins over the ratios and remains the fallback when `ContextWindow == 0`.
 - **I1 Pairing:** every `ToolResult` in the outgoing conversation is preceded by the assistant
   message carrying the matching `ToolCall`. Prune removes whole atomic blocks only.
 - **I2 Anchor:** the first `anchor_messages` messages are byte-identical after any number of passes.
-- **I3 Ledger monotonicity:** a message carrying `[state ledger]` is never fed to the summarizer
-  again; ledger content only grows across passes.
+- **I3 Ledger monotonicity:** stated in three parts, because the old single sentence was already
+  violated in letter while the property it protected held.
+  - **I3a** a message carrying `[state ledger]` is never a judge block, never history, and never a
+    prune candidate (`Blocks` chunks only `ZoneHistory`; `LedgerEnd` claims the ledger's own replies).
+  - **I3b** no summarizer call is ever handed the ledger *alone*: every call that rewrites it also
+    receives turns no earlier pass compressed, so a rewrite is measured against fresh material
+    rather than being a summary of a summary.
+  - **I3c** a rewrite of the ledger's body cannot *silently* drop what the earlier body named:
+    it is granted only when every identifier the earlier body carried survives, or refused and the
+    merge stands (`Identifiers`, `MissingIdentifiers`, `Stats.LedgerKept`/`LedgerReplaced`). The
+    guard is **lexical and no more**: "identifier" means a backticked span or a path/flag/extension-
+    shaped token and nothing else. A body whose facts are prose — a constraint, a decision, a number
+    — carries no such token, so it has no rewrite guard at all: a consolidation that dropped one is
+    granted and `Stats.LedgerReplaced` reports the success.
+  - Monotonicity itself is now line-granular rather than byte-granular: a merge keeps every line the
+    earlier body carried and drops only the ones the new one repeats. Growth is bounded by
+    consolidation; duplication is bounded by the merge and by `keepAsk`.
 - **I4 Role alternation:** the assembled conversation never has two consecutive messages of the
   same role (`Apply` runs `alternateFrom` after assembling, folding same-role neighbours together
   and carrying the merged parts forward so nothing is lost — see the Phase 4 note).
@@ -641,6 +684,76 @@ a fourth once the judge started answering at all.
    runs on a `compactPass` snapshot, so the read safety is local. `alignedEvictCut` went with it — its
    only caller in the repository was its own test — and so did the superseded `compaction-upgrade.md`.
 
+### Tail budget and reserve (2026-09-22)
+
+Two things §3.1 and §5 left as magic values, closed after a review that asked whether the design
+matched published practice rather than whether its own invariants held. Recorded here per §0.5.
+
+1. **The active window is sized by a budget, not a count.** `keep_turns: 3` was a *message* bound,
+   and a message bound is the one figure neither tier can move: the newest turns are exactly where
+   a session's largest tool results land, and the active window is never touched. Two heavy reads
+   could therefore hold the conversation over the trigger with nothing any pass could do, which is
+   the shape the thrash guard was quietly absorbing. `keep_tokens` (40k) is now the budget, walked
+   back over whole messages; `keep_turns` drops to 1 and becomes the *floor* — the live turn alone,
+   which is also the one turn no summary may stand in for. The **token budget** is capped at half of
+   what a pass may fill (`min(usable window, ceiling)/2`), since a tail that size could not land
+   under the trigger it fires. The **message floor carries no such cap**: `walkBack` starts at the
+   floor's cut and only ever widens it, so a `keep_turns` big enough to take more than half the fill
+   is honoured anyway. It is the one bound a pass cannot move.
+2. **The ladder is read against a usable window.** The ratios were fractions of the raw window, so
+   `hard_ratio: 0.90` left a tenth of the window for the response — thin on a reasoning model. A
+   `reserve_tokens` (a fifth of the window within 8k–64k when unset) is now held back for the turn's
+   own answer and subtracted *before* the ladder is read, so `hard` leaves the reserve plus a tenth
+   of the usable window. A `window_tokens` override was added in the same breath, because the
+   reserve needs a window to derive from and an OpenAI-compatible runner reports none.
+
+Two consequences worth stating. The pre-send guard now fires at `Trigger()` rather than
+`Trigger() + compactSlack`: the trigger is already the soft ratio of the usable window, so waiting
+only changes which tier answers, and upward — and the thrash guard's "did it land" test moved to
+the same figure, since a margin between the two made every pass stopping inside it a silent reset.
+`compactSlack` therefore has no production role left and survives only as a fixture offset in the
+tests. And package `tui`'s fixture session pins its tail explicitly
+(`KeepTurns: 3, KeepTokens: 1`), because a fixture conversation is small enough that the shipped
+40k budget swallows it whole and leaves the pass tests with no history to fold.
+
+The invariant that §3.3's I3 states survives untouched: nothing here re-summarizes the ledger, and
+the new bounds only decide *which messages stay verbatim*.
+
+### Ledger growth and duplication (2026-09-22)
+
+Two defects, one cause: the fold handed the previous ledger to the summarizer and asked it to "fold
+it into the new one", then concatenated whatever came back unless it textually contained the old
+body. A model that *reworded* what it was shown produced `previous + reworded previous + new`, so
+the body doubled on every pass and nothing bounded it — the fold is monotone by design, and I5
+compares whole-conversation estimates, so a body adding kilobytes a pass is invisible until it
+dominates the window.
+
+What changed:
+
+1. **The merge is structural, not textual.** `MergeLedger` parses both bodies into headed sections
+   (`sections` — the schema's own section names, or a short label ending in a colon, or markdown
+   emphasis) and merges line by line with a normalized dedup key, so a restatement costs nothing.
+2. **The prompt says why the ledger is shown.** `keepAsk` tells the summarizer not to repeat what
+   the earlier ledger holds. The merge catches exact restatement; the ask is what stops the reworded
+   half, which no deterministic check can see.
+3. **The body is bounded.** `MaxLedgerTokens` (aliased by the TUI's `compactMaxTokens`, so the
+   ledger's budget and the summarizer's own ceiling are one number) is the size above which a pass
+   consolidates: `beginCompaction` decides it on the update loop from the ledger the conversation
+   actually holds (`LedgerOverBudget`), `compactPass.consolidate` carries it to the goroutine, and
+   `consolidateAsk` asks for one rewritten block instead of an addition.
+4. **The rewrite is gated.** `NextLedger` grants a replacement only when `MissingIdentifiers` is
+   empty — a lexical check over backticked spans and path/flag/extension-shaped tokens. A rewrite
+   that would lose one is refused and the merge stands, which costs growth rather than a fact. The
+   refusal is reported (`Stats.LedgerKept`, "kept the ledger as written" in the report card).
+5. **A provider refusal is recovered.** `internal/overflow.Detect` recognises the context-length
+   vocabulary every backend words differently, `armRecovery` holds it instead of printing it,
+   `settle`→`recoverOverflow` compacts with a forced hard pass and `retryRun` starts the run again.
+   Once per turn (`run.overflowTried`), and never with `compact_at: 0`.
+
+I3 is restated above rather than weakened: what protected the ledger was never that the summarizer
+could not see it, but that it was never the *only* thing the summarizer could see, and that is
+I3b — now explicit — with I3c added as the guard the original design lacked.
+
 ---
 
 ## 7. Test & validation matrix
@@ -650,14 +763,18 @@ a fourth once the judge started answering at all.
 | I1 pairing after prune | no `ToolResult` without a preceding `ToolCall`; property over random conversations | `internal/compaction/blocks_test.go` |
 | I1 pairing when the ledger absorbs a kept block | no orphan result, pair survives a second pass and a prune | `internal/compaction/apply_test.go`, `policy_test.go` |
 | I2 anchor preserved | first `anchor_messages` byte-identical after 5 passes | `internal/compaction/apply_test.go` |
-| I3 ledger monotonic | re-pass does not re-summarize; ledger only grows | `internal/compaction/ledger_test.go` |
+| I3 ledger monotonic | re-pass does not re-summarize; the merge keeps every line and repeats none | `internal/compaction/ledger_test.go`, `ledgerbody_test.go` |
+| I3 duplication is bounded | 8 passes whose summarizer echoes its own section list leave each fact recorded once | `internal/compaction/ledgerbody_test.go` |
+| I3c a rewrite never loses an identifier | a consolidated body is granted only with every identifier kept, and refused otherwise | `internal/compaction/ledgerident_test.go`, `ledgerbody_test.go` |
+| Ledger budget | `LedgerOverBudget` at one summary; the pass consolidates rather than adds, and the report names it | `internal/compaction/ledgerbody_test.go`, `internal/tui/compact_ledger_test.go` |
+| Overflow recovery | the rejection is held, answered once, forced to hard, and reported verbatim when there is no history to fold | `internal/overflow/overflow_test.go`, `internal/tui/overflow_test.go` |
 | I4 role alternation | assembled slice has no same-role neighbours | `internal/compaction/apply_test.go` |
 | I5 never grow | `After ≤ Before` for every tier, and a rebuild that would grow is refused with the original handed back | `internal/compaction/apply_test.go` |
 | I1 the pinned head never splits a pair | a head that is a `ToolCall` claims its reply; history never opens on an orphan result | `internal/compaction/policy_test.go` |
 | I4 both ends legal without a ledger | a pass that folds nothing still stands a ledger buffer between the head and the active window | `internal/compaction/apply_test.go` |
-| I7 empty summary with the judge on | masks instead of folding turns it cannot summarize | `internal/tui/compact_test.go` |
+| I7 empty summary with the judge on | masks instead of folding turns it cannot summarize | `internal/tui/compact_live_test.go` |
 | I6 idle-only + queued delivery | existing `compact_idle_test.go` cases still pass | `internal/tui` |
-| I7 degrade safely | 429 / timeout / malformed ⇒ nothing pruned | `internal/jev/client_test.go`, `judge_test.go` |
+| I7 degrade safely | 429 / timeout ⇒ a failed call keeps every block; a malformed answer has **no test** | `internal/jev/retry_test.go`, `internal/compaction/jevjudge_test.go` |
 | Tier boundaries | `Tier(size)` at 0.649/0.65/0.799/0.80/0.899/0.90 of a known window | `internal/compaction/policy_test.go` |
 | Window unknown | `ContextWindow == 0` ⇒ falls back to `compact_at` | `internal/compaction/policy_test.go` |
 | Tombstone idempotence | second pass adds no stub and no debit | `internal/compaction/micro_test.go` |
@@ -667,9 +784,9 @@ a fourth once the judge started answering at all.
 | Reasoning is never tombstoned | a stub on it frees nothing and is not credited | `internal/compaction/micro_test.go`, `internal/tui/compact_mask_test.go` |
 | The prune threshold has a floor | an unusable threshold prunes nothing | `internal/compaction/judge_test.go`, `jevjudge_test.go` |
 | A degenerate ratio cannot disable the ladder | derived ceiling falls back; the value is refused at load | `internal/agent/compact_test.go`, `internal/settings/compaction_test.go` |
-| A stale plan is refused, not indexed | `Covers` is exact; `Apply` reports `Stale` with the original | `internal/compaction/apply_test.go`, `policy_test.go` |
+| A stale plan is refused, not indexed | `Covers` is exact; `Apply` reports `Stale` with the original | `internal/compaction/apply_test.go`, `pair_test.go` |
 | The judge sees what a call did | a block carries the call's arguments, abbreviated | `internal/compaction/blocks_test.go`, `micro_test.go` |
-| A gateway failure is transient | 502 retried like a 429 | `internal/jev/client_test.go` |
+| A gateway failure is transient | 502 retried like a 429 | `internal/jev/retry_test.go` |
 | A question is one the live endpoint accepts | the criteria encode as an object, and every question names its own block | `internal/compaction/jevquestion_test.go` |
 | The judge request is bounded in bytes | a block is cut to `maxBlockText`, the goal to the same cap, the batch to `defaultMaxState`, and the newest block is always asked about | `internal/compaction/jevjudge_test.go`, `jevquestion_test.go` |
 | The answering model is reportable | `LastAnswer` carries the version and the bill, and survives a failed pass | `internal/compaction/jevjudge_test.go`, `internal/tui/context_line_test.go` |
@@ -705,7 +822,11 @@ limits:
     soft_ratio: 0.65          # tombstone only, no model call
     mid_ratio: 0.80           # + one batched JEV pass + one ledger summary
     hard_ratio: 0.90          # + force-summarize history; lands at anchor+ledger+active
-    keep_turns: 3             # active window, in messages
+    window_tokens: 200000     # overrides the backend's reported window (unset = the backend's)
+    reserve_tokens: 40000     # runway held back for the answer; the ratios are read
+                              # against the window less it (unset = a fifth of the window)
+    keep_tokens: 40000        # the verbatim tail's budget, in tokens
+    keep_turns: 1             # the tail's floor, in messages (the live turn alone)
     anchor_messages: 1        # pinned head (the first user turn)
     judge:
       enabled: false          # OPT-IN: sends conversation history to TypeSafe
@@ -747,7 +868,9 @@ Env: `KORI_COMPACTION_*` for the scalars, `TYPESAFE_API_KEY` for the key.
 
 - No nacelle core rewrite; strategy stays consumer-side (`nacelle/trim.go`).
 - No provider-side / native compaction, no checkpoints, no plan-mode machine.
-- No summarization of the ledger; no "summary of a summary" path, ever.
+- No *unbounded* summarization of the ledger; no "summary of a summary" path, ever. The one
+  rewrite (a consolidation) is bounded by `MaxLedgerTokens`, gated on identifiers, and always made
+  in a call that carries uncompressed turns — see the 2026-09-22 note under §6.
 - No JEV-based tool-risk gating (a natural fit for nacelle's `BeforeToolCall`, but a separate
   feature with its own security review).
 - No per-tool semantic summaries or tool-specific stubs; one tombstone shape.
@@ -759,7 +882,13 @@ Env: `KORI_COMPACTION_*` for the scalars, `TYPESAFE_API_KEY` for the key.
 ## 11. Implementer checklist
 
 - [x] Phases 0–4 done in order, each **Exit** verified.
-- [x] I1–I7 each backed by a test.
+- I1–I7 implemented and carried by tests. I3a is pinned by `TestClassifyIsNeverOfferedTheLedger`
+  and `TestPruningEverythingStillCannotReachTheLedger` (`internal/compaction/macro_test.go`) — a
+  plan that gives the ledger its own zone, no block overlapping it, and a judge that prunes every
+  block it is shown still unable to reach it — alongside the older `TestBlocksIgnoreNonHistorySpans`
+  which exercises an anchor span. I3b is pinned by `TestARewriteCallIsNeverHandedTheLedgerAlone` and
+  `TestTheI3bCounterSeesALedgerOnlyAsk` (`internal/tui/compact_prompt_test.go`), the second of which
+  keeps the first honest by asserting the counter returns 0 on the forbidden ledger-only shape.
 - [x] No new logic in `internal/tui` beyond thin wiring.
 - [x] `filet check`, `go test ./... -race`, `golangci-lint run ./...`, `go build ./...` all clean.
 - [x] Judge off reproduces today's behaviour; judge on makes exactly one JEV call per pass.

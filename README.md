@@ -104,7 +104,9 @@ precedence order and the traps in each setting:
 [docs/configuration.md](docs/configuration.md).
 
 `example.kori.yml` in this repo is the same file the first boot writes — the whole
-surface, abridged here:
+surface, abridged here. The abridgement is illustrative: the scaffold-parity test covers
+`example.kori.yml`, and nothing reads the block below, so a wrong key here fails no gate —
+it fails at load, under `KnownFields`, when you paste it.
 
 ```yaml
 provider:
@@ -124,10 +126,15 @@ limits:
   # compact_at is an absolute token ceiling when set, 0 disables compaction,
   # and unset derives the ceiling from the context window and the ratios here.
   compaction:
+    # Ratios are fractions of the window a turn can fill: the backend's window
+    # less reserve_tokens, the runway held back for the model's answer.
     soft_ratio: 0.65
     mid_ratio: 0.80
     hard_ratio: 0.90
-    keep_turns: 3
+    # window_tokens overrides what the backend reports; reserve_tokens defaults
+    # to a fifth of it, between 8k and 64k.
+    keep_turns: 1
+    keep_tokens: 40000
     anchor_messages: 1
     # The judge is OPT-IN and off by default: enabling it sends conversation
     # history to TypeSafe. Its key prefers the TYPESAFE_API_KEY env var.
@@ -143,7 +150,7 @@ tools:
   run_command: true
   web_fetch: true
   tasks: true
-  parallel_subagent: true
+  parallel_agents: true
 
 security:
   approve_tools: false
@@ -202,17 +209,38 @@ each a superset of the one below:
 
 | Tier | Crossed at | What it does | Model calls |
 |---|---|---|---|
-| soft | `soft_ratio` (0.65) × window | Tombstones oversized old tool results — deterministic, no model call | 0 |
-| mid | `mid_ratio` (0.80) × window | Classifies each history block and folds it into one `[state ledger]` message, keeping, pruning or folding | 1 judge + 1 ledger |
-| hard | `hard_ratio` (0.90) × window | Mid, plus force-folding what is left of the history and landing at the pinned ends | 1 judge + 1 ledger |
+| soft | `soft_ratio` (0.65) × usable window | Tombstones oversized old tool results — deterministic, no model call | 0 |
+| mid | `mid_ratio` (0.80) × usable window | Classifies each history block and folds it into one `[state ledger]` message, keeping, pruning or folding | 1 judge + 1 ledger |
+| hard | `hard_ratio` (0.90) × usable window | Mid, plus force-folding what is left of the history and landing at the pinned ends | 1 judge + 1 ledger |
 
-The newest `keep_turns` turns stay verbatim and the first `anchor_messages`
-messages — the original task — are never rewritten, summarized or pruned, so the
-goal cannot be compacted away. The ledger is rebuilt, never re-summarized: a
-later pass folds new facts into the existing one rather than summarizing a
-summary. `limits.compact_at` still speaks last (an absolute ceiling when set, `0`
-disables compaction), and a backend that reports no context window falls back to
-it.
+The *usable window* is the backend's context window less `reserve_tokens` — the
+runway the model needs to finish its own answer — so `hard` still leaves the
+reserve plus a tenth of the usable window, instead of a tenth of the raw one.
+That reserve is an engineering hypothesis rather than a measurement: it defaults
+to a fifth of the window between 8k and 64k, and a session that knows what its
+model needs should set `reserve_tokens`. A backend that reports no window at all
+can be given one with `window_tokens`.
+
+The verbatim tail is sized by `keep_tokens` (40k by default), a budget rather
+than a count of messages, so two heavy reads can no longer pin the window open.
+`keep_turns` is the floor underneath it — how few messages the tail may ever
+shrink to, one by default, the live turn alone — and the first
+`anchor_messages` messages, the original task, are never rewritten, summarized or
+pruned, so the goal cannot be compacted away. The ledger is rebuilt, and it is
+rebuilt by *merging*: a later pass folds new facts into the existing one line by
+line, so a summarizer that restates what the ledger already holds adds nothing to
+it. Never a summary of a summary — the ledger is only ever shown to a call that
+also carries turns no earlier pass compressed. Once the body outgrows one summary
+(2000 tokens, the same ceiling the summarizer writes under) the next pass
+*consolidates* it: one rewritten block instead of an addition, accepted only if
+it still names every identifier the old body named, otherwise the merge stands.
+`limits.compact_at` still speaks last (an absolute ceiling when set, `0` disables
+compaction), and a backend that reports no context window falls back to it.
+
+If a provider refuses a request for length anyway — the ladder is measured
+against an estimate, so it can — kori compacts once and sends the turn again.
+That retry is a forced hard pass, it happens at most once per turn, and it is
+skipped entirely when `compact_at` is `0`.
 
 The judge is **opt-in and off by default**: turning on
 `limits.compaction.judge` sends conversation history — which can include source
@@ -220,8 +248,8 @@ code and secrets — to TypeSafe's System One model for classification, so it is
 the one setting here that leaves the machine. Its key prefers the
 `TYPESAFE_API_KEY` environment variable over `limits.compaction.judge.api_key`.
 With the judge off, compaction behaves exactly as it did before the ladder
-existed. The status line shows the live load and tier
-(`↕120k/200k · 0.60 · soft`), and `/status` reports the ledger and the last
+existed. The status line shows the live load and tier against the usable window
+(`↕120k/160k · 0.75 · soft`), and `/status` reports the ledger and the last
 pass's tier.
 
 ## Sandboxes & remote hosts

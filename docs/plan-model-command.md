@@ -78,7 +78,7 @@ Create `internal/tui/model_swap.go` to keep `command.go` under the filet functio
   - On success, reassign `m.agent = res.Agent`, `m.delegate = res.Config`, `m.model = targetModel`.
   - Rebuild `m.sink = usage.NewSink(m.run.root, targetModel)`.
   - Update `m.banner` to show the new model.
-  - Re-run `agent.ResolveBudget` against `res.Backend` with the session's resolved compaction settings, rebuild the policy with `agent.Policy(budget, m.policy.KeepTurns, m.policy.AnchorMessages)`, and assign it to `m.policy` (taking `m.compactAt = m.policy.Ceiling`), so the ratios, the window and the ceiling all move together and the ladder re-derives from the new model's window.
+  - Re-run `agent.ResolveBudget` against `res.Backend` with the session's resolved compaction settings, rebuild the policy with `agent.Policy(budget, m.policy.KeepTurns, m.policy.KeepTokens, m.policy.AnchorMessages)`, and assign it to `m.policy` (taking `m.compactAt = m.policy.Ceiling`), so the ratios, the window, the reserve and the ceiling all move together and the ladder re-derives from the new model's window. The tail moves with them for the same reason: `KeepTokens` is capped against the new window's usable half, and a swap to a smaller model has to re-cut the tail rather than keep one sized for the old one.
   - Print confirmation card: `→ switched to <backend>/<model> · context re-reads cold from here (no prompt-cache hits)`.
 
 ### 4. Implement interactive picker in `internal/tui/model_picker.go`
