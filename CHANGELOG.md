@@ -7,6 +7,13 @@
 ### Changed
 
 ### Fixed
+
+## [0.74.0] - 2026-09-23
+
+### Added
+- feat(settings): `limits.compaction.keep_turns` is refused at load when the floor it names alone exceeds the half of a pass the tail may fill, which it previously overrode silently: a generous floor pinned the window open above the trigger, so no pass could move it, because the active window is never rewritten. The check fires only where the cap is decidable at that layer, a written `window_tokens` or `compact_at`, since with neither the window is the backend's own and refusing would judge a number nobody wrote. The floor is weighed with the package's existing one-block bound rather than a second estimate (`internal/settings`, `internal/compaction`)
+
+### Fixed
 - fix(compaction): a consolidating pass now folds the history instead of trusting the judge's keep verdicts, so the rewrite it asks for is measured against turns no earlier pass compressed. A keep-heavy classification used to leave the pass with no ledger block to fold, and those turns are what carry the earlier ledger into the ask: the summarizer was never called, the consolidating addendum never reached the model, and a body past `MaxLedgerTokens` stayed over budget for the rest of the session (`internal/tui`)
 - fix(compaction): the ledger's identity is claimed by a marker a reader cannot type. The sentinel now ends in the private-use codepoint U+E000, because matching the whole first line (the 0.73.0 fix) was not enough on its own: a turn whose first line spells the marker the way a document prints it still matched, and identity decides whether a message is folded into or pruned away. `ledgerIndex` takes the first match in the `anchor..active` range, so such a turn took the ledger's zone while the ledger the package wrote read as history behind it, breaking I3a by ordering alone. Binding identity to the assistant role is not available, since assembly picks the ledger's role as the opposite of its neighbour and an assistant-anchored session is folded into a *user*-role ledger; neither is recording it outside the message text (`nacelle.Message` is a role and a list of parts, and `Part` is sealed to `nacelle`). The marker being untypeable is therefore the discriminator. Nothing on disk is orphaned by the change: a resumed session is rebuilt from its question and answer lines alone (`internal/sessions`), never from the ledger (`internal/compaction`)
 
