@@ -45,6 +45,16 @@ const (
 // unit converts to the other without a second guess.
 const bytesPerToken = 4
 
+// EstMsgTokens is the token weight one unwritten message is estimated at, for a
+// caller that has to size a floor written in messages rather than in tokens: a
+// config is validated before there is a conversation, so there is no message to
+// measure, and a message floor is a count of turns the session has not taken yet.
+// The figure is the package's own bound for one unit of history — maxBlockText,
+// which a block carrying a whole tool result is held to — converted at the rate
+// above. A turn is what a block is: a tool call with the reply answering it, or a
+// standalone turn, and the result in it is the part that makes a tail heavy.
+const EstMsgTokens = maxBlockText / bytesPerToken
+
 // EstTokens is the bytes-to-tokens estimate the whole package uses: four bytes
 // per token is the rough English rate, and it is only ever compared against
 // itself, so its error bars are directionally consistent.

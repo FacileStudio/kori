@@ -403,8 +403,9 @@ token budget and `anchor_messages` pins the head: two heavy file reads can no lo
 window open by virtue of being the newest turns, and the first user turn is never rewritten,
 summarized or pruned, so the original task cannot be summarized away. `keep_turns` is the floor
 under the budget — how few messages the tail may ever shrink to, one by default, the live turn
-alone, which is also the one turn no summary may stand in for. Neither bound can take more than
-half of what a pass may fill, so a tail can never defeat the pass it triggers. With the judge off (the default), `mid` and `hard`
+alone, which is also the one turn no summary may stand in for. Neither bound may take more than
+half of what a pass may fill — a `keep_turns` whose own turns would is refused at load, whenever a
+`window_tokens` or a `compact_at` is there to bound the cap — so a tail can never defeat the pass it triggers. With the judge off (the default), `mid` and `hard`
 both fold the whole history into the ledger. With it on, `mid` classifies each history block and
 keeps, prunes or folds it, and `hard` folds everything the judge did not prune.
 

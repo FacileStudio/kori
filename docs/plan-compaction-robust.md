@@ -697,9 +697,14 @@ matched published practice rather than whether its own invariants held. Recorded
    back over whole messages; `keep_turns` drops to 1 and becomes the *floor* — the live turn alone,
    which is also the one turn no summary may stand in for. The **token budget** is capped at half of
    what a pass may fill (`min(usable window, ceiling)/2`), since a tail that size could not land
-   under the trigger it fires. The **message floor carries no such cap**: `walkBack` starts at the
-   floor's cut and only ever widens it, so a `keep_turns` big enough to take more than half the fill
-   is honoured anyway. It is the one bound a pass cannot move.
+   under the trigger it fires. The **message floor carries no such cap at run time**: `walkBack`
+   starts at the floor's cut and only ever widens it, so a `keep_turns` big enough to take more
+   than half the fill is honoured by the plan. It is the one bound a pass cannot move — which is
+   why the floor is now refused at load rather than trimmed at run time: `validateTail`
+   (`internal/settings/compactiontail.go`) rejects a `keep_turns` whose own estimated weight is over
+   the same half-cap, whenever a `window_tokens` or a `compact_at` written down lets that layer put
+   a number on the cap. Dropping the floor or re-expressing a count of turns as a byte budget would
+   both mean touching a window no tier may rewrite; refusing the config does not.
 2. **The ladder is read against a usable window.** The ratios were fractions of the raw window, so
    `hard_ratio: 0.90` left a tenth of the window for the response — thin on a reasoning model. A
    `reserve_tokens` (a fifth of the window within 8k–64k when unset) is now held back for the turn's
