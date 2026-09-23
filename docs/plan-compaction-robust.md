@@ -172,7 +172,9 @@ The conversation is partitioned **by index** into spans, in this order:
    The pinned in-conversation anchor is the **first user turn**, i.e. `anchor_messages` messages
    from the front. Never rewritten, never summarized, never pruned. A head that carries a tool call
    is extended over the reply answering it (`anchorEnd`), so the pinned boundary never splits a pair.
-2. **Ledger** — exactly one message carrying the `[state ledger]` sentinel. It is *rebuilt* across
+2. **Ledger** — exactly one message carrying the `[state ledger]` sentinel, which ends in the
+   private-use codepoint U+E000. That codepoint is the discriminator: a reader cannot type one, so
+   the marker as a document prints it is ordinary history rather than a claim on the zone. It is *rebuilt* across
    passes, and it is rebuilt by *merging*: a later pass folds new facts into the existing ledger
    line by line, so a summarizer that restates what the ledger already holds adds nothing
    (`MergeLedger`). The one exception is a consolidation: a body past `MaxLedgerTokens` is rewritten
@@ -206,8 +208,17 @@ wins over the ratios and remains the fallback when `ContextWindow == 0`.
 - **I2 Anchor:** the first `anchor_messages` messages are byte-identical after any number of passes.
 - **I3 Ledger monotonicity:** stated in three parts, because the old single sentence was already
   violated in letter while the property it protected held.
-  - **I3a** a message carrying `[state ledger]` is never a judge block, never history, and never a
-    prune candidate (`Blocks` chunks only `ZoneHistory`; `LedgerEnd` claims the ledger's own replies).
+  - **I3a** the message carrying the ledger's sentinel is never a judge block, never history, and
+    never a prune candidate (`Blocks` chunks only `ZoneHistory`; `LedgerEnd` claims the ledger's own
+    replies). The sentinel is matched as the whole first line *including* the private-use codepoint
+    U+E000 it ends in, because identity is decided by a text a reader supplies: with a typeable
+    marker, a turn whose first line spells it (the ASCII form a document prints) matched, and
+    `ledgerIndex` takes the first match in the `anchor..active` range, so the paste took the ledger's
+    zone while the real ledger behind it read as history and became a prune candidate. Identity
+    cannot be bound to the assistant role (assembly picks the ledger's role as the opposite of its
+    neighbour, so an assistant-anchored session folds into a user-role ledger) and cannot be recorded
+    outside the message text (`nacelle.Message` is a role and a list of parts, and `Part` is sealed to
+    this package), so the marker being untypeable is the discriminator.
   - **I3b** no summarizer call is ever handed the ledger *alone*: every call that rewrites it also
     receives turns no earlier pass compressed, so a rewrite is measured against fresh material
     rather than being a summary of a summary.
@@ -902,7 +913,7 @@ Env: `KORI_COMPACTION_*` for the scalars, `TYPESAFE_API_KEY` for the key.
 ### 12.1 Glossary
 
 - **Anchor** — the pinned head of the conversation (the original task); never rewritten.
-- **Ledger / State Ledger** — the single accumulating `[state ledger]` message; never summarized.
+- **Ledger / State Ledger** — the single accumulating `[state ledger]` message, its marker ending in the private-use codepoint U+E000; never summarized.
 - **Atomic block** — an assistant `ToolCall` message plus the user message answering it, or one
   standalone turn; the unit of prune.
 - **Tier** — soft / mid / hard, selected by measured size against the window ratio.

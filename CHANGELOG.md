@@ -7,6 +7,7 @@
 ### Changed
 
 ### Fixed
+- fix(compaction): the ledger's identity is claimed by a marker a reader cannot type. The sentinel now ends in the private-use codepoint U+E000, because matching the whole first line (the 0.73.0 fix) was not enough on its own: a turn whose first line spells the marker the way a document prints it still matched, and identity decides whether a message is folded into or pruned away. `ledgerIndex` takes the first match in the `anchor..active` range, so such a turn took the ledger's zone while the ledger the package wrote read as history behind it, breaking I3a by ordering alone. Binding identity to the assistant role is not available, since assembly picks the ledger's role as the opposite of its neighbour and an assistant-anchored session is folded into a *user*-role ledger; neither is recording it outside the message text (`nacelle.Message` is a role and a list of parts, and `Part` is sealed to `nacelle`). The marker being untypeable is therefore the discriminator. Nothing on disk is orphaned by the change: a resumed session is rebuilt from its question and answer lines alone (`internal/sessions`), never from the ledger (`internal/compaction`)
 
 ## [0.73.0] - 2026-09-23
 
