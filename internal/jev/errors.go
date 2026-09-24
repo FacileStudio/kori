@@ -54,13 +54,13 @@ func statusError(status int, detail string) error {
 // not: a typed 401 or 422 cannot succeed unchanged, and a 4xx or 5xx with a body
 // is the endpoint speaking, not the network failing.
 func retryable(err error) bool {
-	var unauthorized *UnauthorizedError
-	var invalid *InvalidRequestError
-	if errors.As(err, &unauthorized) || errors.As(err, &invalid) {
+	if _, ok := errors.AsType[*UnauthorizedError](err); ok {
 		return false
 	}
-	var httpErr *HTTPError
-	if errors.As(err, &httpErr) {
+	if _, ok := errors.AsType[*InvalidRequestError](err); ok {
+		return false
+	}
+	if httpErr, ok := errors.AsType[*HTTPError](err); ok {
 		return transient(httpErr.Status)
 	}
 	return true
