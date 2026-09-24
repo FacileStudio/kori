@@ -35,6 +35,8 @@ func (m *Model) routeTask(message tea.Msg) (tea.Cmd, bool) {
 		return m.recordTasks(msg), true
 	case hookReportMsg:
 		return m.recordHook(msg), true
+	case ideEvent:
+		return m.editorEvent(msg), true
 	}
 	return nil, false
 }

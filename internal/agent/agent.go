@@ -14,20 +14,48 @@ import (
 // decides what the settings are, and this turns them into the thing that
 // answers. Nothing here reads a flag or touches the terminal.
 
-// built is what build assembles: the agent, the backend it answers on, and the
-// nacelle.Config it was built from. Grouped so build returns two values instead
-// of four — the config is only there so /parallel can clone it for its own
-// detached fan-out; callers that do not delegate ignore it.
+// built is what assemble builds: the agent, the backend it answers on, and the
+// nacelle.Config it was built from. Grouped so assemble returns two values
+// instead of four — the config is only there so /parallel can clone it for its
+// own detached fan-out; callers that do not delegate ignore it.
 type built struct {
 	agent   *nacelle.Agent
 	backend nacelle.Backend
 	config  nacelle.Config
 }
 
-// build assembles the agent the settings describe, and hands the backend back
-// so the caller can say which one answered. approve is nil unless
-// -approve-tools was asked for — see nacelle.Approve's own doc comment for
-// why nil, not a rubber-stamp function, is what "off" means here.
+// build assembles the agent the settings describe: backendFor and assemble in
+// one call, for the callers that want an agent and nothing else. The
+// interactive session resolves the backend itself first, because the IDE
+// surface is opened before the agent exists and has to name the model an empty
+// provider.model leaves to the provider.
+func build(config *settings.Config, local []nacelle.Tool, approve nacelle.Approve, hooks map[nacelle.HookPoint][]nacelle.Hook) (built, error) {
+	backend, err := backendFor(config)
+	if err != nil {
+		return built{}, err
+	}
+	return assemble(*config, backend, local, approve, hooks)
+}
+
+// backendFor resolves the keys a config left to a command and builds the
+// backend the session answers on.
+//
+// config is taken by pointer because a key a file left to a command is resolved
+// once, here, and the caller needs the result: every path that builds an agent
+// arrives through this function, so this is the one place an api_key_command
+// can run — and it runs after every layer has merged, so a job's own command
+// wins over the session's the same way its literal key does.
+func backendFor(config *settings.Config) (nacelle.Backend, error) {
+	if err := settings.ResolveKeys(config); err != nil {
+		return nil, err
+	}
+	return chosen(*config)
+}
+
+// assemble builds the agent around a backend that is already chosen, and hands
+// that backend back so the caller can say which one answered. approve is nil
+// unless -approve-tools was asked for — see nacelle.Approve's own doc comment
+// for why nil, not a rubber-stamp function, is what "off" means here.
 //
 // The three reasoning settings fold into one nacelle.Thinking here, and the
 // one rename in that fold is worth knowing about: this client's -thinking
@@ -37,29 +65,16 @@ type built struct {
 // built.config is the nacelle.Config the agent was built from, kept so a
 // /parallel fan-out runs its own agents from the same tools, system prompt and
 // iteration ceiling instead of a hand-built subset.
-//
-// config is taken by pointer because a key a file left to a command is resolved
-// once, here, and the caller needs the result: every path that builds an agent
-// arrives through this function, so this is the one place an api_key_command can
-// run — and it runs after every layer has merged, so a job's own command wins
-// over the session's the same way its literal key does.
-func build(config *settings.Config, local []nacelle.Tool, approve nacelle.Approve, hooks map[nacelle.HookPoint][]nacelle.Hook) (built, error) {
-	if err := settings.ResolveKeys(config); err != nil {
-		return built{}, err
-	}
+func assemble(config settings.Config, backend nacelle.Backend, local []nacelle.Tool, approve nacelle.Approve, hooks map[nacelle.HookPoint][]nacelle.Hook) (built, error) {
 	approve = unwrapCallTool(approve)
-	backend, err := chosen(*config)
-	if err != nil {
-		return built{}, err
-	}
 
 	retrying := nacelle.Retry(backend, nacelle.RetryOptions{})
-	local, err = withParallelAgents(*config, retrying, local, approve)
+	local, err := withParallelAgents(config, retrying, local, approve)
 	if err != nil {
 		return built{}, err
 	}
-	local = withTasks(*config, local)
-	local, hooks = withDiagnostics(*config, local, hooks)
+	local = withTasks(config, local)
+	local, hooks = withDiagnostics(config, local, hooks)
 
 	cfg := nacelle.Config{
 		Backend: retrying,

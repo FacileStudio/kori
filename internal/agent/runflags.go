@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -71,10 +72,21 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	get, err := build(&p.config, p.local, approve, hooks)
+	backend, err := backendFor(&p.config)
 	if err != nil {
 		return nil, err
+	}
+	publisher, err := startIDE(p.config, v, backend)
+	if err != nil {
+		return nil, err
+	}
+	if publisher != nil {
+		hooks = mergeHooks(hooks, publisher.Hooks())
+	}
+
+	get, err := assemble(p.config, backend, p.local, approve, hooks)
+	if err != nil {
+		return nil, errors.Join(err, publisher.Close())
 	}
 
 	return &tui.UISession{
@@ -88,6 +100,7 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 		TransparentBlocks: *p.config.TransparentBlocks,
 		BaseURL:           p.config.BaseURL,
 		APIKey:            p.config.APIKey,
+		IDE:               ideSurface(publisher),
 		SessionConfig:     sessionConfig(p, found, get.backend),
 	}, nil
 }

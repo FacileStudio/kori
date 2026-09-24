@@ -1,6 +1,10 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/FacileStudio/kori/internal/ide"
+)
 
 type modelFlags struct {
 	backend  string
@@ -24,6 +28,7 @@ type sessionFlags struct {
 	showHooks      bool
 	showHookOutput bool
 	detach         bool
+	ide            bool
 }
 
 type toolFlags struct {
@@ -91,6 +96,8 @@ func bindSessionFlags(cmd *cobra.Command, f *sessionFlags) {
 	fl.BoolVar(&f.showHooks, "show-hooks", true, "Show hook execution in conversation")
 	fl.BoolVar(&f.showHookOutput, "show-hook-output", true, "Show hook output preview in conversation")
 	fl.BoolVarP(&f.detach, "detach", "d", false, "Launch prompt headlessly in background")
+	fl.BoolVar(&f.ide, "ide", false, "Publish session events to an editor over a unix socket")
+	ide.BindFlag(&f.ide)
 }
 
 func bindToolFlags(cmd *cobra.Command, f *toolFlags) {

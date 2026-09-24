@@ -216,9 +216,14 @@ func (r *inflight) clearGroups() {
 
 // parkApproval holds an incoming approval request until the next keypress
 // calls decide, then hands it back as nil so the loop stays awake for that
-// press.
+// press. An attached editor is asked as well, and its answer arrives on this
+// loop the same way a keypress does: whichever of the two answers first
+// decides. A refusal from the editor — a click, a deadline, a lost connection,
+// or the session ending — is a refusal, never an implicit yes; an editor that
+// was never attached is asked nothing, and this terminal prompt is the decision
+// on its own.
 func (m *Model) parkApproval(req approvalRequest) tea.Cmd {
 	m.run.pending = &req
 	herdr.Report(m.herdrClient, herdr.Blocked)
-	return nil
+	return m.askEditor(req)
 }

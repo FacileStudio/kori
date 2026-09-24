@@ -93,13 +93,28 @@ func (m *Model) insertPaste(content string) tea.Cmd {
 	return nil
 }
 
+// ask takes the line the reader typed and submits it. The prompt is cleared
+// first, so the field is empty whether the line goes out now or is queued.
 func (m *Model) ask() tea.Cmd {
-	question := strings.TrimSpace(m.prompt.Value())
-	if question == "" {
+	question := m.prompt.Value()
+	if strings.TrimSpace(question) == "" {
 		return nil
 	}
 	m.prompt.Reset()
+	return m.submit(question)
+}
 
+// submit sends one line as a prompt, or queues it behind the run in flight.
+//
+// It is the one path a question takes, whether it was typed at the prompt or
+// sent by an attached editor: a line arriving while a run is going is queued
+// rather than dropped, and the choice between the two lives here rather than in
+// each caller.
+func (m *Model) submit(question string) tea.Cmd {
+	question = strings.TrimSpace(question)
+	if question == "" {
+		return nil
+	}
 	if !m.run.busy && !m.compacting {
 		m.hist.Remember(question, m.Items())
 		m.layout(m.windowHeight)

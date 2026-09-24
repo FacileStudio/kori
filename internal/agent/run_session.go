@@ -38,6 +38,7 @@ func buildUISessionWithFlags(v string, flags settings.Config, noConfig bool) (*t
 		return nil, nil, closeOnErr(err, prep.set, prep.mcp.set)
 	}
 	return sess, func() {
+		closeIDE(sess)
 		if err := closeAll(prep.set, prep.mcp.set); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}

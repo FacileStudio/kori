@@ -60,6 +60,7 @@ func (m *Model) absorb(event nacelle.Event) {
 	if m.run.turnBegan.IsZero() && event.Kind != nacelle.KindTurn && event.Kind != nacelle.KindDone && event.Kind != nacelle.KindToolResult {
 		m.run.turnBegan = time.Now()
 	}
+	m.ideTurn(event.Kind)
 	switch event.Kind {
 	case nacelle.KindText:
 		m.Thought()

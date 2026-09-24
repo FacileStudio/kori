@@ -199,4 +199,5 @@ type Model struct {
 
 	parallelState
 	run inflight
+	ide ideWiring
 }

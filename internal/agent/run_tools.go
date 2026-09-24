@@ -11,6 +11,7 @@ import (
 	"github.com/FacileStudio/nacelle"
 
 	"github.com/FacileStudio/kori/internal/approval"
+	"github.com/FacileStudio/kori/internal/ide"
 	"github.com/FacileStudio/kori/internal/sessions"
 	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/kori/internal/tui"
@@ -76,6 +77,7 @@ func buildUISessionWithTools(v string, flags settings.Config, customTools []nace
 		return nil, nil, closeOnErr(err, prep.mcp.set)
 	}
 	return sess, func() {
+		closeIDE(sess)
 		if err := closeAll(prep.mcp.set); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
@@ -96,6 +98,29 @@ func bootOrAskWithTools(v string, flags settings.Config, customTools []nacelle.T
 		return nil, nil, refusedConfig(bad)
 	}
 	return buildUISessionWithTools(v, flags, customTools, true)
+}
+
+// startIDE opens the IDE surface when the session asked for it, by flag or by
+// environment, and returns nil when it did not. A session with the surface off
+// creates nothing at all — no socket, no discovery file, no goroutine — and
+// merges no hook that would publish to a socket that does not exist.
+//
+// The model it announces is the resolved one rather than the raw setting: a
+// config that leaves provider.model empty is the ordinary case, the provider
+// fills its own default, and a hello naming no model would tell the editor less
+// than the banner beside it. That name is read from the backend the session
+// answers on, which is built before the agent is: the surface's hooks have to
+// be in the map the agent is built from, so the surface cannot wait for the
+// agent to exist.
+func startIDE(config settings.Config, version string, backend nacelle.Backend) (*ide.Server, error) {
+	if !ide.Enabled() {
+		return nil, nil
+	}
+	return ide.Start(ide.Options{
+		Root:    config.Root,
+		Model:   resolvedModel(backend, config),
+		Version: version,
+	})
 }
 
 func buildHeadlessToolsAgent(p preparedTools, extra map[nacelle.HookPoint][]nacelle.Hook) (*nacelle.Agent, error) {

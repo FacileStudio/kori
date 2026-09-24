@@ -15,7 +15,9 @@ import (
 
 // boot wires the session config the model was built from into its live fields —
 // the ones that arrive as pointers or are only meaningful on the running model
-// rather than at construction.
+// rather than at construction. An attached editor is handed the model as its
+// command handler here, because the handler is this session's prompt loop and
+// this is the first moment it exists.
 func boot(m *Model, c UISession) {
 	m.groupTools = c.GroupTools != nil && *c.GroupTools
 	m.Expanded = c.ShowThinking
@@ -26,6 +28,10 @@ func boot(m *Model, c UISession) {
 	m.mode = renderMode(c.Mode)
 	m.transparent = c.TransparentBlocks
 	m.diagLoop = c.Startup.Diagnostics
+	m.ide.surface = c.IDE
+	if c.IDE != nil {
+		c.IDE.SetCommands(m)
+	}
 	if c.Resume != "" || c.AutoResume {
 		if res := sessions.RestoreAtLaunch(c.Resume, c.Root, c.AutoResume); res.Path != "" {
 			m.session = sessions.OpenResumeSession(res.Path, c.Backend, c.Model, c.Root)

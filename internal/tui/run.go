@@ -81,6 +81,12 @@ type EditorConfig struct {
 }
 
 // UISession holds the complete state needed to run an interactive terminal session.
+//
+// IDE is the editor this session publishes to, nil when it publishes to none.
+// It rides here rather than in SessionConfig because that struct is already at
+// filet's field cap, and because the surface is the session's own attachment
+// rather than a runtime setting: it is handed the model as its command handler
+// once the model exists.
 type UISession struct {
 	Agent             *nacelle.Agent
 	Banner            string
@@ -92,10 +98,15 @@ type UISession struct {
 	TransparentBlocks bool
 	BaseURL           string
 	APIKey            string
+	IDE               IDESurface
 	SessionConfig
 }
 
-// Launch starts the Bubble Tea UI session loop for the given configuration.
+// Launch starts the Bubble Tea UI session loop for the given configuration. The
+// program is the one thing an attached editor's commands may pass through: they
+// arrive on the socket's own goroutine, and the loop is the only place model
+// state may be touched, so the model is handed the program's send before it
+// runs.
 func Launch(c UISession) error {
 	opened := NewModel(c.Agent, c.Banner, c.Skills, c.SessionConfig)
 	boot(opened, c)
@@ -108,6 +119,7 @@ func Launch(c UISession) error {
 	if c.Gate != nil {
 		c.Gate.Wire(program.Send)
 	}
+	opened.ide.deliver = program.Send
 	final, err := program.Run()
 	finalizeLaunch(final)
 	return err
@@ -123,6 +135,7 @@ func (m *Model) send(text string) tea.Cmd {
 	m.run.asked, m.run.answered = nil, nil
 	m.run.reported = false
 	m.run.overflow, m.run.overflowTried = nil, false
+	m.ide.turns, m.ide.open, m.ide.failed = 0, false, false
 	m.stranded()
 	m.conversation = append(m.conversation, nacelle.UserText(text))
 
@@ -193,6 +206,7 @@ func (m *Model) consume(next result) tea.Cmd {
 			}
 			m.flush()
 			m.run.reported = true
+			m.ide.failed = true
 			m.say(fromFailure, next.err.Error())
 		}
 		return waitFor(m.run.results)
