@@ -143,6 +143,77 @@ func TestDetachedLiveSpendJoinsTheSessionTotalAsItStreams(t *testing.T) {
 	}
 }
 
+// The stats line opens with the provider and model being billed, in the
+// banner's own words, so which model is answering is readable while a run
+// streams rather than only at launch.
+func TestTheFooterNamesTheProviderAndModelAheadOfThePrice(t *testing.T) {
+	m := sized()
+	m.activeBackend = "openrouter"
+	m.activeModel = "deepseek/deepseek-v4.1-flash"
+	m.spent = nacelle.Usage{InputTokens: 2600, OutputTokens: 1100, Cost: 0.0123}
+
+	foot := visible(strings.Join(m.footer(), " "))
+	label := "openrouter · deepseek/deepseek-v4.1-flash"
+	if !strings.HasPrefix(foot, label) {
+		t.Fatalf("footer = %q, want it leading with %q", foot, label)
+	}
+	if strings.Index(foot, "$0.0123") < len(label) {
+		t.Errorf("footer = %q, want the price after the label", foot)
+	}
+}
+
+// KindDone carries the run's total — every turn's input summed, since each turn
+// bills the whole conversation again — which is a bill, not a conversation.
+// Sizing from it showed a multi-turn run as several times the context it held,
+// and it is the same figure the compaction triggers are read against.
+func TestTheContextSizeIsTheLastTurnsInputNotTheRunsTotal(t *testing.T) {
+	m := sized()
+
+	m.absorb(nacelle.Event{Kind: nacelle.KindTurn, Usage: nacelle.Usage{InputTokens: 100_000, OutputTokens: 500}})
+	m.absorb(nacelle.Event{Kind: nacelle.KindTurn, Usage: nacelle.Usage{InputTokens: 101_000, OutputTokens: 500}})
+	m.absorb(nacelle.Event{Kind: nacelle.KindDone, Usage: nacelle.Usage{InputTokens: 201_000, OutputTokens: 1000}})
+
+	if m.size != 101_000 {
+		t.Errorf("size = %d, want the last turn's input, not the run's total", m.size)
+	}
+}
+
+// The realised rate was measured on the spend /clear throws away. Kept, it
+// would scale the next turn's live estimate by a price from a session that no
+// longer exists and print a dollar figure on a session that has spent nothing.
+func TestClearingTheSessionDropsTheLearnedRate(t *testing.T) {
+	m := sized()
+	m.spent = nacelle.Usage{InputTokens: 400, OutputTokens: 30, Cost: 0.003}
+	m.rate = 0.003 / 430
+
+	m.clear()
+	if m.rate != 0 {
+		t.Errorf("rate = %v, want it dropped with the spend it was measured on", m.rate)
+	}
+
+	m.absorb(nacelle.Event{Kind: nacelle.KindText, Text: strings.Repeat("b", 40)})
+	if got := visible(strings.Join(m.footer(), " ")); strings.Contains(got, "$") {
+		t.Errorf("footer = %q, want no price invented on a cleared session", got)
+	}
+}
+
+// A switched model is billed at its own prices, so the rate learned on the
+// last one goes with it — otherwise the new model's tokens are priced by the
+// old model's rate until its first turn reports a Cost of its own.
+func TestSwitchingModelDropsTheLearnedRate(t *testing.T) {
+	m := sized()
+	m.rate = 0.001
+
+	m.activate("openrouter", "deepseek/deepseek-v4.1-flash", "", "")
+
+	if m.rate != 0 {
+		t.Errorf("rate = %v, want the old model's rate dropped on a switch", m.rate)
+	}
+	if m.activeBackend != "openrouter" || m.activeModel != "deepseek/deepseek-v4.1-flash" {
+		t.Errorf("active = %s/%s, want the switched backend and model", m.activeBackend, m.activeModel)
+	}
+}
+
 // A model-called parallel_agents already reaches the session total through
 // nacelle's Usage hook (the delegations channel), so folding its live spend in
 // here too would double-count it. Only detached batches fold live.

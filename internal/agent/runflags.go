@@ -99,7 +99,7 @@ func sessionConfig(p preparedTools, found loaded, backend nacelle.Backend) tui.S
 	budget := ResolveBudget(p.config.CompactAt, p.config.Compaction, backend)
 	return tui.SessionConfig{
 		Root:       p.config.Root,
-		Model:      p.config.Model,
+		Model:      resolvedModel(backend, p.config),
 		Backend:    p.config.Backend,
 		Diffs:      *p.config.Diffs,
 		GroupTools: p.config.GroupTools, ShowThinking: *p.config.ShowThinking,

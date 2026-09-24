@@ -80,11 +80,31 @@ type account struct {
 	grind grindBudget
 }
 
+// total is the session's spend: every finished run plus what the run in flight
+// has reported so far. It is the one figure the status line, /status and the
+// recap all read, so they cannot disagree about what the session cost.
+func (m *Model) total() nacelle.Usage {
+	return m.spent.Add(m.run.usage)
+}
+
+// tokenTotals renders the input and output counts the footer, /status and the
+// run recap share. Input counts cache creations, which are billed like any
+// other input; cache reads are left to the surfaces that name them, so the two
+// figures are never read as one.
+func tokenTotals(u nacelle.Usage) string {
+	return "↑" + shortTokens(u.InputTokens+u.CacheCreationTokens) + " ↓" + shortTokens(u.OutputTokens)
+}
+
 // sized records what a finished turn cost on the input side.
 //
 // Cache reads and cache creations are billed input like any other, and both
 // backends report them here, so leaving either out would understate the
 // conversation by most of an agentic session's real size.
+//
+// It is only ever called with a turn's own usage. KindDone carries the run's
+// total — the sum of every turn's input, the conversation billed once per turn
+// — which is a bill, not a conversation, and reading it as a size would show a
+// three-turn run as three times the context it actually holds.
 //
 // A usage that reports no input at all is left as it stands rather than written
 // through. Zero input is what a backend that does not report usage on every

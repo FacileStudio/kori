@@ -8,7 +8,7 @@ require (
 	charm.land/fang/v2 v2.0.1
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.5
-	github.com/FacileStudio/nacelle v0.28.0
+	github.com/FacileStudio/nacelle v0.28.2
 	github.com/adhocore/gronx v1.20.3
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/spf13/cobra v1.10.2

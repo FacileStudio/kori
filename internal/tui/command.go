@@ -23,8 +23,7 @@ var commands = map[string]command{
 	"clear":      (*Model).clear,
 	"compact":    (*Model).compactCmd,
 	"cost": func(m *Model) tea.Cmd {
-		total := m.spent.Add(m.run.usage)
-		m.say(fromClient, cost.Summary(total, m.tools, m.failed, time.Since(m.began)))
+		m.say(fromClient, cost.Summary(m.total(), m.tools, m.failed, time.Since(m.began)))
 		return nil
 	},
 	"detach":   (*Model).detachCmd,
@@ -77,6 +76,7 @@ func commandNames() []string {
 func (m *Model) clear() tea.Cmd {
 	m.conversation = nil
 	m.spent = nacelle.Usage{}
+	m.rate = 0
 	m.size, m.trimmed = 0, 0
 	m.thrashCount = 0
 	m.last = compacted{}
@@ -125,10 +125,8 @@ func (m *Model) statusCmd() tea.Cmd {
 	lines = append(lines, fmt.Sprintf("session · %s", lasted(time.Since(m.began))))
 	lines = append(lines, fmt.Sprintf("model · %s/%s", m.activeBackend, m.activeModel))
 	lines = append(lines, fmt.Sprintf("tools · %d total · %d failed", m.tools, m.failed))
-	total := m.spent.Add(m.run.usage)
-	lines = append(lines, fmt.Sprintf("tokens · ↑%s ↓%s",
-		shortTokens(total.InputTokens+total.CacheCreationTokens),
-		shortTokens(total.OutputTokens)))
+	total := m.total()
+	lines = append(lines, "tokens · "+tokenTotals(total))
 	if total.Cost > 0 {
 		lines = append(lines, fmt.Sprintf("cost · $%.4f", total.Cost))
 	}

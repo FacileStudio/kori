@@ -46,32 +46,43 @@ func (m *Model) status() string {
 	return stateLine + "\n" + m.theme.Muted.Render(truncate(counts, width))
 }
 
-// footer is the costs line under the state line: price when the backend
-// reported one, input and output tokens, and the context size. The output and
-// context counts carry the live estimate (liveOut) so they tick as the model
-// writes, and the price carries that estimate scaled by the last realised cost
-// per token (rate) so the dollar figure moves too; the real per-turn usage
-// replaces the estimates the moment a turn ends. A session with a grind
-// budget adds what is left of the current run's minimum, and a session
-// without one looks exactly as it did before.
+// footer is the stats line under the state line: the provider and model being
+// billed, in the same words the launch banner uses and following a /model
+// switch, then the price when the backend reported one, the input and output
+// tokens, and the context size. The output tokens, the context and the price
+// all carry the live estimate (liveOut) so they tick as the model writes — the
+// price scaled by the last realised cost per token (rate) — and the real
+// per-turn usage replaces the estimate the moment a turn ends. A session with a
+// grind budget adds what is left of the current run's minimum, measured against
+// that run alone, and a session without one looks exactly as it did before.
 func (m *Model) footer() []string {
-	total := m.spent.Add(m.run.usage)
-	live := m.rate * float64(m.run.liveOut)
-
 	var spent []string
-	if total.Cost+live > 0 {
-		spent = append(spent, fmt.Sprintf("$%.4f", total.Cost+live))
+	label := m.activeBackend
+	if m.activeModel != "" {
+		if label != "" {
+			label += " · "
+		}
+		label += m.activeModel
 	}
-	spent = append(spent,
-		"↑"+shortTokens(total.InputTokens+total.CacheCreationTokens),
-		"↓"+shortTokens(total.OutputTokens+m.run.liveOut))
+	if label != "" {
+		spent = append(spent, label)
+	}
+
+	total := m.total()
+	total.OutputTokens += m.run.liveOut
+	total.Cost += m.rate * float64(m.run.liveOut)
+
+	if total.Cost > 0 {
+		spent = append(spent, fmt.Sprintf("$%.4f", total.Cost))
+	}
+	spent = append(spent, tokenTotals(total))
 	if m.size > 0 {
 		spent = append(spent, contextLoad(m.size+m.run.liveOut, m.policy))
 	}
-	liveSpend := m.run.usage
-	liveSpend.OutputTokens += m.run.liveOut
-	liveSpend.Cost += m.rate * float64(m.run.liveOut)
-	if left := m.grind.left(liveSpend); left != "" {
+	run := m.run.usage
+	run.OutputTokens += m.run.liveOut
+	run.Cost += m.rate * float64(m.run.liveOut)
+	if left := m.grind.left(run); left != "" {
 		spent = append(spent, "grind "+left)
 	}
 	return spent

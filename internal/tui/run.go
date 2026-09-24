@@ -203,8 +203,8 @@ func (m *Model) consume(next result) tea.Cmd {
 }
 
 func (m *Model) recap() string {
-	total := m.spent.Add(m.run.usage)
-	tokens := total.InputTokens + total.OutputTokens + total.CacheReadTokens + total.CacheCreationTokens
+	total := m.total()
+	tokens := total.Total()
 	if m.tools == 0 && tokens == 0 {
 		return ""
 	}
@@ -220,9 +220,7 @@ func (m *Model) recap() string {
 		shape += fmt.Sprintf(" · %d failed", m.failed)
 	}
 
-	spend := fmt.Sprintf("↑%s ↓%s",
-		shortTokens(total.InputTokens+total.CacheCreationTokens),
-		shortTokens(total.OutputTokens))
+	spend := tokenTotals(total)
 	if total.CacheReadTokens > 0 {
 		spend += fmt.Sprintf(" · %s cached", shortTokens(total.CacheReadTokens))
 	}

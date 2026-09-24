@@ -9,7 +9,6 @@ import (
 	"github.com/FacileStudio/kori/internal/menu"
 	"github.com/FacileStudio/kori/internal/provider"
 	"github.com/FacileStudio/kori/internal/settings"
-	"github.com/FacileStudio/kori/internal/usage"
 	"github.com/FacileStudio/nacelle"
 )
 
@@ -105,11 +104,7 @@ func (m *Model) applyProfileSwitch(p settings.Profile) tea.Cmd {
 		return nil
 	}
 	m.agent = agent
-	m.activeBackend = p.Provider.Backend
-	m.activeModel = p.Provider.Model
-	m.activeBaseURL = p.Provider.BaseURL
-	m.activeAPIKey = apiKey
-	m.sink = usage.NewSink(m.run.root, m.activeModel)
+	m.activate(p.Provider.Backend, p.Provider.Model, p.Provider.BaseURL, apiKey)
 	m.say(fromClient, fmt.Sprintf("switched to profile %s (%s/%s)", p.Name, p.Provider.Backend, p.Provider.Model))
 	return nil
 }
@@ -138,11 +133,7 @@ func (m *Model) applyDirectModelSwitch(target string) tea.Cmd {
 		return nil
 	}
 	m.agent = agent
-	m.activeBackend = targetBackend
-	m.activeModel = targetModel
-	m.activeBaseURL = baseURL
-	m.activeAPIKey = apiKey
-	m.sink = usage.NewSink(m.run.root, m.activeModel)
+	m.activate(targetBackend, targetModel, baseURL, apiKey)
 	m.say(fromClient, fmt.Sprintf("switched to %s/%s", targetBackend, targetModel))
 	return nil
 }

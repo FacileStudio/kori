@@ -22,14 +22,10 @@ func boot(m *Model, c UISession) {
 	m.run.root = c.Root
 	m.run.diffs = c.Diffs
 	m.delegate = c.DelegateConfig
-	m.activeBackend = c.Backend
-	m.activeModel = c.Model
-	m.activeBaseURL = c.BaseURL
-	m.activeAPIKey = c.APIKey
+	m.activate(c.Backend, c.Model, c.BaseURL, c.APIKey)
 	m.mode = renderMode(c.Mode)
 	m.transparent = c.TransparentBlocks
 	m.diagLoop = c.Startup.Diagnostics
-	m.sink = usage.NewSink(c.Root, c.Model)
 	if c.Resume != "" || c.AutoResume {
 		if res := sessions.RestoreAtLaunch(c.Resume, c.Root, c.AutoResume); res.Path != "" {
 			m.session = sessions.OpenResumeSession(res.Path, c.Backend, c.Model, c.Root)
@@ -39,6 +35,21 @@ func boot(m *Model, c UISession) {
 		m.session = sessions.OpenSession(c.Backend, c.Model, c.Root)
 	}
 	herdr.SetSession(m.herdrClient, m.session.Path())
+}
+
+// activate points the client at the backend it will bill from here, whether at
+// launch or after a /model switch. It is the one place those five fields are
+// written, so the two paths cannot leave the client naming one model and
+// billing another; the usage sink follows the model for the same reason.
+//
+// The realised cost-per-token rate is dropped with it. That rate was measured
+// on the old model's prices, and keeping it would scale the live price of the
+// new model's tokens by them — a price nobody was ever charged.
+func (m *Model) activate(backend, model, baseURL, apiKey string) {
+	m.activeBackend, m.activeModel = backend, model
+	m.activeBaseURL, m.activeAPIKey = baseURL, apiKey
+	m.rate = 0
+	m.sink = usage.NewSink(m.run.root, model)
 }
 
 // startupContextNote says which context files the system prompt grew by and

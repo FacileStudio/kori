@@ -50,14 +50,7 @@ import (
 // the one failure this client cannot otherwise show, since it is an error
 // nowhere and its only trace is a model that never reaches for the tool.
 func banner(backend nacelle.Backend, config settings.Config, found loaded, mcp connected, version string) string {
-	model := config.Model
-	if model == "" {
-		if withModel, ok := backend.(interface{ Model() string }); ok && withModel.Model() != "" {
-			model = withModel.Model()
-		} else {
-			model = anthropic.DefaultModel
-		}
-	}
+	model := resolvedModel(backend, config)
 	root := absolute(config.Root)
 	bash := "bash off"
 	if *config.Bash {
@@ -73,6 +66,21 @@ func banner(backend nacelle.Backend, config settings.Config, found loaded, mcp c
 		line += " · fetch off"
 	}
 	return line
+}
+
+// resolvedModel names the model this session runs on: the configured name,
+// else the backend's own default, else anthropic's. An empty model in the
+// config is the ordinary case — the provider fills its own default — and the
+// banner and the status line both have to name the one that actually answers,
+// so neither reads the raw setting.
+func resolvedModel(backend nacelle.Backend, config settings.Config) string {
+	if config.Model != "" {
+		return config.Model
+	}
+	if withModel, ok := backend.(interface{ Model() string }); ok && withModel.Model() != "" {
+		return withModel.Model()
+	}
+	return anthropic.DefaultModel
 }
 
 // countedNoun is "N noun" or "N nouns" — the one piece of English this

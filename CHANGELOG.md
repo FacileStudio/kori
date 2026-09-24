@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- feat(tui): the stats line under the state line now opens with `provider · model` — `openrouter · deepseek/deepseek-v4.1-flash` — ahead of the price, in the banner's own words, so which model is being billed is readable mid-run rather than only at launch. It follows a `/model` switch, and it names the *resolved* model: a config that leaves `provider.model` empty lets the backend supply its own default, and the banner and the session config now read one shared helper for it, so the two cannot disagree. The session total, the token pair and the context figure now come from `total()`/`tokenTotals()` for the footer, `/cost`, `/status` and the recap alike, instead of four hand-written sums (`internal/agent`, `internal/tui`). Incidental: `/status` no longer prints an empty `anthropic/` for a session that never named a model
+
+### Fixed
+
+- fix(tui): the context counter was sized from the *run* total instead of the conversation. `KindDone` carries every turn's usage summed — each turn re-bills the whole conversation, so that figure is a bill, not a size — and sizing from it showed a three-turn run as three times the context it held (201k against a conversation of 101k), pinned in `TestTheContextSizeIsTheLastTurnsInputNotTheRunsTotal`. Compaction reads that figure and selects its tier from it, so the inflation also compacted early on every multi-turn run. Only a turn sizes now (`internal/tui`)
+- fix(tui): the live price estimate carried the cost-per-token rate it had learned from the last turn across `/clear` and across `/model`. After a clear it priced a session that had spent nothing, putting a phantom dollar figure on the next stream; after a switch it priced the new model's tokens at the old model's rate until a turn reported its own cost. Both drop it now, and every model switch goes through one `activate` that writes the active-model fields and the usage sink in one place, instead of three call sites repeating the same five lines (`internal/tui`)
+- fix(cost): raise nacelle to v0.28.2. Its OpenAI-schema backends (`openai`, `openrouter`, `google`) reported a prompt token twice whenever any of it was cached or written: `prompt_tokens` is the whole prompt and its `prompt_tokens_details` parts are parts *of* it, not neighbours of it — a 34375-token prompt with 32768 written read as 67145 against a `total_tokens` of 34377. Since the context is sized as `InputTokens + CacheReadTokens + CacheCreationTokens`, the figure was up to double on those backends, and compaction ran early. v0.28.1 subtracted the cached share and v0.28.2 the written share as well, so `Usage.Total` equals the provider's own `total_tokens` on every backend (`go.mod`)
+
 ## [0.76.0] - 2026-09-24
 
 ### Changed
