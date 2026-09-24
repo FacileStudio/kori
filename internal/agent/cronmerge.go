@@ -12,6 +12,9 @@ func mergeJobProvider(cfg *settings.Config, p settings.Provider, model string) {
 	if p.APIKey != "" {
 		cfg.APIKey = p.APIKey
 	}
+	if p.APIKeyCommand != "" {
+		cfg.APIKeyCommand = p.APIKeyCommand
+	}
 	if p.Model != "" {
 		cfg.Model = p.Model
 	} else if model != "" {

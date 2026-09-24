@@ -38,13 +38,16 @@ type Compaction struct {
 // keep / prune / ledger before the summarizer writes the ledger. It is off by
 // default: enabling it sends conversation history to a third party, so it is
 // an explicit opt-in and never a shipped default. The key prefers the
-// TYPESAFE_API_KEY environment variable over the file, which is the one
-// credential this config may carry.
+// TYPESAFE_API_KEY environment variable over the file; api_key_command is the
+// alternative that leaves a file carrying no credential at all (see keycmd.go).
 type Judge struct {
-	Enabled        *bool    `yaml:"enabled"`
-	Model          string   `yaml:"model"`
-	BaseURL        string   `yaml:"base_url"`
-	APIKey         string   `yaml:"api_key"`
+	Enabled *bool  `yaml:"enabled"`
+	Model   string `yaml:"model"`
+	BaseURL string `yaml:"base_url"`
+	APIKey  string `yaml:"api_key"`
+	// APIKeyCommand is run to obtain the judge's key when APIKey is empty, the
+	// same arrangement the provider's key has. See keycmd.go.
+	APIKeyCommand  string   `yaml:"api_key_command"`
 	PruneThreshold *float64 `yaml:"prune_threshold"`
 	MaxBlocks      *int     `yaml:"max_blocks_per_call"`
 }
@@ -96,6 +99,9 @@ func (j *Judge) merge(over Judge) {
 	}
 	if over.APIKey != "" {
 		j.APIKey = over.APIKey
+	}
+	if over.APIKeyCommand != "" {
+		j.APIKeyCommand = over.APIKeyCommand
 	}
 	if over.PruneThreshold != nil {
 		j.PruneThreshold = over.PruneThreshold

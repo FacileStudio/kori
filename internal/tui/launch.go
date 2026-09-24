@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/FacileStudio/nacelle"
+
 	"github.com/FacileStudio/kori/internal/herdr"
+	"github.com/FacileStudio/kori/internal/provider"
 	"github.com/FacileStudio/kori/internal/sessions"
+	"github.com/FacileStudio/kori/internal/settings"
 	"github.com/FacileStudio/kori/internal/usage"
 )
 
@@ -51,6 +55,33 @@ func startupContextNote(c LaunchContext) string {
 	return fmt.Sprintf("context: %s loaded · ~%s tokens · %s",
 		countedNoun(len(c.ContextPaths), "file"), shortTokens(c.ContextTokens),
 		strings.Join(c.ContextPaths, ", "))
+}
+
+// profileBackend builds the backend a profile names, resolving a key the profile
+// left to a command. Switching profiles mid-session reads the profile itself
+// rather than the resolved config, so this is where its api_key_command runs —
+// under the same rule the session applied at startup: a literal key wins, the
+// command fills what is empty, and a command that fails stops the switch instead
+// of quietly answering with no credential.
+func profileBackend(p settings.Profile) (nacelle.Backend, string, error) {
+	apiKey := p.Provider.APIKey
+	if apiKey == "" {
+		key, err := settings.KeyFromCommand(p.Provider.APIKeyCommand)
+		if err != nil {
+			return nil, "", err
+		}
+		apiKey = key
+	}
+	backend, err := provider.New(provider.Config{
+		Backend: p.Provider.Backend,
+		Model:   p.Provider.Model,
+		BaseURL: p.Provider.BaseURL,
+		APIKey:  apiKey,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return backend, apiKey, nil
 }
 
 // startupPrint hands the pre-queued banner lines to the terminal — unless it is

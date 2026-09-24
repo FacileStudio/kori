@@ -73,6 +73,9 @@ func (c *Config) mergeStrings(over Config) {
 	if over.APIKey != "" {
 		c.APIKey = over.APIKey
 	}
+	if over.APIKeyCommand != "" {
+		c.APIKeyCommand = over.APIKeyCommand
+	}
 	if over.Effort != "" {
 		c.Effort = over.Effort
 	}

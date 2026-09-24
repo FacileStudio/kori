@@ -105,7 +105,7 @@ func buildHeadlessToolsAgent(p preparedTools, extra map[nacelle.HookPoint][]nace
 	if err != nil {
 		return nil, err
 	}
-	get, err := build(p.config, p.local, approve, mergeHooks(hooks, extra))
+	get, err := build(&p.config, p.local, approve, mergeHooks(hooks, extra))
 	if err != nil {
 		return nil, err
 	}

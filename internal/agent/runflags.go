@@ -72,7 +72,7 @@ func setupAgentSession(p preparedTools, v string) (*tui.UISession, error) {
 		return nil, err
 	}
 
-	get, err := build(p.config, p.local, approve, hooks)
+	get, err := build(&p.config, p.local, approve, hooks)
 	if err != nil {
 		return nil, err
 	}

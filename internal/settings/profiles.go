@@ -112,6 +112,9 @@ func ApplyProfile(c *Config, p Profile) {
 	if p.Provider.APIKey != "" {
 		c.APIKey = p.Provider.APIKey
 	}
+	if p.Provider.APIKeyCommand != "" {
+		c.APIKeyCommand = p.Provider.APIKeyCommand
+	}
 	if p.Reasoning.Effort != "" {
 		c.Effort = p.Reasoning.Effort
 	}

@@ -84,12 +84,7 @@ func (m *Model) switchModel(arg string) tea.Cmd {
 }
 
 func (m *Model) applyProfileSwitch(p settings.Profile) tea.Cmd {
-	backend, err := provider.New(provider.Config{
-		Backend: p.Provider.Backend,
-		Model:   p.Provider.Model,
-		BaseURL: p.Provider.BaseURL,
-		APIKey:  p.Provider.APIKey,
-	})
+	backend, apiKey, err := profileBackend(p)
 	if err != nil {
 		m.say(fromClient, "failed to configure backend: "+err.Error())
 		return nil
@@ -113,7 +108,7 @@ func (m *Model) applyProfileSwitch(p settings.Profile) tea.Cmd {
 	m.activeBackend = p.Provider.Backend
 	m.activeModel = p.Provider.Model
 	m.activeBaseURL = p.Provider.BaseURL
-	m.activeAPIKey = p.Provider.APIKey
+	m.activeAPIKey = apiKey
 	m.sink = usage.NewSink(m.run.root, m.activeModel)
 	m.say(fromClient, fmt.Sprintf("switched to profile %s (%s/%s)", p.Name, p.Provider.Backend, p.Provider.Model))
 	return nil

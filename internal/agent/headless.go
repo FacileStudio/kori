@@ -115,7 +115,7 @@ func buildHeadlessAgent(config settings.Config, extra map[nacelle.HookPoint][]na
 		return nil, nil, closeOnErr(err, set, mcp.set)
 	}
 
-	get, err := build(config, local, approve, mergeHooks(hooks, extra))
+	get, err := build(&config, local, approve, mergeHooks(hooks, extra))
 	if err != nil {
 		return nil, nil, closeOnErr(err, set, mcp.set)
 	}

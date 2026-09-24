@@ -20,6 +20,12 @@ provider:
   model: ""
   base_url: ""
   api_key: ""
+  # api_key_command is run to obtain the key when api_key is empty, so this file
+  # can carry no secret: "tiroir get ANTHROPIC_API_KEY", "op read op://v/k". The
+  # command prints the key on stdout. A key from a flag, the environment, a file
+  # or a profile wins over it, so an exported ANTHROPIC_API_KEY keeps working
+  # untouched; the command is refused at startup, not ignored, when it fails.
+  # api_key_command: ""
 
 session:
   root: .
@@ -75,6 +81,9 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""
+      # judge.api_key_command is the same arrangement for the judge's own key,
+      # so a profile need not carry the TypeSafe secret either.
+      # api_key_command: ""
       prune_threshold: 0.75
       max_blocks_per_call: 64
 

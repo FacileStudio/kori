@@ -94,7 +94,7 @@ could tell apart.
 |---|---|---|
 | Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-additional-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
 | Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_COMPACTION_SOFT_RATIO`, `KORI_COMPACTION_MID_RATIO`, `KORI_COMPACTION_HARD_RATIO`, `KORI_COMPACTION_WINDOW_TOKENS`, `KORI_COMPACTION_RESERVE_TOKENS`, `KORI_COMPACTION_KEEP_TURNS`, `KORI_COMPACTION_KEEP_TOKENS`, `KORI_COMPACTION_ANCHOR_MESSAGES`, `KORI_COMPACTION_JUDGE`, `KORI_COMPACTION_JUDGE_MODEL`, `KORI_COMPACTION_JUDGE_BASE_URL`, `KORI_COMPACTION_JUDGE_API_KEY`, `KORI_COMPACTION_PRUNE_THRESHOLD`, `KORI_COMPACTION_MAX_BLOCKS`, `KORI_FETCH`, `KORI_TASKS`, `TYPESAFE_API_KEY` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers). `TYPESAFE_API_KEY` is the compaction judge's key and beats `KORI_COMPACTION_JUDGE_API_KEY`; it is the one credential to keep in the environment rather than the file |
-| File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
+| File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. A file can avoid holding one even where it needs one: `api_key_command` names the program that prints the key (`provider.api_key_command`, `limits.compaction.judge.api_key_command`) — see [Keeping the key out of the file](#keeping-the-key-out-of-the-file). `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
 | Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: unset` (an absolute override when set; unset derives the ceiling from `soft_ratio` × the context window, `0` disables), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `limits.compaction.soft_ratio: 0.65`, `limits.compaction.mid_ratio: 0.80`, `limits.compaction.hard_ratio: 0.90`, `limits.compaction.keep_turns: 1`, `limits.compaction.keep_tokens: 40000`, `limits.compaction.anchor_messages: 1`, `limits.compaction.judge.enabled: false`, (`limits.compaction.window_tokens` and `reserve_tokens` are unset: the first is the backend's own window, the second a fifth of it), `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_agents: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
@@ -118,10 +118,12 @@ error, because `KnownFields(true)` refuses anything unknown.
 provider:
   backend: anthropic
   model: claude-opus-5
-  # base_url: and api_key: point at a custom endpoint — see "Custom providers".
-  # leave them out to use the vendor's own API and key resolution.
+  # base_url:, api_key: and api_key_command: point at a custom endpoint and keep
+  # the secret out of the file — see "Custom providers" and "Keeping the key out
+  # of the file". Leave them out to use the vendor's own API and key resolution.
   # base_url: http://localhost:3001/v1
   # api_key: sk-your-unified-key
+  # api_key_command: tiroir get ANTHROPIC_API_KEY
 reasoning:
   effort: high
   thinking: true
@@ -158,6 +160,7 @@ limits:
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""
+      # api_key_command: tiroir get TYPESAFE_API_KEY
       prune_threshold: 0.75
       max_blocks_per_call: 64
 session:
@@ -306,6 +309,54 @@ uses.
 `anthropic` cannot be pointed at a custom endpoint: its `Config` takes a pre-built client rather
 than a URL and key. `openai`, `openrouter` and `google` all take a `BaseURL`. A local OpenAI-compatible
 gateway is the overwhelmingly common case, and it is the case that works.
+
+### Keeping the key out of the file
+
+`api_key_command` replaces the literal key with the command that produces it, so a config file — or a
+profile, or a dotfiles repo — carries no secret at all:
+
+```yaml
+provider:
+  backend: openrouter
+  model: deepseek/deepseek-v4.1-flash
+  api_key_command: tiroir get OPENROUTER_API_KEY
+
+limits:
+  compaction:
+    judge:
+      enabled: true
+      api_key_command: tiroir get TYPESAFE_API_KEY
+```
+
+The provider's key is `provider.api_key_command` and the judge's is
+`limits.compaction.judge.api_key_command`. Either may sit in a profile, which is where the setting
+earns its keep: one file per identity, none of them holding a credential.
+
+The command runs through `sh -c`, so a whole program with its arguments, a pipeline, or
+`tiroir unlock && tiroir get K` all work. It prints the key on stdout; trailing whitespace is
+trimmed. stderr is read for the error message and never for the key, so a command that warns on
+stderr still works. Its stdin is closed rather than inherited, so a command that stops to prompt
+fails against end-of-file instead of seizing your terminal, and it is killed after 10 seconds.
+
+**It is a source, not an override.** A key any layer already supplied wins — a flag, the
+environment, a literal `api_key`, a profile — and the command only fills what is still empty. The
+practical consequence is worth stating plainly: **if `TYPESAFE_API_KEY` is exported on your machine,
+a judge `api_key_command` never runs**, because the environment already answered. Same for
+`KORI_PROVIDER_API_KEY` or an exported `OPENROUTER_API_KEY` against a provider command. Unset the
+variable when you want the command to take over. Nothing else changes: a key that arrives from the
+environment keeps working with no config edit at all.
+
+Two more properties, both deliberate:
+
+- The command runs only where a key is actually used — when a session builds its provider or the
+  judge — and never for inspection. `kori list`, `kori sessions` and `kori cron list` do not run it,
+  so a locked secret store cannot break them.
+- A command that fails, times out or prints nothing is **refused at startup**, naming the field,
+  rather than left as an empty key. An empty key would reach the backend as "no credential" and read
+  exactly like a config that forgot one. A locked tiroir fails loudly instead.
+
+The environment-variable route remains the shortest one when the key is already exported; the
+command route is for when it is not, and for the files you keep in git.
 
 ### Profiles and /model command
 

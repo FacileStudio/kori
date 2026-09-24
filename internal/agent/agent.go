@@ -37,24 +37,29 @@ type built struct {
 // built.config is the nacelle.Config the agent was built from, kept so a
 // /parallel fan-out runs its own agents from the same tools, system prompt and
 // iteration ceiling instead of a hand-built subset.
-func build(config settings.Config, local []nacelle.Tool, approve nacelle.Approve, hooks map[nacelle.HookPoint][]nacelle.Hook) (built, error) {
+//
+// config is taken by pointer because a key a file left to a command is resolved
+// once, here, and the caller needs the result: every path that builds an agent
+// arrives through this function, so this is the one place an api_key_command can
+// run — and it runs after every layer has merged, so a job's own command wins
+// over the session's the same way its literal key does.
+func build(config *settings.Config, local []nacelle.Tool, approve nacelle.Approve, hooks map[nacelle.HookPoint][]nacelle.Hook) (built, error) {
+	if err := settings.ResolveKeys(config); err != nil {
+		return built{}, err
+	}
 	approve = unwrapCallTool(approve)
-	backend, err := chosen(config)
+	backend, err := chosen(*config)
 	if err != nil {
 		return built{}, err
 	}
 
 	retrying := nacelle.Retry(backend, nacelle.RetryOptions{})
-	local, err = withParallelAgents(config, retrying, local, approve)
+	local, err = withParallelAgents(*config, retrying, local, approve)
 	if err != nil {
 		return built{}, err
 	}
-	local = withTasks(config, local)
-	if settings.DerefBool(config.Diagnostics) {
-		local = append(local, diagnostics.Tool())
-		hooks = withDiagnosticsHook(hooks)
-		diagnostics.UseChain(chainOf(config.Gates))
-	}
+	local = withTasks(*config, local)
+	local, hooks = withDiagnostics(*config, local, hooks)
 
 	cfg := nacelle.Config{
 		Backend: retrying,
@@ -74,6 +79,18 @@ func build(config settings.Config, local []nacelle.Tool, approve nacelle.Approve
 		return built{}, err
 	}
 	return built{agent: agent, backend: backend, config: cfg}, nil
+}
+
+// withDiagnostics adds the diagnostics tool and installs the post-edit gate
+// chain when the toggle is on, handing both back untouched when it is off. Split
+// out of build to keep that function inside filet's length cap once key
+// resolution joined it; the two writes are one decision, so they stay together.
+func withDiagnostics(config settings.Config, local []nacelle.Tool, hooks map[nacelle.HookPoint][]nacelle.Hook) ([]nacelle.Tool, map[nacelle.HookPoint][]nacelle.Hook) {
+	if !settings.DerefBool(config.Diagnostics) {
+		return local, hooks
+	}
+	diagnostics.UseChain(chainOf(config.Gates))
+	return append(local, diagnostics.Tool()), withDiagnosticsHook(hooks)
 }
 
 // chosen builds the backend the settings ask for.

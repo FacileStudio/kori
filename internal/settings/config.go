@@ -43,6 +43,9 @@ type Provider struct {
 	Model   string `yaml:"model"`
 	BaseURL string `yaml:"base_url"`
 	APIKey  string `yaml:"api_key"`
+	// APIKeyCommand is run to obtain the key when APIKey is empty, so a config
+	// file need carry no secret. See keycmd.go for the precedence and the rules.
+	APIKeyCommand string `yaml:"api_key_command"`
 }
 
 // Session is the launch settings that are not display choices — where the
