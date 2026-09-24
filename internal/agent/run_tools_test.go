@@ -18,7 +18,11 @@ func dummyTool(name string) nacelle.Tool {
 	return t
 }
 
+// It runs on a home of the test's own: setupAgentCustomTools resolves settings
+// through the real chain, so without that it read the developer's ~/.kori.yml
+// and whichever profile that names.
 func TestSetupAgentCustomTools(t *testing.T) {
+	writeHome(t, "")
 	flags := settings.Defaults("test")
 	custom := []nacelle.Tool{dummyTool("remote_tool")}
 	prep, err := setupAgentCustomTools(flags, custom, false)
