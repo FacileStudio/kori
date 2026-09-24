@@ -58,7 +58,7 @@ A receiver that reads a `v` it does not support replies
 | `hello` | `pid`, `root`, `session`, `model`, `version` | First line after a client connects. |
 | `turn` | `n` | A model turn started. `n` counts from 1, within the run. |
 | `tool` | `id`, `name`, `status` (`start`/`done`), `ok`, `path` | A tool call started or finished. `path` only for file tools; `ok` only on `done`, since whether a call worked is unknowable before it runs. |
-| `edit` | `id`, `path`, `tool`, `first`, `last`, `added`, `removed`, `diff` | A file changed. `first`/`last` are 1-based inclusive line numbers in the **new** file. `diff` is the unified diff, optional. |
+| `edit` | `id`, `path`, `tool`, `first`, `last`, `added`, `removed`, `diff` | A file changed. `first`/`last` are 1-based inclusive line numbers in the **new** file. `diff` is optional and kori does not currently send it, so a receiver must not depend on it. |
 | `approval` | `id`, `tool`, `input` | A tool is waiting for the user's yes or no. `input` is the raw tool JSON, verbatim, so the editor can show exactly what is about to run. |
 | `done` | `reason`, `cost` | The run finished. `reason` is `end_turn`, `max_iterations`, `cancelled` or `error`. `cost` is US dollars, zero when the backend reported none. |
 | `error` | `reason` | Protocol level problem. The connection closes after it. |

@@ -88,6 +88,7 @@ environment variables, then flags. The useful ones:
 | `-max-iterations` | `KORI_MAX_ITERATIONS` | how many times the model may be asked |
 | `-mcp` | — | MCP servers file (repeatable) |
 | `-skill-dir` | `KORI_SKILL_DIRS` | extra skills directory (repeatable) |
+| `-ide` | `KORI_IDE` | publish the session to an editor over a unix socket |
 
 `kori -version` prints exactly `kori <semver>`. See `-h` for the full set:
 reasoning effort and budget, web fetch, project-context and skill
@@ -307,6 +308,17 @@ with `kori` (auto-resumes the newest session by cwd) or
 kori to its resume table; `--resume` already accepts the exact absolute
 transcript path the reporter reports.
 
+## Editors
+
+`kori --ide` (or `KORI_IDE=1`) publishes the session to an editor over a unix
+socket, so a plugin can watch a run and drive it: mark the lines kori changes,
+put an approval in front of you, run a prompt with your cursor's place
+attached, and stop a run. It is off by default, and a session that publishes to
+nobody creates no socket, no file and no goroutine.
+
+The contract is [docs/ide-protocol.md](docs/ide-protocol.md); the first client
+is [kori.nvim](https://github.com/FacileStudio/kori.nvim).
+
 ## Structure
 
 ```
@@ -333,6 +345,7 @@ internal/jev/       TypeSafe System One client for the opt-in compaction judge
 internal/tui/       Bubble Tea v2 model, key handling, rendering, slash commands
 internal/usage/     Token accounting and context window headroom
 internal/herdr/     Reports agent state and session identity to herdr over its socket API
+internal/ide/       Publishes a session to an editor over a unix socket
 ```
 
 ---
