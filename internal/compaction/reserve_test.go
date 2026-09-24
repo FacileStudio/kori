@@ -8,12 +8,11 @@ package compaction
 import "testing"
 
 // A reserve moves every rung down together, because the ladder names a fraction
-// of the window a turn can actually fill: 0.65/0.80/0.90 of 160000 is
-// 104000/128000/144000, and what that buys is that hard still leaves the 40000
-// reserve plus a tenth of the usable window for the answer instead of a tenth of
-// the raw one.
+// of the window a turn can actually fill: 0.65/0.80 of 160000 is 104000/128000,
+// and what that buys is that the top rung still leaves the 40000 reserve plus a
+// fifth of the usable window for the answer instead of a fifth of the raw one.
 func TestTierMeasuresTheUsableWindow(t *testing.T) {
-	p := Policy{Ratios: Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90}, Window: 200_000, Reserve: 40_000}
+	p := Policy{Ratios: Ratios{Soft: 0.65, Smart: 0.80}, Window: 200_000, Reserve: 40_000}
 	tests := []struct {
 		name string
 		size int64
@@ -21,10 +20,9 @@ func TestTierMeasuresTheUsableWindow(t *testing.T) {
 	}{
 		{"under the usable soft", 103_999, Below},
 		{"at the usable soft", 104_000, Soft},
-		{"just under the usable mid", 127_999, Soft},
-		{"at the usable mid", 128_000, Mid},
-		{"at the usable hard", 144_000, Hard},
-		{"under the raw hard", 179_999, Hard},
+		{"just under the usable smart", 127_999, Soft},
+		{"at the usable smart", 128_000, Smart},
+		{"over the usable smart", 199_999, Smart},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

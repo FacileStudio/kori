@@ -7,13 +7,13 @@ import (
 )
 
 // Budget is the resolved compaction ceiling for one session: the token count the
-// soft tier trips at, the ratio ladder the mid and hard tiers sit on, the
+// soft tier trips at, the ratio ladder the smart tier sits on, the
 // backend's total window (0 when the backend does not report one), and the
 // runway held back from it.
 type Budget struct {
 	Ceiling   int64
 	TierRatio struct {
-		Soft, Mid, Hard float64
+		Soft, Smart float64
 	}
 	Window int64
 	// Reserve is the part of the window kept free for the turn's own answer, and
@@ -49,8 +49,8 @@ const (
 //
 // The reserve is subtracted before the ladder is read rather than from each rung
 // in turn: a ratio names a fraction of the window a session can actually fill, so
-// hard_ratio 0.90 leaves a tenth of the *usable* window plus the whole reserve
-// for the response, instead of a tenth of the raw one.
+// smart_ratio 0.80 leaves a fifth of the *usable* window plus the whole reserve for
+// the response, instead of a fifth of the raw one.
 //
 // A derived ceiling that comes out zero or less falls back to
 // settings.DefaultCompactAt rather than staying at zero, because a ceiling of
@@ -59,10 +59,10 @@ const (
 // rejects such a ratio at load, so this is the floor under a caller that built a
 // Compaction itself.
 func ResolveBudget(compactAt *int64, c settings.Compaction, backend nacelle.Backend) Budget {
-	soft, mid, hard := c.Ratios()
+	soft, smart := c.Ratios()
 	window := resolveWindow(backend, c.WindowTokens)
 	budget := Budget{Window: window}
-	budget.TierRatio.Soft, budget.TierRatio.Mid, budget.TierRatio.Hard = soft, mid, hard
+	budget.TierRatio.Soft, budget.TierRatio.Smart = soft, smart
 	budget.Reserve = resolveReserve(window, settings.DerefInt64(c.ReserveTokens))
 	budget.Usable = max(window-budget.Reserve, 0)
 	switch {

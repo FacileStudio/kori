@@ -36,6 +36,14 @@ type compactPass struct {
 	// than trusting the judge's keeps, so the rewrite it asks for has turns to
 	// be measured against — see runCompaction.
 	consolidate bool
+	// force is overflow recovery's lever: a run the provider refused for length
+	// has already proven the ladder's estimate wrong, so the pass folds the whole
+	// history outright rather than asking whether the gentle fold would land.
+	force bool
+	// trigger is the size the pass is trying to land under, read from the policy
+	// here because the pass goroutine must not touch the model. It is what
+	// LandsUnder measures a fold against.
+	trigger int64
 }
 
 // pass snapshots the session for one pass. The snapshot owns the conversation it
@@ -62,7 +70,7 @@ type compactPass struct {
 //
 // The summarizer is built here rather than in the goroutine for the same reason:
 // it reads m.agent, and a pass must not touch the model at all.
-func (m *Model) pass(plan []compaction.Span, tier compaction.Tier) compactPass {
+func (m *Model) pass(plan []compaction.Span, tier compaction.Tier, force bool) compactPass {
 	return compactPass{
 		conv:        snapshot(m.conversation),
 		size:        m.size,
@@ -71,6 +79,8 @@ func (m *Model) pass(plan []compaction.Span, tier compaction.Tier) compactPass {
 		judge:       m.judge,
 		agent:       m.summarizer(),
 		consolidate: compaction.LedgerOverBudget(compaction.LedgerText(m.conversation, plan)),
+		force:       force,
+		trigger:     m.policy.Trigger(),
 	}
 }
 

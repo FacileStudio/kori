@@ -12,16 +12,14 @@ import (
 // its ceiling from the ratio ladder instead.
 const DefaultCompactAt int64 = 75_000
 
-// The tier ladder's defaults: soft tombstones history tool results and
-// reasoning with no model call, mid adds one batched judge pass and one ledger
-// summary, hard force-summarizes what is left. A backend that reports no
-// context window cannot use them — compact_at and DefaultCompactAt are the
-// fallback there. They alias the compaction package so the two layers cannot
-// drift.
+// The tier ladder's defaults: soft tombstones history tool results with no model
+// call, smart adds one batched judge pass and one ledger summary and forces the
+// fold when the gentle one does not land. A backend that reports no context
+// window cannot use them — compact_at and DefaultCompactAt are the fallback
+// there. They alias the compaction package so the two layers cannot drift.
 const (
 	DefaultSoftRatio      = compaction.DefaultSoftRatio
-	DefaultMidRatio       = compaction.DefaultMidRatio
-	DefaultHardRatio      = compaction.DefaultHardRatio
+	DefaultSmartRatio     = compaction.DefaultSmartRatio
 	DefaultPruneThreshold = compaction.DefaultPruneThreshold
 )
 

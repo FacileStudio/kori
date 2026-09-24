@@ -113,13 +113,13 @@ func (m *Model) softPass() tea.Cmd {
 }
 
 // compactTiered selects the pass a measured size has earned: a free tombstone at
-// the soft tier, a full summarize at mid or hard, and nothing below. It is the
+// the soft tier, a full summarize at smart, and nothing below. It is the
 // single dispatch both automatic triggers and the pre-send path share.
 func (m *Model) compactTiered(ctx context.Context) tea.Cmd {
 	switch m.policy.Tier(m.size) {
 	case compaction.Soft:
 		return m.softPass()
-	case compaction.Mid, compaction.Hard:
+	case compaction.Smart:
 		return m.beginCompaction(ctx, false)
 	default:
 		return nil
@@ -150,7 +150,7 @@ func (m *Model) thrashed() bool {
 // the count clears on a size the next send will compact again, thrashed stays
 // false, and a full pass fires on every send with nothing said to the reader. The
 // windowless backend is where the band was widest, because with no window to
-// measure a ratio against the ceiling is the whole ladder and Tier reads Mid at
+// measure a ratio against the ceiling is the whole ladder and Tier reads smart at
 // exactly it — so every pass in the band was a summarizing one, an LLM call
 // repeated forever. Keep this comparison identical to shouldCompactIdle's.
 func (m *Model) checkThrash() {

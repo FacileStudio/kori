@@ -2,11 +2,14 @@
 
 ## [Unreleased]
 
-### Added
-
 ### Changed
 
+- feat(compaction)!: the tier ladder is two rungs instead of three. `limits.compaction.hard_ratio` is **removed**, and `limits.compaction.mid_ratio` is **renamed to `smart_ratio`** — the old name is refused at load by the strict decoder rather than silently ignored, and under the environment layer `KORI_COMPACTION_MID_RATIO` and `KORI_COMPACTION_HARD_RATIO` are now refused too, since that layer would otherwise ignore them and quietly run on the default. Migrating is deleting one line and renaming the other; there is nothing to re-tune, since the forced fold is now derived rather than configured. Whether a pass *forces* is no longer scheduled by that second ratio: it is derived, from whether the fold the judge produced would leave the conversation under its trigger (`compaction.LandsUnder`, `compaction.Fold.Forced`). A fixed ratio was a proxy for that question and a coarse one — two conversations at 0.81 and 0.89 of the usable window ran the same pass, though only the second needed forcing — and it drifted on large windows, because the reserve is capped at 64k and stops growing above a 320k window: the old `hard` rung sat at 72% of the raw window at 200k but 84% at 1M, later than the 70–75% the field converges on. What forcing costs is bounded but real: it never drops a block, since a `prune` still needs the judge's probability and confidence — but the blocks it overrides are exactly the ones the judge said must survive verbatim, and they go to a summarizer whose prompt says to be as short as correctness allows, so a fact in one can be lost to summarization. That is why the decision is made on an upper bound of the rebuilt size rather than a guess. The judge is no longer asked to force either — `JudgeRequest.Force` is gone, and forcing is one lever pulled after the verdicts rather than a parameter to the question that produced them (`internal/compaction`, `internal/settings`, `internal/tui`, `internal/agent`)
+- docs(compaction): the `limits.compaction` block in `~/.kori.yml` now says which settings are a decision and which are a default — `judge.enabled` and `compact_at` are the two that are yours, and the ratios carry the rule that the soft tier is free and the smart tier is a call, so raise `soft_ratio` before touching `smart_ratio`. No value changed (`internal/settings`, `README.md`, `docs/configuration.md`)
+
 ### Fixed
+
+- fix(settings): `TestShowHooksFromEnv` and `TestSetupAgentCustomTools` resolved settings through the real chain and so read the developer's own `~/.kori.yml` and whichever profile it names — an unrelated key in someone's config could fail the suite, which is exactly how the `hard_ratio` removal surfaced. Both now run on a home of their own, the way their siblings already did (`internal/settings`, `internal/agent`)
 
 ## [0.75.0] - 2026-09-24
 

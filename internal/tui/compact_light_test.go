@@ -14,11 +14,11 @@ import (
 // compactSlack is a fixture offset above the trigger, used to build the band a pass can stop inside.
 const compactSlack = 20_000
 
-// windowedPolicy is a policy whose ratios can be measured: soft at 130k, mid at
-// 160k and hard at 180k of a 200k window, with compact_at pinned at 100k.
+// windowedPolicy is a policy whose ratios can be measured: soft at 130k and smart
+// at 160k of a 200k window, with compact_at pinned at 100k.
 func windowedPolicy() compaction.Policy {
 	return compaction.Policy{
-		Ratios:         compaction.Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Ratios:         compaction.Ratios{Soft: 0.65, Smart: 0.80},
 		Window:         200_000,
 		Ceiling:        100_000,
 		KeepTurns:      3,
@@ -220,13 +220,13 @@ func TestCheckThrashResetsTheCounterWhenUnder(t *testing.T) {
 // The pre-send guard acts at the trigger itself, and what it dispatches there has
 // to be a pass that can shrink the conversation. On a backend that reports no
 // window there is no ratio to measure, so the ceiling is the whole ladder and Tier
-// reads Mid at exactly it: the first size the guard acts on, Trigger() + 1, is a
+// reads Smart at exactly it: the first size the guard acts on, Trigger() + 1, is a
 // summarizing pass already.
 //
 // This drives the guard rather than reading Tier off an assumed firing size. The
 // earlier shape asked about Trigger() + compactSlack + 1, a size the guard stopped
 // acting at when it moved to the trigger, so it proved nothing about the dispatch.
-// A windowed session whose compact_at sits below its own mid ratio fires into the
+// A windowed session whose compact_at sits below its own smart ratio fires into the
 // soft tier, and that is accepted: a free tombstone with no model call.
 func TestThePreSendGuardDispatchesASummarizingPassAtTheTrigger(t *testing.T) {
 	m := sized()
@@ -234,8 +234,8 @@ func TestThePreSendGuardDispatchesASummarizingPassAtTheTrigger(t *testing.T) {
 	m.conversation = heavyHistory()
 	m.size = m.policy.Trigger() + 1
 
-	if tier := m.policy.Tier(m.size); tier != compaction.Mid {
-		t.Fatalf("tier at the trigger = %s, want mid with no window to measure a ratio against", tier)
+	if tier := m.policy.Tier(m.size); tier != compaction.Smart {
+		t.Fatalf("tier at the trigger = %s, want smart with no window to measure a ratio against", tier)
 	}
 	if cmd := m.compactBeforeSend(context.Background()); cmd == nil {
 		t.Fatal("compactBeforeSend = nil one token past the trigger, want the send held behind a pass")

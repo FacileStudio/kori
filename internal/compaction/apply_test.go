@@ -23,7 +23,7 @@ func applySample() []nacelle.Message {
 }
 
 func applyPolicy() Policy {
-	return Policy{Ratios: Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90}, Window: 200_000, AnchorMessages: 1, KeepTurns: 2}
+	return Policy{Ratios: Ratios{Soft: 0.65, Smart: 0.80}, Window: 200_000, AnchorMessages: 1, KeepTurns: 2}
 }
 
 // I2: the anchor is byte-identical after any number of passes. The session keeps
@@ -109,7 +109,7 @@ func smallTurnSample() []nacelle.Message {
 // the original handed back, rather than installed with a hopeful number.
 func TestApplyNeverGrowsTheConversation(t *testing.T) {
 	small := smallTurnSample()
-	fold := foldVerdicts(Blocks(small, Plan(small, applyPolicy())), []Verdict{{Decision: Ledger}}, false)
+	fold := foldVerdicts(Blocks(small, Plan(small, applyPolicy())), []Verdict{{Decision: Ledger}})
 
 	tests := []struct {
 		name    string

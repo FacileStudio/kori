@@ -90,7 +90,7 @@ func rewriteCall(t *testing.T) (sent, history []nacelle.Message, ledger string) 
 		t.Fatal("the fixture carries no turns or no earlier ledger, so no rewrite is being asked for")
 	}
 
-	pass := m.pass(plan, compaction.Hard)
+	pass := m.pass(plan, compaction.Smart, false)
 	if !pass.consolidate {
 		t.Fatal("the pass is not consolidating, so the invariant is not being exercised")
 	}

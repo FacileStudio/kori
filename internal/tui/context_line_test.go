@@ -48,7 +48,7 @@ func TestTheFooterShowsTheContextRatioAndTier(t *testing.T) {
 func TestTheFooterKeepsThePlainSizeWithoutAWindow(t *testing.T) {
 	m := sized()
 	m.policy = compaction.Policy{
-		Ratios:  compaction.Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Ratios:  compaction.Ratios{Soft: 0.65, Smart: 0.80},
 		Ceiling: 100_000,
 	}
 	m.size = 150_000
@@ -57,7 +57,7 @@ func TestTheFooterKeepsThePlainSizeWithoutAWindow(t *testing.T) {
 	if !strings.Contains(foot, "↕150k") || strings.Contains(foot, "/") {
 		t.Errorf("footer = %q, want the plain size and no ratio", foot)
 	}
-	if !strings.Contains(foot, "mid") {
+	if !strings.Contains(foot, "smart") {
 		t.Errorf("footer = %q, want the tier the ceiling bought", foot)
 	}
 }
@@ -76,11 +76,11 @@ func TestStatusReportsTheLedgerAndTheLastPassTier(t *testing.T) {
 		nacelle.AssistantText("active turn"),
 		nacelle.UserText("the newest turn"),
 	}
-	m.last = compacted{tier: compaction.Mid, turns: 2}
+	m.last = compacted{tier: compaction.Smart, turns: 2}
 
 	m.statusCmd()
 	got := strings.Join(m.unprinted, "\n")
-	for _, want := range []string{"↕150k/200k · 0.75", "ledger · ~", "last pass mid"} {
+	for _, want := range []string{"↕150k/200k · 0.75", "ledger · ~", "last pass smart"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status missing %q in %q", want, got)
 		}
@@ -90,7 +90,7 @@ func TestStatusReportsTheLedgerAndTheLastPassTier(t *testing.T) {
 // The denominator the footer prints is the window a turn can actually fill, and
 // /status spells out the raw window it came from with the reserve held back for
 // the answer. Showing the raw window in the footer would print a ratio under
-// mid_ratio while the session was already compacting at mid — the same kind of
+// smart_ratio while the session was already compacting at smart — the same kind of
 // disagreement the tier suffix exists to prevent.
 func TestStatusNamesTheReserveTheLadderHoldsBack(t *testing.T) {
 	m := sized()
@@ -128,7 +128,7 @@ func TestStatusSaysNothingAboutCompactionBeforeTheFirstPass(t *testing.T) {
 // 160k usable window, with compact_at pinned wherever a case puts it.
 func windowedAt(ceiling int64) compaction.Policy {
 	return compaction.Policy{
-		Ratios:         compaction.Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Ratios:         compaction.Ratios{Soft: 0.65, Smart: 0.80},
 		Window:         200_000,
 		Reserve:        40_000,
 		Ceiling:        ceiling,

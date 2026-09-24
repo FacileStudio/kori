@@ -10,7 +10,7 @@ import (
 // 0.65 is soft, 0.649 is not. The thresholds are computed from a rounded product
 // so 0.65 × 200000 lands exactly on 130000 rather than a float hair above it.
 func TestTierBoundaries(t *testing.T) {
-	p := Policy{Ratios: Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90}, Window: 200_000}
+	p := Policy{Ratios: Ratios{Soft: 0.65, Smart: 0.80}, Window: 200_000}
 	tests := []struct {
 		name string
 		size int64
@@ -18,10 +18,9 @@ func TestTierBoundaries(t *testing.T) {
 	}{
 		{"under soft", 129_999, Below},
 		{"at soft", 130_000, Soft},
-		{"under mid", 159_999, Soft},
-		{"at mid", 160_000, Mid},
-		{"under hard", 179_999, Mid},
-		{"at hard", 180_000, Hard},
+		{"under smart", 159_999, Soft},
+		{"at smart", 160_000, Smart},
+		{"over smart", 199_999, Smart},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -40,15 +39,15 @@ func TestTierFallsBackToTheCeilingWithoutAWindow(t *testing.T) {
 	if got := p.Tier(99_999); got != Below {
 		t.Errorf("Tier under the ceiling = %v, want Below", got)
 	}
-	if got := p.Tier(100_000); got != Mid {
-		t.Errorf("Tier at the ceiling = %v, want the full Mid pass", got)
+	if got := p.Tier(100_000); got != Smart {
+		t.Errorf("Tier at the ceiling = %v, want the full smart pass", got)
 	}
 }
 
 // A compact_at pinned below the soft ratio still floors the tier at soft, so a
 // session that asks to compact early does not silently do nothing.
 func TestCeilingFloorsTheTierAtSoft(t *testing.T) {
-	p := Policy{Ratios: Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90}, Window: 200_000, Ceiling: 100_000}
+	p := Policy{Ratios: Ratios{Soft: 0.65, Smart: 0.80}, Window: 200_000, Ceiling: 100_000}
 	if got := p.Tier(100_000); got != Soft {
 		t.Errorf("Tier at a low ceiling = %v, want Soft", got)
 	}

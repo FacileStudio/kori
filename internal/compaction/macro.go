@@ -56,13 +56,12 @@ func (f Fold) PrunedSize() int {
 }
 
 // JudgeRequest is everything one classification needs beyond the conversation:
-// the task to judge against and whether the pass must fold the whole history
-// (the hard tier, and every consolidating pass, both of which override keep
-// verdicts). The prune threshold lives on the judge itself, where the adapters
-// that read it are built.
+// the task to judge against. Forcing is deliberately not here. It is a decision
+// taken after the verdicts arrive, from whether the fold they produce lands the
+// conversation under its trigger, so it belongs to the caller and not to the
+// request — see Fold.Forced.
 type JudgeRequest struct {
-	Goal  string
-	Force bool
+	Goal string
 }
 
 // Classify runs the judge over a plan's history and sorts its blocks into a
@@ -78,20 +77,20 @@ func Classify(ctx context.Context, conv []nacelle.Message, plan []Span, req Judg
 	if err != nil {
 		return Fold{Kept: blocks}, err
 	}
-	return foldVerdicts(blocks, verdicts, req.Force), nil
+	return foldVerdicts(blocks, verdicts), nil
 }
 
 // foldVerdicts sorts each block by its verdict, defaulting a missing or short
-// answer to Keep and upgrading a Keep to Ledger when the pass is forced.
-func foldVerdicts(blocks []Block, verdicts []Verdict, force bool) Fold {
+// answer to Keep. Forcing is not applied here: a caller that means to fold the
+// whole history calls Fold.Forced on the result, which is the same lever pulled
+// after the verdicts arrive rather than as a parameter to the question that
+// produced them.
+func foldVerdicts(blocks []Block, verdicts []Verdict) Fold {
 	var fold Fold
 	for i, block := range blocks {
 		decision := Keep
 		if i < len(verdicts) {
 			decision = verdicts[i].Decision
-		}
-		if force && decision == Keep {
-			decision = Ledger
 		}
 		switch decision {
 		case Prune:

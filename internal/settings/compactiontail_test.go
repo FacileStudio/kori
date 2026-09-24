@@ -8,7 +8,7 @@ import (
 // The reserve is what a declared window holds back for the turn's own answer, so
 // what it leaves behind is the window the ladder actually measures. A reserve one
 // token under the window leaves a single token to measure against: every rung
-// trips at once and the session is pinned at the hard tier while the config still
+// trips at once and the session is pinned at the top tier while the config still
 // reads as enabled. Half is the floor, because a reserve that takes more than half
 // leaves the tiers crowded into a minority of the window; the shipped reserve is a
 // fifth, so nothing about the defaults moves. It is checked through the real

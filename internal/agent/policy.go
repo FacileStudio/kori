@@ -13,7 +13,7 @@ import (
 // trigger reads is measured on the same figure the budget resolved.
 func Policy(b Budget, keepTurns int, keepTokens int64, anchorMessages int) compaction.Policy {
 	return compaction.Policy{
-		Ratios:         compaction.Ratios{Soft: b.TierRatio.Soft, Mid: b.TierRatio.Mid, Hard: b.TierRatio.Hard},
+		Ratios:         compaction.Ratios{Soft: b.TierRatio.Soft, Smart: b.TierRatio.Smart},
 		Window:         b.Window,
 		Reserve:        b.Reserve,
 		Ceiling:        b.Ceiling,

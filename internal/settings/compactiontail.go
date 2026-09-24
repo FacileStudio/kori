@@ -16,7 +16,7 @@ import (
 // `window_tokens: 0` reads as "ask the backend" — which is what leaving it out
 // already means — and a reserve that leaves under half of a declared window
 // usable shrinks the ladder to a single rung: usable collapses toward one token,
-// every tier trips at once, and the session sits at hard while the config still
+// every tier trips at once, and the session sits at the top tier while the config still
 // reads as enabled. That is the same failure `soft_ratio: 0` used to have, and
 // failing at load is what keeps it from being found out later.
 //

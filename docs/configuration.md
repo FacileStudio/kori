@@ -93,9 +93,9 @@ could tell apart.
 | Layer | Source | Notes |
 |---|---|---|
 | Flags | `-backend`, `-model`, `-effort`, `-root`, `-system-prompt`, `-additional-prompt`, `-bash`, `-thinking`, `-project-context`, `-skills`, `-trust-skills`, `-skill-dir`, `-mcp`, `-fetch`, `-approve-tools`, `-diffs`, `-show-hooks`, `-show-hook-output`, `-max-iterations`, `-compact-at`, `-max-concurrency`, `-max-parallel-agents`, `-tasks`, `-continue`, `-resume`, `-gates-file`, `-no-config` | Only flags actually **typed** are collected, via `flag.Visit` — Go's `flag` package cannot otherwise tell a flag left alone from one passed its own default value. `-skill-dir` and `-mcp` are repeatable (`-mcp a.json -mcp b.json`); every other flag keeps only its last occurrence. `-resume` names one session by id or file path and, when given, beats `-continue`. `-no-config` skips `~/.kori.yml` entirely: defaults plus environment plus flags. An invalid file gets a coloured report and one prompt — yes boots with defaults, no exits with the documentation link |
-| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_COMPACTION_SOFT_RATIO`, `KORI_COMPACTION_MID_RATIO`, `KORI_COMPACTION_HARD_RATIO`, `KORI_COMPACTION_WINDOW_TOKENS`, `KORI_COMPACTION_RESERVE_TOKENS`, `KORI_COMPACTION_KEEP_TURNS`, `KORI_COMPACTION_KEEP_TOKENS`, `KORI_COMPACTION_ANCHOR_MESSAGES`, `KORI_COMPACTION_JUDGE`, `KORI_COMPACTION_JUDGE_MODEL`, `KORI_COMPACTION_JUDGE_BASE_URL`, `KORI_COMPACTION_JUDGE_API_KEY`, `KORI_COMPACTION_PRUNE_THRESHOLD`, `KORI_COMPACTION_MAX_BLOCKS`, `KORI_FETCH`, `KORI_TASKS`, `TYPESAFE_API_KEY` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers). `TYPESAFE_API_KEY` is the compaction judge's key and beats `KORI_COMPACTION_JUDGE_API_KEY`; it is the one credential to keep in the environment rather than the file |
+| Environment | `KORI_BACKEND`, `KORI_MODEL`, `KORI_PROVIDER_BASE_URL`, `KORI_PROVIDER_API_KEY`, `KORI_EFFORT`, `KORI_REASONING_BUDGET`, `KORI_ROOT`, `KORI_SYSTEM_PROMPT`, `KORI_ADDITIONAL_PROMPT`, `KORI_BASH`, `KORI_THINKING`, `KORI_PROJECT_CONTEXT`, `KORI_SKILLS`, `KORI_TRUST_SKILLS`, `KORI_SKILL_DIRS`, `KORI_APPROVE_TOOLS`, `KORI_DIFFS`, `KORI_SHOW_HOOKS`, `KORI_SHOW_HOOK_OUTPUT`, `KORI_MAX_ITERATIONS`, `KORI_COMPACT_AT`, `KORI_MAX_CONCURRENCY`, `KORI_MAX_PARALLEL_AGENTS`, `KORI_COMPACTION_SOFT_RATIO`, `KORI_COMPACTION_SMART_RATIO`, `KORI_COMPACTION_WINDOW_TOKENS`, `KORI_COMPACTION_RESERVE_TOKENS`, `KORI_COMPACTION_KEEP_TURNS`, `KORI_COMPACTION_KEEP_TOKENS`, `KORI_COMPACTION_ANCHOR_MESSAGES`, `KORI_COMPACTION_JUDGE`, `KORI_COMPACTION_JUDGE_MODEL`, `KORI_COMPACTION_JUDGE_BASE_URL`, `KORI_COMPACTION_JUDGE_API_KEY`, `KORI_COMPACTION_PRUNE_THRESHOLD`, `KORI_COMPACTION_MAX_BLOCKS`, `KORI_FETCH`, `KORI_TASKS`, `TYPESAFE_API_KEY` | A misspelt boolean (`KORI_BASH=yez`) is treated as unmentioned, not as `false`, and falls through to the layer below. `KORI_SKILL_DIRS` is colon-separated, the same convention `PATH` itself uses for a list of directories. `KORI_PROVIDER_BASE_URL` and `KORI_PROVIDER_API_KEY` belong to the active provider — see [Custom providers](#custom-providers). `TYPESAFE_API_KEY` is the compaction judge's key and beats `KORI_COMPACTION_JUDGE_API_KEY`; it is the one credential to keep in the environment rather than the file |
 | File | `~/.kori.yml` | Preferences only, **no credentials** — those already have two homes: the environment, and the Anthropic SDK's own profile. A file can avoid holding one even where it needs one: `api_key_command` names the program that prints the key (`provider.api_key_command`, `limits.compaction.judge.api_key_command`) — see [Keeping the key out of the file](#keeping-the-key-out-of-the-file). `KnownFields(true)`: an unrecognised key (`max_iteration:`, one letter short) is refused rather than silently ignored |
-| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: unset` (an absolute override when set; unset derives the ceiling from `soft_ratio` × the context window, `0` disables), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `limits.compaction.soft_ratio: 0.65`, `limits.compaction.mid_ratio: 0.80`, `limits.compaction.hard_ratio: 0.90`, `limits.compaction.keep_turns: 1`, `limits.compaction.keep_tokens: 40000`, `limits.compaction.anchor_messages: 1`, `limits.compaction.judge.enabled: false`, (`limits.compaction.window_tokens` and `reserve_tokens` are unset: the first is the backend's own window, the second a fifth of it), `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_agents: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
+| Defaults | — | `provider.backend: anthropic`, `root: .`, `tools.run_command: true`, `reasoning.thinking: true`, `discovery.project_context: true`, `discovery.skills: true`, `discovery.trust_skills: false`, `discovery.trust_hooks: false`, `sources.skill_dirs: []`, `sources.mcp: {}`, `security.approve_tools: false`, `security.deny_elevation: true`, `ui.diffs: true`, `ui.show_hooks: true`, `ui.show_hook_output: true`, `limits.max_iterations: 5`, `limits.compact_at: unset` (an absolute override when set; unset derives the ceiling from `soft_ratio` × the context window, `0` disables), `limits.max_concurrency: 16`, `limits.max_parallel_agents: 16`, `limits.compaction.soft_ratio: 0.65`, `limits.compaction.smart_ratio: 0.80`, `limits.compaction.keep_turns: 1`, `limits.compaction.keep_tokens: 40000`, `limits.compaction.anchor_messages: 1`, `limits.compaction.judge.enabled: false`, (`limits.compaction.window_tokens` and `reserve_tokens` are unset: the first is the backend's own window, the second a fifth of it), `tools.web_fetch: true`, `tools.tasks: true`, `tools.parallel_agents: true`, `ui.rendering_mode: tui`, `ui.group_tools: true`, `ui.show_thinking: true` |
 
 `project_context` and `skills` default **on**, unlike `bash`: each fails soft to nothing when
 there is nothing to find — no `AGENTS.md`/`CLAUDE.md` anywhere above `root`, no
@@ -137,14 +137,16 @@ limits:
   max_concurrency: 16
   max_parallel_agents: 16
   # compaction decides, per history block, what to keep, prune or fold into the
-  # state ledger. The ratios are fractions of the window a turn can fill: the
-  # backend's window less reserve_tokens, the runway held back for the model's
-  # own answer. The judge is opt-in and off by default: enabling it sends
-  # conversation history to TypeSafe (see "Compaction" below).
+  # state ledger. Two of its settings are yours to decide: judge.enabled below,
+  # and compact_at above. The rest are defaults that are right for most sessions.
+  #
+  # The ratios are fractions of the window a turn can fill: the backend's window
+  # less reserve_tokens, the runway held back for the model's own answer.
+  # soft_ratio is the free rung; smart_ratio is the paid one. Raise soft_ratio
+  # before touching smart_ratio.
   compaction:
     soft_ratio: 0.65
-    mid_ratio: 0.80
-    hard_ratio: 0.90
+    smart_ratio: 0.80
     # window_tokens overrides what the backend reports — gateways under-report
     # and some runners report nothing at all. reserve_tokens left out is a fifth
     # of the window, between 8k and 64k.
@@ -155,6 +157,8 @@ limits:
     keep_turns: 1
     keep_tokens: 40000
     anchor_messages: 1
+    # The judge is opt-in and off by default: enabling it sends conversation
+    # history to TypeSafe (see "Compaction" below).
     judge:
       enabled: false
       model: jev-latest
@@ -425,15 +429,21 @@ any ceiling at all.
 | Tier | Crossed at | What it does | Model calls |
 |---|---|---|---|
 | soft | `soft_ratio` × usable window | Tombstones oversized history tool results older than the active window — deterministic, no model call | 0 |
-| mid | `mid_ratio` × usable window | Classifies each history block and keeps, prunes or folds it into one `[state ledger]` message | 1 judge + 1 ledger |
-| hard | `hard_ratio` × usable window | Mid, plus force-folding everything the judge did not prune, landing at the pinned head, ledger and active window | 1 judge + 1 ledger |
+| smart | `smart_ratio` × usable window | Classifies each history block and keeps, prunes or folds it into one `[state ledger]` message, forcing the fold when the gentle one would not land | 1 judge + 1 ledger |
+
+Whether a pass **forces** — folding the whole history rather than the blocks the judge left in
+place — is not a third threshold. It is derived: the pass forces when the gentle fold it just
+built would not leave the conversation under its trigger. Asking that directly is more precise
+than a second ratio, which had to serve every window size at once, and it is safe because
+forcing only ever moves a block from kept to folded. A `prune` still needs the judge's
+probability and confidence, so forcing costs verbatim fidelity and never a fact.
 
 The **usable window** is the backend's context window less `reserve_tokens`, the
 runway held back for the model's own answer. Measuring the ladder against it is
-what stops the top rung from leaving a reasoning model nothing to think in: at
-`hard_ratio: 0.90` of the raw window only a tenth of it would remain for the
-response, where against the usable window `hard` leaves the reserve *and* a tenth
-of what a turn can fill. The reserve defaults to a fifth of the window within the
+what stops the top rung from leaving a reasoning model nothing to think in: against
+the raw window a ratio at 0.90 would leave only a tenth of it for the response,
+where against the usable window the top rung leaves the reserve *and* a fifth of
+what a turn can fill. The reserve defaults to a fifth of the window within the
 shipped bounds (8k–64k); set `reserve_tokens` when you know what the model needs,
 and `window_tokens` when the backend under-reports a window or reports none at
 all — an OpenAI-compatible runner reports zero, which otherwise leaves every
@@ -456,9 +466,7 @@ summarized or pruned, so the original task cannot be summarized away. `keep_turn
 under the budget — how few messages the tail may ever shrink to, one by default, the live turn
 alone, which is also the one turn no summary may stand in for. Neither bound may take more than
 half of what a pass may fill — a `keep_turns` whose own turns would is refused at load, whenever a
-`window_tokens` or a `compact_at` is there to bound the cap — so a tail can never defeat the pass it triggers. With the judge off (the default), `mid` and `hard`
-both fold the whole history into the ledger. With it on, `mid` classifies each history block and
-keeps, prunes or folds it, and `hard` folds everything the judge did not prune.
+`window_tokens` or a `compact_at` is there to bound the cap — so a tail can never defeat the pass it triggers. With the judge off (the default), a pass folds the whole history into the ledger. With it on, a pass classifies each history block and keeps, prunes or folds it — and folds the rest too when the keeps would not land the conversation under its trigger.
 
 The ledger is only ever *merged* into: a later pass folds new facts in line by line, and a
 summarizer that restates what the ledger already holds adds nothing to it. It is never handed to a
@@ -466,7 +474,7 @@ summarizer alone — every call that rewrites it also carries turns no earlier p
 once the body outgrows one summary (2000 tokens, the ceiling the summarizer itself writes under) the
 pass *consolidates* it instead: one rewritten block, accepted only if it still names every
 identifier the old body named, and otherwise the merge stands. If a provider refuses a request for
-length anyway, kori compacts once and sends the turn again — one forced hard pass, at most once per
+length anyway, kori compacts once and sends the turn again — one forced pass, at most once per
 turn, and not at all while `compact_at` is `0`.
 
 **The judge is opt-in and off by default.** Turning on `limits.compaction.judge` sends
@@ -482,7 +490,7 @@ Enabling it is one key in `~/.kori.yml`. No flag and no environment variable are
 limits:
   compaction:
     judge:
-      enabled: true          # sends history to TypeSafe on every mid and hard pass
+      enabled: true          # sends history to TypeSafe on every summarizing pass
       model: jev-latest
       base_url: https://api.typesafe.ai
       api_key: ""            # empty is fine: export TYPESAFE_API_KEY instead

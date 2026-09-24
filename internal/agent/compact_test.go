@@ -57,10 +57,10 @@ func TestResolveBudgetCeilingPrecedence(t *testing.T) {
 // The ladder is carried whether or not compact_at overrode the ceiling, so a
 // session that pins the trigger still tiers its passes.
 func TestResolveBudgetCarriesTheRatios(t *testing.T) {
-	soft, mid, hard := 0.5, 0.7, 0.95
-	configured := settings.Compaction{SoftRatio: &soft, MidRatio: &mid, HardRatio: &hard}
+	soft, smart := 0.5, 0.7
+	configured := settings.Compaction{SoftRatio: &soft, SmartRatio: &smart}
 	got := ResolveBudget(new(int64(80_000)), configured, &fixedWindow{window: 100_000})
-	if got.TierRatio.Soft != 0.5 || got.TierRatio.Mid != 0.7 || got.TierRatio.Hard != 0.95 {
+	if got.TierRatio.Soft != 0.5 || got.TierRatio.Smart != 0.7 {
 		t.Errorf("ratios = %+v, want the configured ladder", got.TierRatio)
 	}
 	if got.Ceiling != 80_000 {

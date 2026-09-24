@@ -12,9 +12,9 @@ import (
 // be, neither of which this layer can know.
 func TestCompactionDefaults(t *testing.T) {
 	c := Defaults("").Compaction
-	soft, mid, hard := c.Ratios()
-	if soft != DefaultSoftRatio || mid != DefaultMidRatio || hard != DefaultHardRatio {
-		t.Errorf("ratios = %v/%v/%v, want %v/%v/%v", soft, mid, hard, DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio)
+	soft, smart := c.Ratios()
+	if soft != DefaultSoftRatio || smart != DefaultSmartRatio {
+		t.Errorf("ratios = %v/%v, want %v/%v", soft, smart, DefaultSoftRatio, DefaultSmartRatio)
 	}
 	if c.KeepTurns == nil || *c.KeepTurns != 1 {
 		t.Errorf("keep_turns = %v, want the floor of 1", c.KeepTurns)
@@ -51,9 +51,9 @@ func TestCompactionFileLeavesUnmentionedRatiosAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settings: %v", err)
 	}
-	soft, mid, hard := c.Compaction.Ratios()
-	if soft != 0.5 || mid != DefaultMidRatio || hard != DefaultHardRatio {
-		t.Errorf("ratios = %v/%v/%v, want the file's 0.5 then the defaults", soft, mid, hard)
+	soft, smart := c.Compaction.Ratios()
+	if soft != 0.5 || smart != DefaultSmartRatio {
+		t.Errorf("ratios = %v/%v, want the file's 0.5 then the defaults", soft, smart)
 	}
 	if !DerefBool(c.Compaction.Judge.Enabled) {
 		t.Error("judge enabled = false, want the file's true")
@@ -73,16 +73,15 @@ func TestCompactionFileLeavesUnmentionedRatiosAlone(t *testing.T) {
 // NaN is the case the range tests used to miss: it compares false against every
 // bound, so `x <= 0 || x > 1` let it through and the ladder's own
 // `size >= ratio*window` was then true at every size, pinning the session at the
-// hard tier while the file still read as an ordinary ladder. YAML's `.nan` is the
+// top tier while the file still read as an ordinary ladder. YAML's `.nan` is the
 // spelling that reaches it.
 func TestCompactionRejectsAnUnusableLadder(t *testing.T) {
 	tests := map[string]string{
-		"a ratio above one":                        "limits:\n  compaction:\n    hard_ratio: 1.5\n",
+		"a ratio above one":                        "limits:\n  compaction:\n    smart_ratio: 1.5\n",
 		"a zero soft ratio":                        "limits:\n  compaction:\n    soft_ratio: 0\n",
-		"a negative ratio":                         "limits:\n  compaction:\n    mid_ratio: -0.2\n",
+		"a negative ratio":                         "limits:\n  compaction:\n    smart_ratio: -0.2\n",
 		"a NaN soft ratio":                         "limits:\n  compaction:\n    soft_ratio: .nan\n",
-		"a NaN mid ratio":                          "limits:\n  compaction:\n    mid_ratio: .nan\n",
-		"a NaN hard ratio":                         "limits:\n  compaction:\n    hard_ratio: .nan\n",
+		"a NaN smart ratio":                        "limits:\n  compaction:\n    smart_ratio: .nan\n",
 		"rungs out of order":                       "limits:\n  compaction:\n    soft_ratio: 0.9\n",
 		"a zero prune threshold":                   "limits:\n  compaction:\n    judge:\n      prune_threshold: 0\n",
 		"a prune threshold above one":              "limits:\n  compaction:\n    judge:\n      prune_threshold: 1.2\n",
@@ -167,7 +166,7 @@ func TestCompactionCarriesTheTailAndTheWindowOverride(t *testing.T) {
 // judgement on the values and not a refusal to have any: a rung at exactly 1 is
 // the inclusive end of the range, not a mistake.
 func TestCompactionAcceptsAUsableLadder(t *testing.T) {
-	written(t, "limits:\n  compaction:\n    soft_ratio: 0.5\n    mid_ratio: 0.75\n    hard_ratio: 1\n    judge:\n      prune_threshold: 0.9\n")
+	written(t, "limits:\n  compaction:\n    soft_ratio: 0.5\n    smart_ratio: 1\n    judge:\n      prune_threshold: 0.9\n")
 
 	if _, err := settings(Config{}); err != nil {
 		t.Errorf("settings rejected a usable ladder: %v", err)
@@ -219,7 +218,7 @@ func TestJudgeKeyPrefersTheTypesafeVariable(t *testing.T) {
 // positive form precisely so both spellings are refused, so the environment path
 // is pinned rather than assumed to inherit the file's check.
 func TestCompactionRejectsANaNFromTheEnvironment(t *testing.T) {
-	for _, key := range []string{"SOFT_RATIO", "MID_RATIO", "HARD_RATIO", "PRUNE_THRESHOLD"} {
+	for _, key := range []string{"SOFT_RATIO", "SMART_RATIO", "PRUNE_THRESHOLD"} {
 		t.Run(key, func(t *testing.T) {
 			written(t, "")
 			t.Setenv(EnvPrefix+"COMPACTION_"+key, "nan")

@@ -12,9 +12,8 @@ import (
 // Every scalar is a pointer, so a layer that mentions one ratio leaves the rest
 // of the policy alone instead of resetting it to zero.
 type Compaction struct {
-	SoftRatio *float64 `yaml:"soft_ratio"`
-	MidRatio  *float64 `yaml:"mid_ratio"`
-	HardRatio *float64 `yaml:"hard_ratio"`
+	SoftRatio  *float64 `yaml:"soft_ratio"`
+	SmartRatio *float64 `yaml:"smart_ratio"`
 	// WindowTokens overrides the backend's reported context window, and
 	// ReserveTokens is the part of that window held back for the turn's own
 	// answer. The ratios are read against the window minus the reserve, so the
@@ -60,11 +59,8 @@ func (c *Compaction) Merge(over Compaction) {
 	if over.SoftRatio != nil {
 		c.SoftRatio = over.SoftRatio
 	}
-	if over.MidRatio != nil {
-		c.MidRatio = over.MidRatio
-	}
-	if over.HardRatio != nil {
-		c.HardRatio = over.HardRatio
+	if over.SmartRatio != nil {
+		c.SmartRatio = over.SmartRatio
 	}
 	if over.WindowTokens != nil {
 		c.WindowTokens = over.WindowTokens
@@ -113,32 +109,28 @@ func (j *Judge) merge(over Judge) {
 
 // Ratios is the tier ladder with any ratio a layer left out filled from the
 // shipped defaults, so callers never handle the pointers themselves.
-func (c Compaction) Ratios() (soft, mid, hard float64) {
-	soft, mid, hard = DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio
+func (c Compaction) Ratios() (soft, smart float64) {
+	soft, smart = DefaultSoftRatio, DefaultSmartRatio
 	if c.SoftRatio != nil {
 		soft = *c.SoftRatio
 	}
-	if c.MidRatio != nil {
-		mid = *c.MidRatio
+	if c.SmartRatio != nil {
+		smart = *c.SmartRatio
 	}
-	if c.HardRatio != nil {
-		hard = *c.HardRatio
-	}
-	return soft, mid, hard
+	return soft, smart
 }
 
 // defaultCompaction is the tier ladder and judge a session with no opinion of
 // its own runs on. The judge is off: it is the one setting that sends history
 // off the machine, so a machine nobody opted in on never makes that call.
 func defaultCompaction() Compaction {
-	soft, mid, hard := DefaultSoftRatio, DefaultMidRatio, DefaultHardRatio
+	soft, smart := DefaultSoftRatio, DefaultSmartRatio
 	keepTurns, anchorMessages, maxBlocks := DefaultKeepTurns, 1, 64
 	keepTokens := int64(DefaultKeepTokens)
 	pruneThreshold, judgeEnabled := DefaultPruneThreshold, false
 	return Compaction{
 		SoftRatio:      &soft,
-		MidRatio:       &mid,
-		HardRatio:      &hard,
+		SmartRatio:     &smart,
 		KeepTurns:      &keepTurns,
 		KeepTokens:     &keepTokens,
 		AnchorMessages: &anchorMessages,
@@ -158,8 +150,7 @@ func defaultCompaction() Compaction {
 func compactionEnv() Compaction {
 	return Compaction{
 		SoftRatio:      envFloat(EnvPrefix + "COMPACTION_SOFT_RATIO"),
-		MidRatio:       envFloat(EnvPrefix + "COMPACTION_MID_RATIO"),
-		HardRatio:      envFloat(EnvPrefix + "COMPACTION_HARD_RATIO"),
+		SmartRatio:     envFloat(EnvPrefix + "COMPACTION_SMART_RATIO"),
 		WindowTokens:   envInt64(EnvPrefix + "COMPACTION_WINDOW_TOKENS"),
 		ReserveTokens:  envInt64(EnvPrefix + "COMPACTION_RESERVE_TOKENS"),
 		KeepTurns:      envInt(EnvPrefix + "COMPACTION_KEEP_TURNS"),
@@ -193,34 +184,34 @@ func judgeKeyEnv() string {
 // The ladder is a chain of comparisons over one number, so a ratio outside (0,1]
 // or a rung below the one under it is not a preference — it is a trigger that
 // never fires or fires out of order, and nothing at run time says so. A typo like
-// hard_ratio: 1.5 looks exactly like an enabled compaction that never compacts,
+// smart_ratio: 1.5 looks exactly like an enabled compaction that never compacts,
 // and soft_ratio: 0 derives a zero ceiling, which every gate reads as "compaction
 // off". Failing at load is what keeps either from being found out later.
 //
 // Every bound is written in the positive form because NaN compares false against
 // all of them: `x <= 0 || x > 1` admits a ratio that is not a number, and YAML's
 // `.nan` (or an environment "nan") then reaches a ladder whose own
-// `size >= ratio*window` is true at every size, pinning the session at the hard
+// `size >= ratio*window` is true at every size, pinning the session at the top
 // tier. `!(x > 0 && x <= 1)` rejects it with the same message as any other typo.
 func ValidateCompaction(c Compaction, compactAt *int64) error {
 	if compactAt != nil && *compactAt < 0 {
 		return &ParseError{Path: "limits.compact_at", Err: fmt.Errorf(
 			"want 0 (compaction off) or a positive token ceiling, got %d", *compactAt)}
 	}
-	soft, mid, hard := c.Ratios()
+	soft, smart := c.Ratios()
 	rungs := []struct {
 		key   string
 		ratio float64
-	}{{"soft_ratio", soft}, {"mid_ratio", mid}, {"hard_ratio", hard}}
+	}{{"soft_ratio", soft}, {"smart_ratio", smart}}
 	for _, rung := range rungs {
 		if !(rung.ratio > 0 && rung.ratio <= 1) {
 			return &ParseError{Path: "limits.compaction." + rung.key, Err: fmt.Errorf(
 				"want a ratio in (0,1], got %v — use limits.compact_at: 0 to turn compaction off", rung.ratio)}
 		}
 	}
-	if !(soft <= mid && mid <= hard) {
+	if !(soft <= smart) {
 		return &ParseError{Path: "limits.compaction", Err: fmt.Errorf(
-			"want soft_ratio <= mid_ratio <= hard_ratio, got %v/%v/%v", soft, mid, hard)}
+			"want soft_ratio <= smart_ratio, got %v/%v", soft, smart)}
 	}
 	if err := validateTail(c, compactAt); err != nil {
 		return err

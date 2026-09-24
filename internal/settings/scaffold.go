@@ -54,15 +54,19 @@ limits:
   grind_min_tokens: 0
   grind_continuations: 2
   # compaction decides, per history block, what to keep, prune or fold into the
-  # state ledger. The ratios are fractions of the window a turn can actually
-  # fill: the backend's window less reserve_tokens, the runway held back for the
-  # model's own answer. The judge is OPT-IN and off by default: enabling it sends
-  # conversation history to TypeSafe (see docs/configuration.md); its key is
-  # TYPESAFE_API_KEY, with judge.api_key as the file-side alternative.
+  # state ledger.
+  #
+  # Two of its settings are yours to decide: judge.enabled below, and compact_at
+  # above. The rest are defaults that are right for most sessions — they are
+  # listed so you can grep for them, and they want changing only if you know why.
   compaction:
+    # soft_ratio is the free rung: it tombstones old tool output with no model
+    # call. smart_ratio is the paid one — it classifies the history and folds it
+    # into the ledger, forcing the fold when the gentle one would not land under
+    # the trigger. Raise soft_ratio before touching smart_ratio: the soft tier
+    # costs nothing and the smart tier is a call.
     soft_ratio: 0.65
-    mid_ratio: 0.80
-    hard_ratio: 0.90
+    smart_ratio: 0.80
     # window_tokens overrides what the backend reports — gateways under-report
     # and some runners report nothing at all — so a session can pin the figure
     # the ladder is measured against. Left out it is the backend's own.
@@ -76,6 +80,9 @@ limits:
     keep_turns: 1
     keep_tokens: 40000
     anchor_messages: 1
+    # judge is the one setting here that leaves the machine: turning it on sends
+    # conversation history to TypeSafe. It is off by default, and its key is
+    # TYPESAFE_API_KEY, with judge.api_key as the file-side alternative.
     judge:
       enabled: false
       model: jev-latest

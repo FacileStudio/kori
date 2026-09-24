@@ -126,11 +126,15 @@ limits:
   # compact_at is an absolute token ceiling when set, 0 disables compaction,
   # and unset derives the ceiling from the context window and the ratios here.
   compaction:
+    # Two of these are yours to decide: judge.enabled below, and compact_at
+    # above. The rest are defaults that are right for most sessions.
+    #
     # Ratios are fractions of the window a turn can fill: the backend's window
     # less reserve_tokens, the runway held back for the model's answer.
+    # soft_ratio is the free rung; smart_ratio is the paid one. Raise soft_ratio
+    # before touching smart_ratio.
     soft_ratio: 0.65
-    mid_ratio: 0.80
-    hard_ratio: 0.90
+    smart_ratio: 0.80
     # window_tokens overrides what the backend reports; reserve_tokens defaults
     # to a fifth of it, between 8k and 64k.
     keep_turns: 1
@@ -204,18 +208,25 @@ remote:
 ## Context compaction
 
 A long session is measured against the backend's context window and compacted at
-the ratio it has crossed, instead of at one absolute token count. Three tiers,
-each a superset of the one below:
+the ratio it has crossed, instead of at one absolute token count. Two tiers, the
+second a superset of the first:
 
 | Tier | Crossed at | What it does | Model calls |
 |---|---|---|---|
 | soft | `soft_ratio` (0.65) × usable window | Tombstones oversized old tool results — deterministic, no model call | 0 |
-| mid | `mid_ratio` (0.80) × usable window | Classifies each history block and folds it into one `[state ledger]` message, keeping, pruning or folding | 1 judge + 1 ledger |
-| hard | `hard_ratio` (0.90) × usable window | Mid, plus force-folding what is left of the history and landing at the pinned ends | 1 judge + 1 ledger |
+| smart | `smart_ratio` (0.80) × usable window | Classifies each history block and folds it into one `[state ledger]` message, keeping, pruning or folding; forces the fold when the gentle one would not land | 1 judge + 1 ledger |
+
+Whether a pass *forces* — folding the whole history rather than the blocks the
+judge left in place — is not a third threshold. It is derived: the pass forces
+when the gentle fold it just built would not leave the conversation under its
+trigger. Asking that question directly is more precise than a second ratio, which
+had to serve every window size at once, and it is safe because forcing only ever
+moves a block from kept to folded: a prune still needs the judge's probability and
+confidence, so forcing costs verbatim fidelity and never a fact.
 
 The *usable window* is the backend's context window less `reserve_tokens` — the
-runway the model needs to finish its own answer — so `hard` still leaves the
-reserve plus a tenth of the usable window, instead of a tenth of the raw one.
+runway the model needs to finish its own answer — so the top rung still leaves the
+reserve plus a fifth of the usable window, instead of a fifth of the raw one.
 That reserve is an engineering hypothesis rather than a measurement: it defaults
 to a fifth of the window between 8k and 64k, and a session that knows what its
 model needs should set `reserve_tokens`. A backend that reports no window at all
@@ -239,7 +250,7 @@ compaction), and a backend that reports no context window falls back to it.
 
 If a provider refuses a request for length anyway — the ladder is measured
 against an estimate, so it can — kori compacts once and sends the turn again.
-That retry is a forced hard pass, it happens at most once per turn, and it is
+That retry forces the fold, it happens at most once per turn, and it is
 skipped entirely when `compact_at` is `0`.
 
 The judge is **opt-in and off by default**: turning on

@@ -53,7 +53,7 @@ func TestPassDecidesToConsolidateAnOverBudgetLedger(t *testing.T) {
 			m := sized()
 			m.conversation = tc.conv
 
-			if got := m.pass(m.plan(), compaction.Mid).consolidate; got != tc.want {
+			if got := m.pass(m.plan(), compaction.Smart, false).consolidate; got != tc.want {
 				t.Errorf("pass.consolidate = %v, want %v", got, tc.want)
 			}
 		})
@@ -99,7 +99,7 @@ func TestSettleCompactionConsolidatesAnOverBudgetLedger(t *testing.T) {
 		before:      m.size,
 		plan:        plan,
 		fold:        compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)},
-		tier:        compaction.Hard,
+		tier:        compaction.Smart,
 		summary:     summary,
 		consolidate: true,
 	})
@@ -131,7 +131,7 @@ func TestSettleCompactionKeepsTheLedgerWhenARewriteDropsAnIdentifier(t *testing.
 		before:      m.size,
 		plan:        plan,
 		fold:        compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)},
-		tier:        compaction.Hard,
+		tier:        compaction.Smart,
 		summary:     "Decisions:\n- consolidated, see the notes",
 		consolidate: true,
 	})
@@ -162,7 +162,7 @@ func TestAConsolidatingPassFoldsTheHistoryTheJudgeKept(t *testing.T) {
 	m.conversation = overdueLedger()
 	m.size = 130_000
 
-	pass := m.pass(m.plan(), compaction.Mid)
+	pass := m.pass(m.plan(), compaction.Smart, false)
 	if !pass.consolidate {
 		t.Fatal("the fixture ledger is not past its budget, so the pass is not consolidating")
 	}

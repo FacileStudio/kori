@@ -23,17 +23,23 @@ import "github.com/FacileStudio/nacelle"
 // — and forty thousand tokens of tail is the budget that sizes the rest.
 const (
 	DefaultSoftRatio      = 0.65
-	DefaultMidRatio       = 0.80
-	DefaultHardRatio      = 0.90
+	DefaultSmartRatio     = 0.80
 	DefaultKeepTurns      = 1
 	DefaultKeepTokens     = 40_000
 	DefaultAnchorMessages = 1
 )
 
 // Ratios is the tier ladder as fractions of the backend's context window.
-// Soft tombstones history with no model call, mid adds a batched judge pass and
-// a ledger summary, hard force-summarizes what is left.
-type Ratios struct{ Soft, Mid, Hard float64 }
+// Soft tombstones history with no model call; smart adds a batched judge pass and
+// a ledger summary, and forces the fold when the gentle one would not land.
+//
+// There were three rungs until the hard ratio was removed. It was a second
+// threshold over one number standing in for a question that can be asked
+// directly — does the fold just classified land under the trigger — so the
+// answer is now derived in the caller from LandsUnder rather than read off a
+// ratio. Every framework surveyed does unconditionally what that rung did, so
+// nothing was lost by making it conditional instead of scheduled.
+type Ratios struct{ Soft, Smart float64 }
 
 // Tier is the rung a measured conversation size has reached.
 type Tier uint8
@@ -43,10 +49,9 @@ const (
 	Below Tier = iota
 	// Soft is the deterministic, model-free tier.
 	Soft
-	// Mid adds the judge and the ledger summary.
-	Mid
-	// Hard force-summarizes history and trims to the pinned ends.
-	Hard
+	// Smart adds the judge and the ledger summary, and forces the fold when the
+	// gentle one does not land the conversation under the trigger.
+	Smart
 )
 
 // String names a tier the way a status line or a report reads it.
@@ -54,10 +59,8 @@ func (t Tier) String() string {
 	switch t {
 	case Soft:
 		return "soft"
-	case Mid:
-		return "mid"
-	case Hard:
-		return "hard"
+	case Smart:
+		return "smart"
 	default:
 		return "below"
 	}
@@ -110,9 +113,10 @@ type Policy struct {
 
 // Usable is the window a tier is measured against: the backend's own window less
 // the runway a turn needs to finish. Reserving it is what stops the top rung
-// from leaving the model nothing to answer with — at hard_ratio 0.90 of the raw
-// window, a tenth of the window is all that is left for the response, and on a
-// model that reasons before it speaks that is a turn cut off mid-thought. Zero
+// from leaving the model nothing to answer with — a ratio read against the raw
+// window leaves only its remainder for the response, where against the usable
+// window the top rung leaves the reserve *and* that remainder, and on a
+// model that reasons before it speaks the difference is a turn cut off mid-thought. Zero
 // means there is no window to measure against, which is the windowless backend
 // the absolute ceiling alone covers.
 func (p Policy) Usable() int64 {
@@ -132,15 +136,13 @@ func (p Policy) Tier(size int64) Tier {
 	usable := p.Usable()
 	if usable <= 0 {
 		if p.Ceiling > 0 && size >= p.Ceiling {
-			return Mid
+			return Smart
 		}
 		return Below
 	}
 	switch {
-	case reaches(size, p.Ratios.Hard, usable):
-		return Hard
-	case reaches(size, p.Ratios.Mid, usable):
-		return Mid
+	case reaches(size, p.Ratios.Smart, usable):
+		return Smart
 	case reaches(size, p.Ratios.Soft, usable):
 		return Soft
 	case p.Ceiling > 0 && size >= p.Ceiling:

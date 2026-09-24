@@ -159,13 +159,13 @@ func TestTrustReArmsAfterAnEdit(t *testing.T) {
 // therefore combine with the session's ratios into one that cannot tier, and
 // nothing downstream re-reads it. The merge is re-validated for that reason.
 func TestAJobLadderIsValidatedAfterMerging(t *testing.T) {
-	soft, mid, jobMid, sane := 0.85, 0.9, 0.8, 0.88
+	soft, smart, jobSmart, sane := 0.85, 0.9, 0.8, 0.88
 	base := settings.Defaults("")
 	base.Compaction.SoftRatio = &soft
-	base.Compaction.MidRatio = &mid
+	base.Compaction.SmartRatio = &smart
 
 	_, err := jobConfig(base, settings.CronJob{Limits: settings.Limits{
-		Compaction: settings.Compaction{MidRatio: &jobMid},
+		Compaction: settings.Compaction{SmartRatio: &jobSmart},
 	}})
 	if err == nil {
 		t.Fatal("a ladder that cannot tier once merged must be refused")
@@ -175,7 +175,7 @@ func TestAJobLadderIsValidatedAfterMerging(t *testing.T) {
 	}
 
 	if _, err := jobConfig(base, settings.CronJob{Limits: settings.Limits{
-		Compaction: settings.Compaction{MidRatio: &sane},
+		Compaction: settings.Compaction{SmartRatio: &sane},
 	}}); err != nil {
 		t.Errorf("a merged ladder that can tier must load: %v", err)
 	}

@@ -78,7 +78,7 @@ func TestSettleCompactionMasksWhenAJudgedPassHasNoSummary(t *testing.T) {
 	outcome := compactOutcome{
 		before: int64(125_000),
 		plan:   plan,
-		tier:   compaction.Mid,
+		tier:   compaction.Smart,
 		judged: true,
 		fold:   compaction.Fold{Ledger: blocks},
 	}
@@ -113,7 +113,7 @@ func TestSettleCompactionReportsARefusedFold(t *testing.T) {
 	m.settleCompaction(compactOutcome{
 		before:  5,
 		plan:    m.plan(),
-		tier:    compaction.Mid,
+		tier:    compaction.Smart,
 		judged:  true,
 		summary: strings.Repeat("decision, constraint, dead end. ", 400),
 	})

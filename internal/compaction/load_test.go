@@ -10,14 +10,21 @@ import (
 )
 
 // A session that keeps reading large files is folded down whenever it crosses
-// the soft ratio, and forty turns later it is still under the hard ratio with
-// its anchor untouched — byte for byte, not merely first and the right role —
-// and its roles alternating. This is the end-to-end statement the zone model
-// exists to make, with no model call in the loop.
-func TestLoadSettlesUnderTheHardRatio(t *testing.T) {
+// the soft ratio, and forty turns later it has settled under the trigger — the
+// size at which the ladder would ask for another pass — with its anchor untouched
+// byte for byte, not merely first and the right role, and its roles alternating.
+// This is the end-to-end statement the zone model exists to make, with no model
+// call in the loop.
+//
+// Under the trigger rather than under a rung's ratio, because that is the
+// property the session actually needs: a conversation that has settled below the
+// size its own ladder acts on stops compacting. The bound used to be the hard
+// ratio, which was the top rung; with that rung gone the trigger is the honest
+// statement, and it is a tighter one.
+func TestLoadSettlesUnderTheTrigger(t *testing.T) {
 	window := int64(200_000)
 	policy := Policy{
-		Ratios:         Ratios{Soft: 0.65, Mid: 0.80, Hard: 0.90},
+		Ratios:         Ratios{Soft: 0.65, Smart: 0.80},
 		Window:         window,
 		KeepTurns:      3,
 		AnchorMessages: 1,
@@ -32,8 +39,8 @@ func TestLoadSettlesUnderTheHardRatio(t *testing.T) {
 		}
 	}
 
-	if got := EstTokens(Bytes(conv)); got > int64(policy.Ratios.Hard*float64(window)) {
-		t.Errorf("final estimate = %d tokens, want it under the hard ratio", got)
+	if got := EstTokens(Bytes(conv)); got >= policy.Trigger() {
+		t.Errorf("final estimate = %d tokens, want it under the trigger %d", got, policy.Trigger())
 	}
 	if len(conv) == 0 || !reflect.DeepEqual(conv[0], anchor) {
 		t.Errorf("conversation starts with %v, want the anchor byte-identical to the one it started from: %v", conv, anchor)

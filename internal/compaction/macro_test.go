@@ -79,8 +79,9 @@ func TestClassifyOnErrorKeepsEveryBlock(t *testing.T) {
 	}
 }
 
-// Verdicts decide where each block goes, and a forced pass upgrades keeps to
-// ledger folds — the hard tier's force-summarize.
+// Verdicts decide where each block goes, and Fold.Forced upgrades every block
+// that would have survived in place to a ledger fold — the lever a pass pulls
+// when the gentle fold does not land the conversation under its trigger.
 func TestClassifySortsBlocksAndForcesKeeps(t *testing.T) {
 	conv := judgeSample()
 	plan := judgePlan(conv)
@@ -98,11 +99,11 @@ func TestClassifySortsBlocksAndForcesKeeps(t *testing.T) {
 	}
 
 	keeps := &fakeJudge{verdicts: keepAll(2)}
-	forced, err := Classify(t.Context(), conv, plan, JudgeRequest{Goal: "the task", Force: true}, keeps)
+	gentle, err := Classify(t.Context(), conv, plan, JudgeRequest{Goal: "the task"}, keeps)
 	if err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
-	if forced.LedgerSize() != 3 || forced.PrunedSize() != 0 {
+	if forced := gentle.Forced(); forced.LedgerSize() != 3 || forced.PrunedSize() != 0 {
 		t.Errorf("forced fold = %d ledger / %d pruned, want every keep folded", forced.LedgerSize(), forced.PrunedSize())
 	}
 }

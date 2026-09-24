@@ -15,6 +15,8 @@ package settings
 // The finished chain is validated in one place, here, rather than per layer: a
 // ratio a lower layer wrote and a higher one never mentioned is only wrong once
 // every layer has had its say, and both callers below go through this function.
+// The removed-variable check sits here for the same reason — it is about the
+// chain a session ends up running on, not about one layer's own reading.
 func resolveLayers(system string, file, env, flags Config) (Config, error) {
 	resolved := Defaults(system)
 	resolved.merge(file)
@@ -25,6 +27,9 @@ func resolveLayers(system string, file, env, flags Config) (Config, error) {
 	}
 	resolved.merge(env)
 	resolved.merge(flags)
+	if err := removedCompactionEnv(); err != nil {
+		return Config{}, err
+	}
 	if err := ValidateCompaction(resolved.Compaction, resolved.CompactAt); err != nil {
 		return Config{}, err
 	}

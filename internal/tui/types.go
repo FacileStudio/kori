@@ -118,7 +118,7 @@ type transcript struct {
 	judge      compaction.Judge
 	compacting bool
 	// last is the numbers of the most recent pass of any tier — the soft
-	// tombstone, the mid/hard fold, or the mask fallback. /status names the
+	// tombstone, the smart fold, or the mask fallback. /status names the
 	// tier from it; the zero value (Below) means no pass has run this session.
 	last compacted
 	// thrashCount is how many consecutive compaction passes ended with the

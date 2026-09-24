@@ -176,14 +176,42 @@ func TestARejectionOnATurnNobodyStoppedStillRecovers(t *testing.T) {
 	drain(t, m)
 }
 
-// The retry asks for the hardest pass rather than re-deriving a tier from the
-// size the provider has already refused: at the soft band the ladder would pick a
-// lighter rung, and the retry is the one call that knows better.
-func TestARetryAsksForTheHardestPass(t *testing.T) {
+// The retry forces the fold. It is the one caller that knows better than the
+// estimate: a provider refused the request as sent, so whatever the ladder last
+// measured was already wrong.
+func TestARetryForcesTheFold(t *testing.T) {
 	m := overflowing(t)
 	m.size = m.policy.Trigger() + 1
-	if tier := m.policy.Tier(m.size); tier == compaction.Hard {
-		t.Fatalf("the fixture is already at %v, so forcing it is not being tested", tier)
+	m.judge = stubJudge{}
+
+	if cmd := m.retryRun(); cmd == nil {
+		t.Fatal("retryRun = nil, want a pass before the run starts again")
+	}
+	outcome := <-m.run.compactChan
+
+	for i := range m.conversation {
+		if outcome.fold.Survives(i) {
+			t.Errorf("index %d survives the retry's fold, want the whole history folded", i)
+		}
+	}
+}
+
+// The two ways to force are independent, and this pins the explicit one. With a
+// trigger the gentle fold comfortably clears, the derived lever stays its hand —
+// so a keep-all judge leaves every block in place — and only the flag the retry
+// carries can empty the fold. Without this, `pass.force` could be deleted and the
+// suite would not notice, because every other fixture also trips the derivation.
+func TestARetryForcesEvenWhenTheEstimateSaysTheFoldWouldLand(t *testing.T) {
+	m := overflowing(t)
+	m.judge = stubJudge{}
+	m.policy.Ceiling = 10_000_000
+	m.compactAt = m.policy.Ceiling
+	m.size = 130_000
+
+	plan := m.plan()
+	keeps := compaction.Fold{Kept: compaction.Blocks(m.conversation, plan)}
+	if !compaction.LandsUnder(m.conversation, plan, keeps, m.policy.Trigger()) {
+		t.Fatal("the fixture's gentle fold does not land, so the derived lever would fire and the flag is not being tested")
 	}
 
 	if cmd := m.retryRun(); cmd == nil {
@@ -191,7 +219,9 @@ func TestARetryAsksForTheHardestPass(t *testing.T) {
 	}
 	outcome := <-m.run.compactChan
 
-	if outcome.tier != compaction.Hard {
-		t.Errorf("pass tier = %v, want the hard tier forced", outcome.tier)
+	for i := range m.conversation {
+		if outcome.fold.Survives(i) {
+			t.Errorf("index %d survives, want the retry's flag to fold the history the estimate said it could keep", i)
+		}
 	}
 }

@@ -40,7 +40,7 @@ func TestApplyKeepsAnAbsorbedToolPairWhole(t *testing.T) {
 	plan := Plan(conv, policy)
 	fold := foldVerdicts(Blocks(conv, plan), []Verdict{
 		{Decision: Keep}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger}, {Decision: Ledger},
-	}, false)
+	})
 
 	out, _ := Apply(conv, plan, "folded", fold.Survives, false)
 	assertPairsWhole(t, out, policy)

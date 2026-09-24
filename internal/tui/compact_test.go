@@ -58,12 +58,12 @@ func TestCompactReportNamesTheWholePass(t *testing.T) {
 	outcome := compactOutcome{
 		before: 125_000,
 		after:  90_000,
-		done:   compacted{evictCut: end - start, turns: 2, kept: len(m.conversation) - end, tier: compaction.Hard},
+		done:   compacted{evictCut: end - start, turns: 2, kept: len(m.conversation) - end, tier: compaction.Smart},
 	}
 
 	line := compactReport(outcome)
 
-	for _, want := range []string{"✂", "Compaction summary", "verbatim", "summarized 2 turns", "freed", "hard"} {
+	for _, want := range []string{"✂", "Compaction summary", "verbatim", "summarized 2 turns", "freed", "(smart)"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("report = %q, want it to mention %q", line, want)
 		}
@@ -79,7 +79,7 @@ func TestSettleCompactionInstallsASummary(t *testing.T) {
 		before:  int64(125_000),
 		plan:    plan,
 		fold:    compaction.Fold{Ledger: compaction.Blocks(m.conversation, plan)},
-		tier:    compaction.Mid,
+		tier:    compaction.Smart,
 		summary: "Decisions:\n- done.",
 	}
 
@@ -108,7 +108,7 @@ func TestSettleCompactionInstallsASummary(t *testing.T) {
 func TestSettleCompactionKeepsRolesAlternating(t *testing.T) {
 	m := sized()
 	m.conversation = bigConversation()
-	outcome := compactOutcome{before: int64(125_000), plan: m.plan(), tier: compaction.Mid, summary: "Decisions:\n- done."}
+	outcome := compactOutcome{before: int64(125_000), plan: m.plan(), tier: compaction.Smart, summary: "Decisions:\n- done."}
 
 	m.settleCompaction(outcome)
 
@@ -166,7 +166,7 @@ func TestSettleCompactionReportsAJudgeFailure(t *testing.T) {
 	outcome := compactOutcome{
 		before: m.size,
 		plan:   m.plan(),
-		tier:   compaction.Mid,
+		tier:   compaction.Smart,
 		judged: true,
 		stage:  "judge",
 		err:    errors.New("typesafe: http 429"),

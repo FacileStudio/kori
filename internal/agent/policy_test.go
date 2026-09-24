@@ -57,7 +57,7 @@ func TestJudgeIsBuiltFromTheConfigFile(t *testing.T) {
 	if cfg.Compaction.Judge.Model != "jev-test" {
 		t.Errorf("judge model = %q, want the file's own", cfg.Compaction.Judge.Model)
 	}
-	if soft, _, _ := cfg.Compaction.Ratios(); soft != 0.5 {
+	if soft, _ := cfg.Compaction.Ratios(); soft != 0.5 {
 		t.Errorf("soft ratio = %v, want the file's 0.5 alongside it", soft)
 	}
 

@@ -15,7 +15,7 @@ import (
 // The denominator is the window a turn can actually fill — the backend's window
 // less the reserve held back for the answer — because that is the figure the
 // ladder is read against. Showing the raw window instead would print a ratio
-// below mid_ratio while the session was already compacting at mid, which is
+// below smart_ratio while the session was already compacting at smart, which is
 // exactly the kind of disagreement the tier suffix exists to prevent; the raw
 // window and the reserve are named on their own line in /status.
 func contextLoad(size int64, policy compaction.Policy) string {

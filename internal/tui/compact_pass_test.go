@@ -41,7 +41,7 @@ func maskingFixture(t *testing.T) (*Model, []compaction.Span) {
 // arrays back makes it fail, on the stub and on the array identity both.
 func TestTheSnapshotCannotBeReachedByAMask(t *testing.T) {
 	m, plan := maskingFixture(t)
-	snapshot := m.pass(plan, compaction.Mid)
+	snapshot := m.pass(plan, compaction.Smart, false)
 
 	m.maskHistory(plan)
 

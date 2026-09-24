@@ -29,9 +29,8 @@ func resolvedPolicy(base compaction.Policy) compaction.Policy {
 	policy := base
 	if policy.Ratios == (compaction.Ratios{}) {
 		policy.Ratios = compaction.Ratios{
-			Soft: compaction.DefaultSoftRatio,
-			Mid:  compaction.DefaultMidRatio,
-			Hard: compaction.DefaultHardRatio,
+			Soft:  compaction.DefaultSoftRatio,
+			Smart: compaction.DefaultSmartRatio,
 		}
 	}
 	if policy.KeepTurns <= 0 {
@@ -52,7 +51,7 @@ func (m *Model) plan() []compaction.Span {
 	return compaction.Plan(m.conversation, m.policy)
 }
 
-// beginCompaction runs one mid or hard pass: it feeds the history zone to the
+// beginCompaction runs one summarizing pass: it feeds the history zone to the
 // tool-free summarizer and installs the result as the ledger. It is called from
 // the tiered trigger once the measured size has crossed the soft band, from the
 // manual /compact command, and from the pre-send path. It is where the
@@ -64,8 +63,8 @@ func (m *Model) plan() []compaction.Span {
 //
 // force is overflow recovery's one lever: a run the provider refused for length
 // is by definition past whatever the ladder last measured, so the retry asks for
-// the hardest pass outright rather than re-deriving a tier from a size that was
-// already wrong once.
+// the whole history folded outright rather than re-deriving a tier from a size
+// that was already wrong once.
 func (m *Model) beginCompaction(ctx context.Context, force bool) tea.Cmd {
 	plan := m.plan()
 	start, end, ok := compaction.HistoryRange(plan)
@@ -76,18 +75,13 @@ func (m *Model) beginCompaction(ctx context.Context, force bool) tea.Cmd {
 		return m.maskOnlyPass(plan)
 	}
 
-	tier := m.policy.Tier(m.size)
-	if force {
-		tier = compaction.Hard
-	}
-
 	m.compacting = true
 	m.compactBegan = time.Now()
 
 	resultsChan := make(chan compactOutcome)
 	m.run.compactChan = resultsChan
 
-	go runCompaction(ctx, resultsChan, m.pass(plan, tier))
+	go runCompaction(ctx, resultsChan, m.pass(plan, m.policy.Tier(m.size), force))
 	return tea.Batch(waitForCompact(resultsChan), m.spin.Tick)
 }
 
@@ -97,7 +91,7 @@ func (m *Model) beginCompaction(ctx context.Context, force bool) tea.Cmd {
 // arrives on the compactPass the update loop snapshotted for it.
 //
 // A consolidating pass folds the history whether or not the judge tagged any of
-// it, which is the same lever the hard tier pulls. The rewrite such a pass asks
+// it, which is the same lever the derived force pulls. The rewrite such a pass asks
 // for is legitimate only when it is measured against turns no earlier pass
 // compressed (I3b), and those turns are what carry the earlier ledger into the
 // ask: with the fold empty there is no turn to carry it, so compactPrompt drops
@@ -122,14 +116,16 @@ func runCompaction(ctx context.Context, results chan compactOutcome, pass compac
 
 	judgeCtx, cancel := context.WithTimeout(ctx, compactJudgeTimeout)
 	fold, err := compaction.Classify(judgeCtx, pass.conv, pass.plan, compaction.JudgeRequest{
-		Goal:  compaction.GoalText(pass.conv, pass.plan),
-		Force: pass.tier == compaction.Hard || pass.consolidate,
+		Goal: compaction.GoalText(pass.conv, pass.plan),
 	}, pass.judge)
 	cancel()
 	if err != nil {
 		outcome.err, outcome.stage = err, "judge"
 		results <- outcome
 		return
+	}
+	if pass.force || pass.consolidate || !compaction.LandsUnder(pass.conv, pass.plan, fold, pass.trigger) {
+		fold = fold.Forced()
 	}
 	outcome.fold = fold
 

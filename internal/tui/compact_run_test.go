@@ -72,7 +72,7 @@ func TestRunCompactionCollectsASummary(t *testing.T) {
 	m.agent = summarizerAgent(t, summarizing{answer: "Decisions:\n- done."})
 	results := make(chan compactOutcome)
 
-	go runCompaction(t.Context(), results, m.pass(m.plan(), compaction.Mid))
+	go runCompaction(t.Context(), results, m.pass(m.plan(), compaction.Smart, false))
 
 	outcome, open := <-results
 	if !open {
@@ -96,7 +96,7 @@ func TestRunCompactionFallsBackWhenTheSummarizerDeadlineFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
-	go runCompaction(ctx, results, m.pass(m.plan(), compaction.Mid))
+	go runCompaction(ctx, results, m.pass(m.plan(), compaction.Smart, false))
 
 	outcome, open := <-results
 	if !open {
