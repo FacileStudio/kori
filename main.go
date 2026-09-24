@@ -13,8 +13,7 @@ var version = "v0.76.0"
 
 func main() {
 	if err := cmd.Execute(version); err != nil {
-		var usage *agent.UsageError
-		if errors.As(err, &usage) {
+		if _, used := errors.AsType[*agent.UsageError](err); used {
 			os.Exit(2)
 		}
 		os.Exit(1)
