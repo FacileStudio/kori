@@ -3,11 +3,15 @@
 ## [Unreleased]
 
 ### Added
-- feat(settings): `provider.api_key_command` and `limits.compaction.judge.api_key_command` — a key can be the output of a command instead of the value of a file, so a config file, a profile or a dotfiles repo can carry no secret at all: `api_key_command: tiroir get OPENSSH` style, run through `sh -c`, its trailing newline trimmed, its stdin closed so a prompt cannot seize the terminal, killed after 10 seconds. It is a source and not an override — a key from a flag, the environment, a literal `api_key` or a profile wins, and the command fills only what is empty — so an exported `TYPESAFE_API_KEY` keeps working untouched and a judge command never runs while one is set. The command runs only where a key is used, when a session builds its provider or its judge, so inspection commands (`kori list`, `kori sessions`) never run it and a locked secret store cannot break them. A command that fails, times out or prints nothing is refused at startup naming the field, never left as an empty key, which would reach the backend as "no credential" and read exactly like a config that forgot one (`internal/settings`, `internal/agent`, `internal/tui`)
 
 ### Changed
 
 ### Fixed
+
+## [0.75.0] - 2026-09-24
+
+### Added
+- feat(settings): `provider.api_key_command` and `limits.compaction.judge.api_key_command` — a key can be the output of a command instead of the value of a file, so a config file, a profile or a dotfiles repo can carry no secret at all: `api_key_command: "tiroir get OPENROUTER_API_KEY"`, run through `sh -c`, its trailing newline trimmed, its stdin closed so a prompt cannot seize the terminal, killed after 10 seconds. It is a source and not an override — a key from a flag, the environment, a literal `api_key` or a profile wins, and the command fills only what is empty — so an exported `TYPESAFE_API_KEY` keeps working untouched and a judge command never runs while one is set. The command runs only where a key is used, when a session builds its provider or its judge, so inspection commands (`kori list`, `kori sessions`, `kori cron list`) never run it and a locked secret store cannot break them. A command that fails, times out or prints nothing is refused at startup naming the field, never left as an empty key, which would reach the backend as "no credential" and read exactly like a config that forgot one (`internal/settings`, `internal/agent`, `internal/tui`)
 
 ## [0.74.0] - 2026-09-23
 
