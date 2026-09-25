@@ -4,6 +4,7 @@ kind: cli
 
 ignore: [.git, node_modules, vendor, dist, build, target, testdata, .output, coverage]
 extensions: [.go]
+build_flags: ["-tags=goolm"]
 
 limits:
   fileLines: 250        # filet's own default: split the file

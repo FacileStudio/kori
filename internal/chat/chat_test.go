@@ -124,3 +124,28 @@ func TestRunRepliesWhenTheRunFails(t *testing.T) {
 		t.Errorf("reply = %q, want %q", got[0].Text, want)
 	}
 }
+
+type fakeTyper struct {
+	fakeAdapter
+	typing []bool
+}
+
+func (f *fakeTyper) Typing(_ context.Context, _ Identity, typing bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.typing = append(f.typing, typing)
+	return nil
+}
+
+func TestRunShowsTypingIndicator(t *testing.T) {
+	a := &fakeTyper{fakeAdapter: fakeAdapter{in: []Message{msg("!r:x", "@alice:x", "hi")}}}
+	router := Router{Allow: []string{"@alice:x"}}
+	if err := Run(context.Background(), a, echo, router); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.typing) < 2 || !a.typing[0] || a.typing[len(a.typing)-1] {
+		t.Errorf("expected typing true then false, got: %v", a.typing)
+	}
+}

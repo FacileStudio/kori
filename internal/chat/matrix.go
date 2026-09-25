@@ -36,6 +36,7 @@ type Matrix struct {
 }
 
 var _ Adapter = (*Matrix)(nil)
+var _ Typer = (*Matrix)(nil)
 
 // MatrixConfig is everything one bot needs to come up. Token and Password are
 // alternatives, not partners: a token is used as given, while a password logs

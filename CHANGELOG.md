@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- feat(chat): send typing indicators while generating turn responses (`internal/chat`, `filet.yml`)
+
 ## [0.78.0] - 2026-09-25
 
 ### Added

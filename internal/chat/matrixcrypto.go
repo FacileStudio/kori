@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 )
@@ -65,7 +64,7 @@ func selfSign(ctx context.Context, helper *cryptohelper.CryptoHelper, password, 
 	}
 	switch {
 	case !hasKeys:
-		return generateCrossSigning(ctx, mach, password)
+		return generateCrossSigning(ctx, helper, password)
 	case verified:
 		report("matrix", errors.New("cross-signing is in place and this device is already signed by it"))
 		return "", nil
@@ -85,7 +84,8 @@ func selfSign(ctx context.Context, helper *cryptohelper.CryptoHelper, password, 
 // callback is only needed by homeservers that demand a password to publish
 // keys, which Synapse does for anything past the first master key, so a bot
 // configured with a token and no password can fail here and say why.
-func generateCrossSigning(ctx context.Context, mach *crypto.OlmMachine, password string) (string, error) {
+func generateCrossSigning(ctx context.Context, helper *cryptohelper.CryptoHelper, password string) (string, error) {
+	mach := helper.Machine()
 	if password == "" {
 		key, err := mach.GenerateAndVerifyWithRecoveryKey(ctx)
 		if err != nil {
