@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- feat(chat): inbound chat surface over Matrix with end-to-end encryption (`kori chat`). Runs a supervised daemon holding a Matrix connection, turning allowlisted inbound messages into headless agent turns and returning threaded answers into the room. Supports device verification via `kori chat verify --recovery-key`, cross-signing key generation, room invite auto-joining, and Megolm group session management for encrypted rooms (`internal/chat`, `cmd`, `internal/settings`, `docs/configuration.md`)
+- docs(ide): document the surface for users, and be honest about diff (`README.md`, `docs/`)
+
 ## [0.77.0] - 2026-09-24
 
 ### Added

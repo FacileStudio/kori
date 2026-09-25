@@ -830,6 +830,247 @@ the entry's `name` names the file (`news` becomes `news.yml`), the rest of the
 entry moves across unchanged, and `commands: true` keeps working as the legacy
 spelling of `tools.run_command: true`.
 
+## Chat
+
+`kori chat` is the inbound surface: one long-lived process holding a Matrix connection, so
+a message from an allowlisted account runs a kori session and the answer comes back in the
+same room. Every other part of kori pushes text out; this is the one part that reads text
+in. The design, the evidence and the deliberate omissions are in
+[plan-matrix-chat.md](plan-matrix-chat.md); this page is the settings and the first run.
+
+It is cron's opposite in one respect. A [cron job](#cron-jobs) is fire-and-forget, armed by
+systemd and run once; chat is a supervised service that has to stay up to hear anything.
+
+```sh
+kori chat              # hold the connection in the foreground
+kori chat channels     # what is configured, and its state
+kori chat channels --json
+kori chat install      # write and start the systemd user unit
+```
+
+`kori chat` holds the connection until it is stopped. `kori chat install` writes a systemd
+**user** unit and enables it, so the process survives logout; on a machine with linger
+already on it also starts at boot. The unit restarts on failure rather than always: a
+revoked token would restart in a loop forever under `Restart=always`.
+
+### The chat block
+
+Everything lives under `chat:` in `~/.kori.yml`. It is off until `enabled` is `true`, and an
+untouched file with it off opens no connection.
+
+```yaml
+chat:
+  matrix:
+    enabled: true
+    homeserver: https://matrix.example.org
+    user_id: "@kori-bot:example.org"
+    device_id: JLAFKJWSCS
+    # access_token: ""            # empty plus the command below keeps the token here unset
+    access_token_command: tiroir get KORI_MATRIX_TOKEN
+    # password: ""                # the alternative to a token, see "Choosing how the bot authenticates"
+    # password_command: tiroir get KORI_MATRIX_PASSWORD
+    # pickle_key: ""              # empty plus the command below keeps the key here unset
+    pickle_key_command: tiroir get KORI_MATRIX_PICKLE_KEY
+    allow:
+      - "@you:example.org"
+    rooms:
+      - "!roomid:example.org"
+    max_age: ""
+    workdir: ""
+```
+
+The defaults for the two settings without a natural fixed value are both **empty**:
+`max_age` empty keeps every message, and `workdir` empty uses the daemon's own working
+directory, which is what the unit's `WorkingDirectory=` sets. `max_age` takes a duration
+(`1h`, `30m`) and drops anything older, so a restart does not answer a stale backlog.
+
+### Choosing how the bot authenticates
+
+There are two ways in, and they are alternatives rather than layers. Pick one and stay on it.
+
+**Password login** is the easier first run, because kori logs in itself and the crypto helper
+creates the device, so there is no device to name beforehand.
+
+```yaml
+chat:
+  matrix:
+    user_id: "@kori-bot:example.org"
+    password_command: tiroir get KORI_MATRIX_PASSWORD
+```
+
+`user_id` takes the full MXID or just the localpart (`kori-bot`); the homeserver accepts both
+for `m.login.password`, and the login response supplies the full ID either way. On the run that
+creates the device kori names it `kori`, which is what you will see in Element's device list.
+Afterwards the homeserver ignores that name, so a restart does not rename a device you have
+already recognised.
+
+**An access token** authenticates without a login, and is the arrangement to move to once the
+password route works: nothing to store but the token, and no login on every start.
+
+```yaml
+chat:
+  matrix:
+    user_id: "@kori-bot:example.org"
+    device_id: JLAFKJWSCS
+    access_token_command: tiroir get KORI_MATRIX_TOKEN
+```
+
+`device_id` is required on this route when the crypto database is empty, because the token
+belongs to a device and kori has to know which one. That is the run that creates the database,
+so on a fresh install you need both fields from your own login:
+
+```sh
+curl -s https://matrix.example.org/_matrix/client/v3/login
+# {"flows":[{"type":"m.login.password"}]}
+
+curl -s -X POST https://matrix.example.org/_matrix/client/v3/login \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"kori-bot"},"password":"…"}'
+```
+
+```json
+{"user_id":"@kori-bot:example.org","access_token":"syt_…","device_id":"JLAFKJWSCS"}
+```
+
+Those three response fields are the three config keys: `user_id` goes to
+`chat.matrix.user_id`, `access_token` to `chat.matrix.access_token`, and `device_id` to
+`chat.matrix.device_id`. An existing token works too, and `/account/whoami` tells you which
+`user_id` and `device_id` it belongs to:
+
+```sh
+curl -s https://matrix.example.org/_matrix/client/v3/account/whoami \
+  -H 'Authorization: Bearer syt_…'
+# {"user_id":"@kori-bot:example.org","device_id":"JLAFKJWSCS"}
+```
+
+**Do not set both.** A token always wins, so a leftover token silently keeps being used after
+you switch to a password. There is a second reason to keep to one route: the homeserver treats
+a login as authoritative for its device and invalidates that device's previous access token,
+so once the password route runs, any token you exported for the same `device_id` stops working.
+That is expected, not a bug in kori.
+
+An existing token works too. The one Element uses is a valid access token; ask the
+homeserver whose it is:
+
+```sh
+curl -s https://matrix.example.org/_matrix/client/v3/account/whoami \
+  -H 'Authorization: Bearer syt_…'
+# {"user_id":"@kori-bot:example.org","device_id":"JLAFKJWSCS"}
+```
+
+`whoami` is how a token from another client is turned into the `user_id` and `device_id`
+kori needs. A token and a password are alternatives, not layers: set one route or the other.
+
+### Keeping the secret out of the file
+
+`access_token_command`, `password_command` and `pickle_key_command` are the same arrangement
+`provider.api_key_command` has: the command prints the value on stdout, so the config file
+carries no secret and can be committed.
+
+```yaml
+chat:
+  matrix:
+    enabled: true
+    homeserver: https://matrix.example.org
+    user_id: "@kori-bot:example.org"
+    device_id: JLAFKJWSCS
+    access_token_command: tiroir get KORI_MATRIX_TOKEN
+    pickle_key_command: tiroir get KORI_MATRIX_PICKLE_KEY
+```
+
+Each command runs through `sh -c` and its stdout is trimmed; a command that fails is refused
+rather than left as an empty value.
+
+### The crypto database
+
+Matrix end-to-end encryption keeps a device's keys, and kori keeps them in a sqlite database
+under `~/.kori/chat/`. The **pickle key** encrypts the stored device keys at rest, so losing
+it is the same as losing the database: kori comes up as a new device, which Element shows as
+a new unverified device. Back the pickle key up somewhere other than beside the database. The
+plan names a backup story as an open risk; there is none beyond that yet.
+
+### End-to-end encryption
+
+kori uses `mautrix-go` and encrypts with Olm and Megolm. The release build sets
+`CGO_ENABLED=0` and the pure-Go implementation of Olm is selected with the `-tags goolm`
+build flag, because the default imports `libolm`, a C library, and the cross-compiled release
+cannot link it. For the same reason the crypto store is `modernc.org/sqlite`, a pure-Go
+driver.
+
+goolm builds for every release target and passes its own test suite. It is **not audited
+upstream**, so the encryption is only as trustworthy as an unaudited implementation allows.
+Nothing in this repository has been tested against a live homeserver yet: the encrypted path
+has never decrypted or sent a real event here.
+
+An unverified bot device decrypts only while the sender's client chooses to share room keys
+with unverified devices, which is Element's default today. When a sender's client stops doing
+that, the room key is withheld and the bot reads nothing. Set `self_sign: true` to fix that
+without a human tapping emoji in Element: on the first run the bot generates its own
+cross-signing identity, publishes it, and signs its own device.
+
+```yaml
+chat:
+  matrix:
+    self_sign: true
+```
+
+Self-signing writes account data on the homeserver, so it stays off until you ask. It runs
+once, and it refuses to run again on an account that already has cross-signing keys, because a
+second identity would un-verify every device signed by the first. The run that creates the
+identity prints a **recovery key** once and writes it to `~/.kori/chat/recovery.key` with mode
+0600. Keep it: the signing keys otherwise live only in the account's server-side secure secret
+storage, and the recovery key is the only way to get them onto a fresh database.
+
+A homeserver that demands a password to publish keys (`Synapse` does, for anything past a
+first master key) needs `password` or `password_command` set. With a token and no password,
+self-signing fails and says so.
+
+If the account already has cross-signing keys (for example, configured via Element), provide
+the recovery key via `chat.matrix.recovery_key`, `chat.matrix.recovery_key_command`, or run:
+
+```sh
+kori chat verify --recovery-key "EsTE s92N ..."
+```
+
+kori verifies the device against the existing cross-signing identity and signs it.
+
+Replies thread onto the message that triggered them with `m.in_reply_to`, so an answer attaches
+to its question in a busy room. An answer too long for one event is split across several
+messages, and only the first carries the reply relation. A room that gets upgraded does not
+re-key itself: the room ID changes, the conversation is over, and kori logs the replacement
+room ID so you can decide whether to add it to `chat.matrix.rooms`.
+
+### The allowlist
+
+Two lists decide who may make this machine run a tool. `chat.matrix.allow` holds MXIDs that
+may start a session; `chat.matrix.rooms` holds room IDs that are read at all.
+
+**Both empty refuses every message.** That is the default and the right one: kori runs in
+your repos with shell access, so the allowlist is the security boundary of the whole feature,
+not a filter on top of it. The check runs **before** the agent is built, never inside the
+run: an agent asked to refuse its own input has already been given the input.
+
+Every inbound message is untrusted text, whoever sent it. The chat path never touches
+`approve_tools`, so the run inherits whatever the operator set, and the two settings behave
+very differently here:
+
+- **`approve_tools: false` (the default)** means no tool call asks for approval, so a message
+  from an allowlisted account runs tools unattended, including `run_command`. Nobody is
+  watching the terminal, so this is the posture to understand before pointing a room at kori:
+  the allowlist is the only gate between a message and a shell.
+- **`approve_tools: true`** fails closed instead. `approval.Build(true)` with no UI wired
+  returns false from `Ask`, so a run that would need approval is denied rather than prompting
+  into the void. A chat-started run then does nothing until you answer on the workstation.
+
+Either way, do not treat a room as a sandbox. Set `root` to the directory a chat run may
+reach, and leave `path_isolation` on.
+
+### Out of scope
+
+A second adapter, routing chat through Antenne, approval buttons in chat, message history as
+a store, and more than one machine answering as one bot are all deliberately not built. The
+reasons are in the plan's [Skip section](plan-matrix-chat.md#skip-yagni).
+
 ## Slash commands
 
 Typing `/` at the start of a line names one of the client's own commands instead of a

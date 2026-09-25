@@ -85,6 +85,7 @@ type Config struct {
 	Editor     `yaml:"editor"`
 	Sandbox    Sandbox `yaml:"sandbox"`
 	Remote     Remote  `yaml:"remote"`
+	Chat       Chat    `yaml:"chat"`
 }
 
 // Toggles is the tool-mount settings: whether the model gets each optional

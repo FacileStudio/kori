@@ -17,7 +17,10 @@ run = "sh ./scripts/check.sh"
 
 [tasks.test]
 description = "Run the tests only"
-run = "go test ./..."
+# -tags goolm for the same reason the release builds carry it: the Matrix
+# imports resolve to a pure Go Olm only under that tag, and libolm does not
+# build at CGO_ENABLED=0.
+run = "go test -tags goolm ./..."
 
 [tasks.format]
 description = "Format the Go sources in place"

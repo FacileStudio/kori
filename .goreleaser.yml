@@ -9,6 +9,11 @@ builds:
     binary: kori
     env:
       - CGO_ENABLED=0
+    # goolm swaps libolm for a pure Go implementation of Olm. Without it
+    # maunium.net/go/mautrix, which the chat surface imports, pulls in an
+    # all-cgo package and every target below stops compiling.
+    flags:
+      - -tags=goolm
     goos:
       - linux
       - darwin

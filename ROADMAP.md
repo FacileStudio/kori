@@ -43,7 +43,9 @@ A cron for agents: unattended, no daemon. Jobs live inline in `~/.kori.yml` unde
 - **`kori cron uninstall <name>`** — remove an installed job from crontab. *Done.*
 - **Delivery** — `delivery: "file:<dir>"` appends a status header + transcript to `<dir>/<name>.log`; unset means journal/stdout only. *Done (Phase 1).*
 - **Phase 2 (not yet built): promotion UX** — repeat a chat job, agent offers to schedule it, test-runs it once into the same thread, creates it enabled-by-design, and auto-disables on failure with a notification. Mirrors the `syntheses/background-agent-scheduling.md` reference.
-- **Not doing** — a daemon, a job DB, retry, or parsing systemd/crontab syntax inside kori.
+- **Not doing in the cron track** — a job DB, retry, or parsing systemd/crontab syntax
+  inside kori. A long-lived process for **inbound** chat is a separate concern and lives
+  in the chat track: cron stays fire-and-forget, chat is a supervised service.
 
 ---
 
@@ -52,6 +54,39 @@ A cron for agents: unattended, no daemon. Jobs live inline in `~/.kori.yml` unde
 The model should see what its edits broke without being told to check: filet findings land in the session right after an edit, and a pull tool re-checks on demand.
 
 - **Post-edit diagnostics loop** — run `filet check` on every file a tool just wrote, injecting the findings into the session through an AfterToolCall hook (built-in, `internal/diagnostics`, kill switch `tools.diagnostics`), plus a `diagnostics` pull tool the model can call between edits. Design source: `syntheses/coding-agents-lsp-integration.md`. *Done via `internal/diagnostics` and `withDiagnosticsHook` in `internal/agent`.*
+
+---
+
+## Track K — Chat
+
+An inbound surface. `kori chat` runs one long-lived process holding thin platform adapters,
+so a message from an allowlisted identity starts a session and the answer returns in the same
+room, with Matrix end-to-end encryption on. This is the daemon Track I declined, held
+deliberately apart from cron: cron stays fire-and-forget, chat is a supervised service.
+Design and evidence live in `docs/plan-matrix-chat.md`; the settings are in
+`docs/configuration.md`.
+
+- **One process, N thin adapters** — `internal/chat` holds the seam, and the Matrix adapter
+  (`/sync` plus the encrypted send path) is the first one. Telegram, Discord and the rest
+  stay cheap to add rather than built now.
+- **Sessions keyed by chat identity, not by project** — `--continue` resumes the newest
+  session for a project, so two chats in one repo would interleave into one conversation;
+  the chat's key is the room instead.
+- **Default-deny allowlist** — which MXIDs may start a session and which rooms are read at
+  all. Both empty refuses every message, and the check runs before the agent is built.
+- **`kori chat install`** — writes and enables the systemd user unit, so the process
+  survives logout; the unit restarts on failure, not always, so a revoked token cannot
+  restart-loop.
+- **Not doing** — a second adapter (the seam is the deliverable and a second platform is what
+  proves it), routing chat through the Antenne Pool (Antenne keeps the notification leg
+  only), approval buttons in chat (approvals stay local on the workstation), message history
+  as a store (the session log is the record), or several machines answering as one bot (one
+  daemon, on the always-on host).
+- **Risks** — `goolm`, the pure-Go Olm implementation the `CGO_ENABLED=0` release needs, is
+  verified working here but not audited upstream; an unverified bot device may not decrypt
+  until it is verified in Element; the crypto database is new persistent state with no backup
+  story; and the allowlist is the security boundary, because the agent has shell access to
+  the workstation.
 
 ---
 

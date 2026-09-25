@@ -44,6 +44,15 @@ if [ -n "${GOROOT:-}" ] && [ -x "$GOROOT/bin/go" ]; then GO="$GOROOT/bin/go"; el
 if [ -n "${GOROOT:-}" ] && [ -x "$GOROOT/bin/gofmt" ]; then GOFMT="$GOROOT/bin/gofmt"; else GOFMT=gofmt; fi
 if [ -n "${GOROOT:-}" ] && [ -x "$GOROOT/bin/go" ]; then LINT_PATH="$GOROOT/bin:$PATH"; else LINT_PATH="$PATH"; fi
 
+# Every Go invocation here carries -tags goolm, and so does every release
+# (.goreleaser.yml builds.flags). maunium.net/go/mautrix, which the chat
+# surface imports, defaults to libolm: an all-cgo package that CGO_ENABLED=0
+# cannot compile. Without the tag the build, the vet pass and the test run all
+# fail on an import error that names a package nobody in this repository
+# wrote, which reads as a broken tree rather than as a missing flag.
+TAGS="-tags goolm"
+export GOFLAGS="-tags=goolm"
+
 if ! command -v "$GO" >/dev/null 2>&1; then
   echo "check: no usable go ('$GO')" >&2
   exit 1
@@ -95,15 +104,15 @@ if [ -n "$unformatted" ]; then
 fi
 
 echo "==> go build"
-"$GO" build ./... || status=1
+"$GO" build $TAGS ./... || status=1
 
 echo "==> go vet"
-"$GO" vet ./... || status=1
+"$GO" vet $TAGS ./... || status=1
 
 # -race, not as a nicety: bubbletea updates arrive from its own goroutines,
 # which is exactly the shape the detector exists for.
 echo "==> go test"
-"$GO" test -race ./... || status=1
+"$GO" test $TAGS -race ./... || status=1
 
 if [ "$mode" != "nolint" ]; then
   echo "==> golangci-lint"

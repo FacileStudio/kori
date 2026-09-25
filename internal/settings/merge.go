@@ -12,6 +12,7 @@ func (c *Config) merge(over Config) {
 	c.mergeLimits(over)
 	c.Sandbox.merge(over.Sandbox)
 	c.Remote.merge(over.Remote)
+	c.Chat.merge(over.Chat)
 	if over.Budget != nil {
 		c.Budget = over.Budget
 	}

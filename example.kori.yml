@@ -129,9 +129,52 @@ sources:
   mcp: {}
 
 hooks: []
-# Scheduled jobs no longer live in this file: one YAML file per job under
-# ~/.kori/jobs/ (e.g. news.yml), trusted with: kori cron trust <name>
+# Scheduled jobs live under ~/.kori/jobs/ (trusted with: kori cron trust <name>)
 gates: []
+
+# Chat is the inbound surface: one long-lived process holding a platform
+# connection, turning a message from an allowlisted identity into one kori run.
+# Its allowlist is the security boundary of the feature.
+chat:
+  matrix:
+    enabled: false
+    # homeserver is the base URL, the address Element points at, e.g.
+    # https://matrix.example.org
+    homeserver: ""
+    # user_id is the bot's MXID. device_id is only needed with an access_token.
+    user_id: ""
+    device_id: ""
+    # access_token authenticates the bot without a login. Empty with the command
+    # below set keeps the token out of this file.
+    access_token: ""
+    # access_token_command prints the token on stdout, the same arrangement
+    # provider.api_key_command has.
+    # access_token_command: tiroir get KORI_MATRIX_TOKEN
+    # password is the alternative to a token: kori logs in and creates the
+    # device itself, the easier first run because there is no device to name.
+    password: ""
+    # password_command: tiroir get KORI_MATRIX_PASSWORD
+    # pickle_key encrypts the stored device keys. Losing it, or the database
+    # beside it, means a new device, which Element shows as unverified.
+    pickle_key: ""
+    # pickle_key_command: tiroir get KORI_MATRIX_PICKLE_KEY
+    # recovery_key verifies the bot against account cross-signing keys.
+    # recovery_key: ""
+    # recovery_key_command: tiroir get KORI_MATRIX_RECOVERY_KEY
+    # allow lists the MXIDs that may start a session; rooms limits which rooms
+    # are read. Both empty refuses every message, which is the safe default.
+    allow: []
+    rooms: []
+    # self_sign gives the bot its own cross-signing identity and signs its
+    # device, so it keeps decrypting once senders stop sharing keys with
+    # unverified devices; the recovery key it prints is the only copy.
+    # self_sign: false
+    # max_age drops an inbound message older than this, so a restart does not
+    # answer a stale backlog. Empty keeps every message.
+    # max_age: 1h
+    # workdir is the directory chat runs start in, ~ expanded. Empty uses the
+    # daemon's working directory, which is what the systemd unit sets.
+    # workdir: ~/Code
 
 # Sandbox: the sandbox command runs kori on the host and sends every tool
 # call into a local boite microVM over SSH. Uncomment targets: to name one.
